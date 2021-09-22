@@ -63,7 +63,7 @@ func (s *InitializeTablesTestSuite) TestMiningRecord() {
 	require.NotNil(s.T(), db, "GetDB() must not return nil")
 }
 
-func (s *InitializeTablesTestSuite) TestPerpetualRecord() {
+func (s *InitializeTablesTestSuite) TestUserInfoRecord() {
 	db := GetDB()
 	require.NotNil(s.T(), db, "GetDB() must not return nil")
 }
