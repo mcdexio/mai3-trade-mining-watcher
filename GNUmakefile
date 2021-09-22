@@ -79,8 +79,7 @@ setup-database:
 			--restart "always" \
 			-d postgres:9.6 \
 			-c fsync=off -c full_page_writes=off; \
-		echo 'Waiting 10 sec for database to initialize ...'; \
-		sleep 10; \
+	  	while ! nc -z localhost 5432; do sleep 2; done; \
 	fi
 
 remove-database:

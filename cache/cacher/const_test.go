@@ -2,10 +2,9 @@ package cacher
 
 import (
 	"crypto/rand"
+	"github.com/stretchr/testify/suite"
 	"sync"
 	"testing"
-
-	"github.com/stretchr/testify/suite"
 )
 
 type ConstSuite struct {

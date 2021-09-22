@@ -7,5 +7,4 @@ var AllModels = []interface{}{
 	&models.System{},
 
 	&Mining{},
-	&Perpetual{},
 }

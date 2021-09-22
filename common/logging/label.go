@@ -3,11 +3,10 @@ package logging
 import (
 	"bytes"
 	"fmt"
+	"github.com/ttacon/chalk"
 	"os"
 	"path/filepath"
 	"runtime"
-
-	"github.com/ttacon/chalk"
 )
 
 // LabelMap are log Labels

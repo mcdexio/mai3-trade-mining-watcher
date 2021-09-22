@@ -2,7 +2,6 @@ package logging
 
 import (
 	"cloud.google.com/go/logging"
-
 	"github.com/mcdexio/mai3-trade-mining-watcher/common/config"
 )
 
