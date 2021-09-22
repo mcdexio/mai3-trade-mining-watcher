@@ -2,10 +2,9 @@ package logging
 
 import (
 	"fmt"
+	"github.com/mcdexio/mai3-trade-mining-watcher/cache/cacher"
 	"strings"
 	"sync"
-
-	"github.com/mcdexio/mai3-trade-mining-watcher/cache/cacher"
 )
 
 // Shared instances.

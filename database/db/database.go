@@ -3,24 +3,21 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"github.com/mcdexio/mai3-trade-mining-watcher/common/config"
+	"github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
+	"github.com/mcdexio/mai3-trade-mining-watcher/database/db/miningdb"
+	"github.com/mcdexio/mai3-trade-mining-watcher/database/models"
+	"github.com/mcdexio/mai3-trade-mining-watcher/env"
+	"github.com/mcdexio/mai3-trade-mining-watcher/types"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+	"gorm.io/gorm/schema"
 	"net/url"
 	"regexp"
 	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/mcdexio/mai3-trade-mining-watcher/database/db/miningdb"
-	"github.com/mcdexio/mai3-trade-mining-watcher/database/models"
-	"github.com/mcdexio/mai3-trade-mining-watcher/types"
-
-	"github.com/mcdexio/mai3-trade-mining-watcher/common/config"
-	"github.com/mcdexio/mai3-trade-mining-watcher/env"
-	"gorm.io/gorm/schema"
-
-	"github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
 )
 
 // Host specifies the database host.

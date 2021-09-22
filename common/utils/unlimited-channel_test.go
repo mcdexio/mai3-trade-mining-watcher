@@ -1,9 +1,8 @@
 package utils
 
 import (
-	"testing"
-
 	"github.com/stretchr/testify/suite"
+	"testing"
 )
 
 type UnlimitedChannelTestSuite struct {

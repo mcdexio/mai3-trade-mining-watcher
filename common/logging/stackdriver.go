@@ -1,9 +1,8 @@
 package logging
 
 import (
-	"context"
-
 	"cloud.google.com/go/logging"
+	"context"
 	"github.com/mcdexio/mai3-trade-mining-watcher/cache/cacher"
 	"github.com/mcdexio/mai3-trade-mining-watcher/common/config"
 )

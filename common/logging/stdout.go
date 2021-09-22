@@ -3,15 +3,14 @@ package logging
 import (
 	"context"
 	"fmt"
-	"io"
-	"os"
-	"sync"
-	"time"
-
 	"github.com/mcdexio/mai3-trade-mining-watcher/cache/cacher"
 	"github.com/mcdexio/mai3-trade-mining-watcher/common/utils"
 	"github.com/mcdexio/mai3-trade-mining-watcher/env"
 	"github.com/ttacon/chalk"
+	"io"
+	"os"
+	"sync"
+	"time"
 )
 
 var (

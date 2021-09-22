@@ -22,7 +22,7 @@ func (e *WatcherDBApp) Models() []interface{} {
 
 // IsEmpty check if a given database is empty.
 func (e *WatcherDBApp) IsEmpty(db *gorm.DB) bool {
-	return !db.Migrator().HasTable("order")
+	return !db.Migrator().HasTable("mining")
 }
 
 // PreReset is executed before db is reset.
