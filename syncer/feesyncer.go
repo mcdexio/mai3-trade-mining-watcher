@@ -4,12 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
-	utils "github.com/mcdexio/mai3-trade-mining-watcher/utils/http"
 	"github.com/shopspring/decimal"
+	"gorm.io/gorm"
 	"net"
 	"net/http"
 	"time"
+
+	"github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
+	database "github.com/mcdexio/mai3-trade-mining-watcher/database/db"
+	"github.com/mcdexio/mai3-trade-mining-watcher/database/models/mining"
+	utils "github.com/mcdexio/mai3-trade-mining-watcher/utils/http"
 )
 
 var transport = &http.Transport{
@@ -28,6 +32,7 @@ type FeeSyncer struct {
 	logger     logging.Logger
 	checkpoint int64
 	interval   time.Duration
+	db         *gorm.DB
 }
 
 func NewFeeSyncer(ctx context.Context, logger logging.Logger, url string, interval int) (*FeeSyncer, error) {
@@ -36,6 +41,7 @@ func NewFeeSyncer(ctx context.Context, logger logging.Logger, url string, interv
 		httpClient: utils.NewHttpClient(transport, logger),
 		url:        url,
 		interval:   time.Duration(interval),
+		db:         database.GetDB(),
 	}
 	return FeeSyncer, nil
 }
@@ -84,4 +90,12 @@ func (f *FeeSyncer) syncFee() {
 		return
 	}
 
+	for _, user := range response.Data.Users {
+		newFee := &mining.Fee{
+			User:      user.ID,
+			Fee:       user.TotalFee,
+			Timestamp: time.Now().Unix(),
+		}
+		f.db.Create(newFee)
+	}
 }
