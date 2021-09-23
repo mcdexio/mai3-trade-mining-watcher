@@ -5,7 +5,6 @@ import (
 	"github.com/mcdexio/mai3-trade-mining-watcher/database/models/mining"
 	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
-	"sort"
 	"time"
 
 	"github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
@@ -121,20 +120,15 @@ func (c *Calculator) calculate() {
 	}
 	userCount := len(feeResults)
 
-	// feeResults may contain duplication user_add with different timestamp
-	err = c.db.Model(&mining.Fee{}).Select("user_add, fee, timestamp").Where("created_at > ?", c.lastTimestamp).Scan(&feeResults).Error
+	// only get the latest one
+	err = c.db.Model(&mining.Fee{}).Limit(userCount).Order("timestamp desc").Select("user_add, fee, timestamp").Where("created_at > ?", c.lastTimestamp).Scan(&feeResults).Error
 	if err != nil {
 		c.logger.Error("failed to get fee %s", err)
 		return
 	}
-	sort.Slice(feeResults, func(i, j int) bool { return feeResults[i].Timestamp < feeResults[j].Timestamp })
 
 	uniqueUser := make(map[string]*info)
-	for i, r := range feeResults {
-		if i == userCount-1 {
-			// we only get the latest fee
-			break
-		}
+	for _, r := range feeResults {
 		uniqueUser[r.UserAdd] = &info{Fee: r.Fee, Timestamp: r.Timestamp}
 		err = c.db.Model(&mining.Stack{}).Select("user_add, AVG(stack) as stack").Where("user_add = ? and created_at > ?", r.UserAdd, c.lastTimestamp).Group("user_add").Scan(&stackResults).Error
 		if err != nil {
@@ -180,16 +174,17 @@ func (c *Calculator) calculate() {
 	}
 
 	for k, v := range uniqueUser {
-		err = c.db.Model(&mining.UserInfo{}).Select("fee, stack, oi").Where("user_add = ?", k).Scan(&userInfoResults).Error
-		if err != nil {
-			c.logger.Error("failed to get user info %s", err)
-		}
 		// the fee is now_fee - start_fee.
 		// the stack is (stack * interval) + (pre_stack * (lastTimeStamp - start_time)) / now - start_time
 		// the oi is (oi * interval) + (pre_oi * (lastTimeStamp - start_time)) / now - start_time
 		fee := v.Fee // default
 		thisEntryValue := v.EntryValue.Mul(intervalDecimal)
 		thisStackValue := v.Stack.Mul(intervalDecimal)
+
+		err = c.db.Model(&mining.UserInfo{}).Limit(1).Order("timestamp desc").Select("fee, stack, oi").Where("user_add = ?", k).Scan(&userInfoResults).Error
+		if err != nil {
+			c.logger.Error("failed to get user info %s", err)
+		}
 		if len(userInfoResults) == 0 {
 			// there is no previous info, means fee equal to totalFee, stack without pre_stack, oi without pre_oi
 			c.db.Create(&mining.UserInfo{
@@ -200,21 +195,15 @@ func (c *Calculator) calculate() {
 				Timestamp: v.Timestamp,
 			})
 		} else {
-			sort.Slice(userInfoResults, func(i, j int) bool { return userInfoResults[i].Timestamp < userInfoResults[j].Timestamp })
-			for _, in := range userInfoResults {
-				// get the fee before startTime
-				if in.Timestamp > c.startTime.Unix() {
-					continue
-				} else {
-					// get the closest time when is before startTime
-					// and the difference is the totalFee from startTime
-					fee = fee.Add(in.Fee.Neg())
-					break
-				}
-			}
 			pre := userInfoResults[0]
 			preEntryValue := pre.OI.Mul(fromStartTimeToLast)
 			preStack := pre.Stack.Mul(fromStartTimeToLast)
+			err = c.db.Model(&mining.UserInfo{}).Limit(1).Order("timestamp desc").Select("fee").Where("user_add = ? and created_at < ?", k, c.startTime).Scan(&userInfoResults).Error
+			if err != nil {
+				c.logger.Error("failed to get user info %s", err)
+			}
+			begin := userInfoResults[0]
+			fee = fee.Add(begin.Fee.Neg())
 			c.db.Create(&mining.UserInfo{
 				UserAdd: k,
 				Fee:     fee,
