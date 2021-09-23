@@ -41,6 +41,7 @@ func NewSyncer(ctx context.Context, logger logging.Logger, feeUrl string, oiUrl 
 	syncer := &Syncer{
 		ctx:            ctx,
 		httpClient:     utils.NewHttpClient(transport, logger),
+		logger:         logger,
 		feeUrl:         feeUrl,
 		oiUrl:          oiUrl,
 		stackUrl:       stackUrl,
@@ -57,6 +58,7 @@ func (f *Syncer) Run() error {
 		case <-f.ctx.Done():
 			return nil
 		case <-time.After(f.intervalSecond * time.Second):
+			f.logger.Info("Sync Fee, Position, Stack")
 			now := time.Now()
 			if f.startTime.Before(now) {
 				f.syncFee(now)
