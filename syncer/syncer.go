@@ -26,24 +26,25 @@ var transport = &http.Transport{
 }
 
 type Syncer struct {
-	feeUrl     string
-	oiUrl      string
-	ctx        context.Context
-	httpClient *utils.Client
-	logger     logging.Logger
-	checkpoint int64
-	interval   time.Duration
-	db         *gorm.DB
+	feeUrl         string
+	oiUrl          string
+	stackUrl       string
+	ctx            context.Context
+	httpClient     *utils.Client
+	logger         logging.Logger
+	intervalSecond time.Duration
+	db             *gorm.DB
 }
 
-func NewSyncer(ctx context.Context, logger logging.Logger, feeUrl string, oiUrl string, interval int) (*Syncer, error) {
+func NewSyncer(ctx context.Context, logger logging.Logger, feeUrl string, oiUrl string, stackUrl string, intervalSecond int) (*Syncer, error) {
 	syncer := &Syncer{
-		ctx:        ctx,
-		httpClient: utils.NewHttpClient(transport, logger),
-		feeUrl:     feeUrl,
-		oiUrl:      oiUrl,
-		interval:   time.Duration(interval),
-		db:         database.GetDB(),
+		ctx:            ctx,
+		httpClient:     utils.NewHttpClient(transport, logger),
+		feeUrl:         feeUrl,
+		oiUrl:          oiUrl,
+		stackUrl:       stackUrl,
+		intervalSecond: time.Duration(intervalSecond),
+		db:             database.GetDB(),
 	}
 	return syncer, nil
 }
@@ -53,16 +54,16 @@ func (f *Syncer) Run() error {
 		select {
 		case <-f.ctx.Done():
 			return nil
-		case <-time.After(f.interval * time.Second):
+		case <-time.After(f.intervalSecond * time.Second):
 			now := time.Now()
 			f.syncFee(now)
-			f.syncOI(now)
+			f.syncPosition(now)
 			f.syncStack(now)
 		}
 	}
 }
 
-func (f *Syncer) syncOI(timestamp time.Time) {
+func (f *Syncer) syncPosition(timestamp time.Time) {
 	var params struct {
 		Query string `json:"query"`
 	}
@@ -104,14 +105,14 @@ func (f *Syncer) syncOI(timestamp time.Time) {
 	}
 
 	for _, account := range response.Data.MarginAccounts {
-		newOI := &mining.OpenInterest{
-			PerpetualID: account.ID,
-			User:        account.User.ID,
-			Position:    account.Position,
-			OI:          account.EntryValue, // TODO(ChampFu): OI = position * mark_price(from oracle)
-			Timestamp: timestamp.Unix(),
+		newPosition := &mining.Position{
+			PerpetualID:      account.ID,
+			User:             account.User.ID,
+			Position:         account.Position,
+			EntryValue: account.EntryValue, // TODO(ChampFu): OI = position * mark_price(from oracle)
+			Timestamp:        timestamp.Unix(),
 		}
-		f.db.Create(newOI)
+		f.db.Create(newPosition)
 	}
 }
 
@@ -163,8 +164,8 @@ func (f *Syncer) syncFee(timestamp time.Time) {
 
 	for _, user := range response.Data.Users {
 		newStack := &mining.Stack{
-			User: user.ID,
-			Stack: decimal.NewFromInt(100), // TODO(ChampFu)
+			User:      user.ID,
+			Stack:     decimal.NewFromInt(100), // TODO(ChampFu)
 			Timestamp: timestamp.Unix(),
 		}
 		f.db.Create(newStack)
