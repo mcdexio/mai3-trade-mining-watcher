@@ -33,10 +33,11 @@ type Syncer struct {
 	httpClient     *utils.Client
 	logger         logging.Logger
 	intervalSecond time.Duration
+	startTime      *time.Time
 	db             *gorm.DB
 }
 
-func NewSyncer(ctx context.Context, logger logging.Logger, feeUrl string, oiUrl string, stackUrl string, intervalSecond int) (*Syncer, error) {
+func NewSyncer(ctx context.Context, logger logging.Logger, feeUrl string, oiUrl string, stackUrl string, intervalSecond int, startTime *time.Time) (*Syncer, error) {
 	syncer := &Syncer{
 		ctx:            ctx,
 		httpClient:     utils.NewHttpClient(transport, logger),
@@ -44,6 +45,7 @@ func NewSyncer(ctx context.Context, logger logging.Logger, feeUrl string, oiUrl 
 		oiUrl:          oiUrl,
 		stackUrl:       stackUrl,
 		intervalSecond: time.Duration(intervalSecond),
+		startTime:      startTime,
 		db:             database.GetDB(),
 	}
 	return syncer, nil
@@ -56,9 +58,11 @@ func (f *Syncer) Run() error {
 			return nil
 		case <-time.After(f.intervalSecond * time.Second):
 			now := time.Now()
-			f.syncFee(now)
-			f.syncPosition(now)
-			f.syncStack(now)
+			if f.startTime.Before(now) {
+				f.syncFee(now)
+				f.syncPosition(now)
+				f.syncStack(now)
+			}
 		}
 	}
 }
@@ -68,7 +72,7 @@ func (f *Syncer) syncPosition(timestamp time.Time) {
 		Query string `json:"query"`
 	}
 	queryFormat := `{
-		marginAccounts(where: {position_gt: "0"}) {
+		marginAccounts(where: {position_gt: "0"} first: 500 skip: %d) {
 			id
 			user {
 				id
@@ -77,42 +81,51 @@ func (f *Syncer) syncPosition(timestamp time.Time) {
 			entryValue
 		}
 	}`
-	params.Query = fmt.Sprintf(queryFormat)
-
-	err, code, res := f.httpClient.Post(f.oiUrl, nil, params, nil)
-	if err != nil || code != 200 {
-		f.logger.Info("get fee error. err:%s, code:%d", err, code)
-		return
-	}
-
-	var response struct {
-		Data struct {
-			MarginAccounts []struct {
-				ID   string `json:"id"`
-				User struct {
-					ID string `json:"id"`
-				}
-				Position   decimal.Decimal `json:"position"`
-				EntryValue decimal.Decimal `json:"entryValue"`
-			} `json:"marginAccounts"`
-		} `json:"data"`
-	}
-
-	err = json.Unmarshal(res, &response)
-	if err != nil {
-		f.logger.Error("Unmarshal error. err:%s", err)
-		return
-	}
-
-	for _, account := range response.Data.MarginAccounts {
-		newPosition := &mining.Position{
-			PerpetualAdd: account.ID,
-			UserAdd:      account.User.ID,
-			Position:     account.Position,
-			EntryValue:   account.EntryValue, // TODO(ChampFu): OI = position * mark_price(from oracle)
-			Timestamp:    timestamp.Unix(),
+	skip := 0
+	for {
+		params.Query = fmt.Sprintf(queryFormat, skip)
+		err, code, res := f.httpClient.Post(f.oiUrl, nil, params, nil)
+		if err != nil || code != 200 {
+			f.logger.Info("get fee error. err:%s, code:%d", err, code)
+			return
 		}
-		f.db.Create(newPosition)
+
+		var response struct {
+			Data struct {
+				MarginAccounts []struct {
+					ID   string `json:"id"`
+					User struct {
+						ID string `json:"id"`
+					}
+					Position   decimal.Decimal `json:"position"`
+					EntryValue decimal.Decimal `json:"entryValue"`
+				} `json:"marginAccounts"`
+			} `json:"data"`
+		}
+
+		err = json.Unmarshal(res, &response)
+		if err != nil {
+			f.logger.Error("Unmarshal error. err:%s", err)
+			return
+		}
+
+		for _, account := range response.Data.MarginAccounts {
+			newPosition := &mining.Position{
+				PerpetualAdd: account.ID,
+				UserAdd:      account.User.ID,
+				Position:     account.Position,
+				EntryValue:   account.EntryValue, // TODO(ChampFu): OI = position * mark_price(from oracle)
+				Timestamp:    timestamp.Unix(),
+			}
+			f.db.Create(newPosition)
+		}
+		if len(response.Data.MarginAccounts) == 500 {
+			// means there are more data to get
+			skip += 500
+		} else {
+			// we have got all
+			break
+		}
 	}
 }
 
@@ -125,49 +138,58 @@ func (f *Syncer) syncFee(timestamp time.Time) {
 		Query string `json:"query"`
 	}
 	queryFormat := `{
-		users {
+		users(first: 500 skip: %d) {
 			id
 			totalFee
 		}
 	}`
-	params.Query = fmt.Sprintf(queryFormat)
-
-	err, code, res := f.httpClient.Post(f.feeUrl, nil, params, nil)
-	if err != nil || code != 200 {
-		f.logger.Info("get fee error. err:%s, code:%d", err, code)
-		return
-	}
-
-	var response struct {
-		Data struct {
-			Users []struct {
-				ID       string          `json:"id"`
-				TotalFee decimal.Decimal `json:"totalFee"`
-			} `json:"users"`
-		} `json:"data"`
-	}
-
-	err = json.Unmarshal(res, &response)
-	if err != nil {
-		f.logger.Error("Unmarshal error. err:%s", err)
-		return
-	}
-
-	for _, user := range response.Data.Users {
-		newFee := &mining.Fee{
-			UserAdd:   user.ID,
-			Fee:       user.TotalFee,
-			Timestamp: timestamp.Unix(),
+	skip := 0
+	for {
+		params.Query = fmt.Sprintf(queryFormat, skip)
+		err, code, res := f.httpClient.Post(f.feeUrl, nil, params, nil)
+		if err != nil || code != 200 {
+			f.logger.Info("get fee error. err:%s, code:%d", err, code)
+			return
 		}
-		f.db.Create(newFee)
-	}
 
-	for _, user := range response.Data.Users {
-		newStack := &mining.Stack{
-			UserAdd:   user.ID,
-			Stack:     decimal.NewFromInt(100), // TODO(ChampFu)
-			Timestamp: timestamp.Unix(),
+		var response struct {
+			Data struct {
+				Users []struct {
+					ID       string          `json:"id"`
+					TotalFee decimal.Decimal `json:"totalFee"`
+				} `json:"users"`
+			} `json:"data"`
 		}
-		f.db.Create(newStack)
+
+		err = json.Unmarshal(res, &response)
+		if err != nil {
+			f.logger.Error("Unmarshal error. err:%s", err)
+			return
+		}
+
+		for _, user := range response.Data.Users {
+			newFee := &mining.Fee{
+				UserAdd:   user.ID,
+				Fee:       user.TotalFee,
+				Timestamp: timestamp.Unix(),
+			}
+			f.db.Create(newFee)
+		}
+
+		for _, user := range response.Data.Users {
+			newStack := &mining.Stack{
+				UserAdd:   user.ID,
+				Stack:     decimal.NewFromInt(100), // TODO(ChampFu)
+				Timestamp: timestamp.Unix(),
+			}
+			f.db.Create(newStack)
+		}
+		if len(response.Data.Users) == 500 {
+			// means there are more data to get
+			skip += 500
+		} else {
+			// we have got all
+			break
+		}
 	}
 }
