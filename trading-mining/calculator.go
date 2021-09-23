@@ -89,7 +89,23 @@ func (c *Calculator) calculate() {
 	intervalDecimal := decimal.NewFromFloat(c.interval.Seconds())
 	starTimeDecimal := decimal.NewFromInt(c.startTime.Unix())
 	fromStartTimeToNow := decimal.NewFromInt(now.Unix()).Add(starTimeDecimal.Neg())
+	if fromStartTimeToNow.LessThan(decimal.Zero) {
+		c.logger.Error("fromStartTimeToNow is less than zero")
+		c.logger.Error("value %s", fromStartTimeToNow.String())
+		c.logger.Error("start time decimal %s", starTimeDecimal.String())
+		c.logger.Error("start time %s", c.startTime.Unix())
+		c.logger.Error("now %s", now.Unix())
+		return
+	}
 	fromStartTimeToLast := decimal.NewFromInt(c.lastTimestamp.Unix()).Add(starTimeDecimal.Neg())
+	if fromStartTimeToLast.LessThan(decimal.Zero) {
+		c.logger.Error("fromStartTimeToLast is less than zero")
+		c.logger.Error("value %s", fromStartTimeToLast.String())
+		c.logger.Error("start time decimal %s", starTimeDecimal.String())
+		c.logger.Error("start time %s", c.startTime.Unix())
+		c.logger.Error("last %s", c.lastTimestamp.Unix())
+		return
+	}
 
 	c.logger.Info("Calculation trading mining...")
 	var feeResults []struct {
@@ -180,6 +196,16 @@ func (c *Calculator) calculate() {
 		fee := v.Fee // default
 		thisEntryValue := v.EntryValue.Mul(intervalDecimal)
 		thisStackValue := v.Stack.Mul(intervalDecimal)
+		if thisStackValue.LessThan(decimal.Zero) {
+			c.logger.Error("thisStackValue is less than zero")
+			c.logger.Error("value %s", v.Stack.String())
+			return
+		}
+		if thisEntryValue.LessThan(decimal.Zero) {
+			c.logger.Error("thisEntryValue is less than zero")
+			c.logger.Error("value %s", v.EntryValue.String())
+			return
+		}
 
 		err = c.db.Model(&mining.UserInfo{}).Limit(1).Order("timestamp desc").Select("fee, stack, oi").Where("user_add = ?", k).Scan(&userInfoResults).Error
 		if err != nil {
@@ -197,13 +223,25 @@ func (c *Calculator) calculate() {
 		} else {
 			pre := userInfoResults[0]
 			preEntryValue := pre.OI.Mul(fromStartTimeToLast)
+			if preEntryValue.LessThan(decimal.Zero) {
+				c.logger.Error("preEntry is less than zero")
+				c.logger.Error("value %s", pre.OI.String())
+				return
+			}
 			preStack := pre.Stack.Mul(fromStartTimeToLast)
+			if preStack.LessThan(decimal.Zero) {
+				c.logger.Error("preStack is less than zero")
+				c.logger.Error("value %s", pre.Stack.String())
+				return
+			}
 			err = c.db.Model(&mining.UserInfo{}).Limit(1).Order("timestamp desc").Select("fee").Where("user_add = ? and timestamp < ?", k, c.startTime.Unix()).Scan(&userInfoResults).Error
 			if err != nil {
 				c.logger.Error("failed to get user info %s", err)
 			}
-			begin := userInfoResults[0]
-			fee = fee.Add(begin.Fee.Neg())
+			if len(userInfoResults) == 1 {
+				begin := userInfoResults[0]
+				fee = fee.Add(begin.Fee.Neg())
+			}
 			c.db.Create(&mining.UserInfo{
 				UserAdd: k,
 				Fee:     fee,
