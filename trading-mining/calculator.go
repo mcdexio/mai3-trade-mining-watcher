@@ -220,6 +220,7 @@ func (c *Calculator) calculate() {
 				Fee:     fee,
 				OI:      thisEntryValue.Add(preEntryValue).Div(fromStartTimeToNow),
 				Stack:   thisStackValue.Add(preStack).Div(fromStartTimeToNow),
+				Timestamp: v.Timestamp
 			})
 		}
 	}
