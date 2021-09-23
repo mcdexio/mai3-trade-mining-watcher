@@ -68,13 +68,6 @@ func (c *Calculator) Run() error {
 	}
 }
 
-type info struct {
-	Fee        decimal.Decimal
-	Stack      decimal.Decimal
-	EntryValue decimal.Decimal
-	Timestamp  int64
-}
-
 func (c *Calculator) checkpoint() {
 	now := time.Now()
 	if c.startTime.After(now) {
@@ -124,17 +117,15 @@ func (c *Calculator) calculate() {
 	c.logger.Debug("fromStartTimeToNow %s", fromStartTimeToNow.String())
 	if fromStartTimeToNow.LessThanOrEqual(decimal.Zero) {
 		c.logger.Error("start time decimal %s", c.startTimeDecimal.String())
-		c.logger.Error("start time %d", c.startTime.Unix())
 		c.logger.Error("now %d", now.Unix())
 		return
 	}
 	fromStartTimeToLast := decimal.NewFromInt(c.lastTimestamp.Unix()).Add(c.startTimeDecimal.Neg())
 	c.logger.Debug("fromStartTimeToLast %s", fromStartTimeToLast.String())
 	if fromStartTimeToLast.LessThanOrEqual(decimal.Zero) {
-		c.logger.Error("start time decimal %s", c.startTimeDecimal.String())
-		c.logger.Error("start time %d", c.startTime.Unix())
-		c.logger.Error("last %d", c.lastTimestamp.Unix())
-		return
+		c.logger.Warn("it will happen when first time doing calculation")
+		c.logger.Warn("start time decimal %s", c.startTimeDecimal.String())
+		c.logger.Warn("last %d", c.lastTimestamp.Unix())
 	}
 
 	var feeResults []struct {
@@ -214,12 +205,12 @@ func (c *Calculator) calculate() {
 		}
 		thisEntryValue := entryValue.Mul(c.intervalDecimal)
 		thisStackValue := stack.Mul(c.intervalDecimal)
-		if thisStackValue.LessThanOrEqual(decimal.Zero) {
+		if thisStackValue.LessThan(decimal.Zero) {
 			c.logger.Error("thisStackValue is less than zero")
 			c.logger.Error("value %s", stack.String())
 			return
 		}
-		if thisEntryValue.LessThanOrEqual(decimal.Zero) {
+		if thisEntryValue.LessThan(decimal.Zero) {
 			c.logger.Error("thisEntryValue is less than zero")
 			c.logger.Error("value %s", entryValue.String())
 			return
@@ -241,13 +232,13 @@ func (c *Calculator) calculate() {
 		} else {
 			pre := userInfoResults[0]
 			preEntryValue := pre.OI.Mul(fromStartTimeToLast)
-			if preEntryValue.LessThanOrEqual(decimal.Zero) {
+			if preEntryValue.LessThan(decimal.Zero) {
 				c.logger.Error("preEntry is less than zero")
 				c.logger.Error("value %s", pre.OI.String())
 				return
 			}
 			preStack := pre.Stack.Mul(fromStartTimeToLast)
-			if preStack.LessThanOrEqual(decimal.Zero) {
+			if preStack.LessThan(decimal.Zero) {
 				c.logger.Error("preStack is less than zero")
 				c.logger.Error("value %s", pre.Stack.String())
 				return
