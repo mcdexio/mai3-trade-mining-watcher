@@ -2,6 +2,7 @@ package trading_mining
 
 import (
 	"context"
+	"fmt"
 	"github.com/mcdexio/mai3-trade-mining-watcher/database/models/mining"
 	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
@@ -124,6 +125,10 @@ func (c *Calculator) calculate() {
 		OI        decimal.Decimal
 		Timestamp int64
 	}
+	var userInfoBegin []struct {
+		UserAdd   string
+		Fee       decimal.Decimal
+	}
 
 	err := c.db.Model(&mining.Fee{}).Select("DISTINCT user_add").Where("timestamp > ?", c.lastTimestamp.Unix()).Scan(&feeResults).Error
 	if err != nil {
@@ -230,13 +235,19 @@ func (c *Calculator) calculate() {
 				c.logger.Error("value %s", pre.Stack.String())
 				return
 			}
-			err = c.db.Model(&mining.UserInfo{}).Limit(1).Order("timestamp desc").Select("fee").Where("user_add = ? and timestamp < ?", k, c.startTime.Unix()).Scan(&userInfoResults).Error
+			err = c.db.Model(&mining.UserInfo{}).Limit(1).Order("timestamp desc").Select("fee").Where("user_add = ? and timestamp < ?", k, c.startTime.Unix()).Scan(&userInfoBegin).Error
 			if err != nil {
 				c.logger.Error("failed to get user info %s", err)
 			}
-			if len(userInfoResults) == 1 {
-				begin := userInfoResults[0]
+			if len(userInfoBegin) == 1 {
+				begin := userInfoBegin[0]
 				fee = fee.Add(begin.Fee.Neg())
+				if fee.Equal(decimal.Zero) {
+					fmt.Println(userInfoBegin[0])
+					c.logger.Error("v.fee %s", v.Fee.String())
+					c.logger.Error("begin fee neg %s", begin.Fee.Neg().String())
+				}
+				return
 			}
 			c.db.Create(&mining.UserInfo{
 				UserAdd: k,
