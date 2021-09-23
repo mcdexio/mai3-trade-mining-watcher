@@ -54,7 +54,7 @@ func main() {
 		return syn.Run()
 	})
 
-	cal, err := trading_mining.NewCalculator(ctx, logger, 60, &startTime)
+	cal, err := trading_mining.NewCalculator(ctx, logger, intervalSec, &startTime)
 	if err != nil {
 		logger.Error("calculator fail:%s", err)
 		os.Exit(-3)
