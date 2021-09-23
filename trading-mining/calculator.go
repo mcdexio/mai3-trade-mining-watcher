@@ -28,6 +28,7 @@ func NewCalculator(ctx context.Context, logger logging.Logger, intervalSec int, 
 		db:        database.GetDB(),
 		interval:  time.Duration(intervalSec),
 		startTime: startTime,
+		lastTimestamp: startTime,
 	}
 	return cal, nil
 }
@@ -81,11 +82,6 @@ func (c *Calculator) calculate() {
 		return
 	}
 
-	if c.lastTimestamp == nil {
-		// first time to calculate, assign a long time ago
-		date := time.Date(2019, time.January, 0, 0, 0, 0, 0, time.Local)
-		c.lastTimestamp = &date
-	}
 	intervalDecimal := decimal.NewFromFloat(c.interval.Seconds())
 	starTimeDecimal := decimal.NewFromInt(c.startTime.Unix())
 	fromStartTimeToNow := decimal.NewFromInt(now.Unix()).Add(starTimeDecimal.Neg())
@@ -102,8 +98,8 @@ func (c *Calculator) calculate() {
 		c.logger.Error("fromStartTimeToLast is less than zero")
 		c.logger.Error("value %s", fromStartTimeToLast.String())
 		c.logger.Error("start time decimal %s", starTimeDecimal.String())
-		c.logger.Error("start time %s", c.startTime.Unix())
-		c.logger.Error("last %s", c.lastTimestamp.Unix())
+		c.logger.Error("start time %d", c.startTime.Unix())
+		c.logger.Error("last %d", c.lastTimestamp.Unix())
 		return
 	}
 
