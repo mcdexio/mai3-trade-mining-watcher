@@ -7,7 +7,7 @@ var AllModels = []interface{}{
 	&models.System{},
 
 	&Fee{},
-	&OpenInterest{},
+	&Position{},
 	&UserInfo{},
 	&Stack{},
 }

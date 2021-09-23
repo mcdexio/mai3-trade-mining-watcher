@@ -18,3 +18,6 @@ export DB_ARGS=postgres://mcdex@localhost:5432/mcdex?sslmode=disable # Disable s
 # Graph URL
 export MAI3_TRADE_MINING=https://api.thegraph.com/subgraphs/name/mcdexio/mai3-trade-mining
 export MAI3_PERPETUAL=https://api.thegraph.com/subgraphs/name/mcdexio/mcdex3-arb-perpetual2
+
+# setting
+export INTERVAL_SECOND=60
