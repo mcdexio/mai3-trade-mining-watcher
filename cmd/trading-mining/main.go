@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"github.com/mcdexio/mai3-trade-mining-watcher/syncer"
+	trading_mining "github.com/mcdexio/mai3-trade-mining-watcher/trading-mining"
 	"golang.org/x/sync/errgroup"
 	"os"
 	"os/signal"
@@ -33,9 +34,9 @@ func main() {
 	go WaitExitSignal(stop, logger)
 	group, ctx := errgroup.WithContext(backgroundCtx)
 
-	intervalSec := config.GetInt("INTERVAL_SECOND", 3)
-
 	startTime := time.Date(2021, time.September, 23, 16, 0, 0, 0, time.Local)
+	intervalSec := config.GetInt("INTERVAL_SECOND", 30)
+
 	syn, err := syncer.NewSyncer(
 		ctx,
 		logger,
@@ -53,14 +54,14 @@ func main() {
 		return syn.Run()
 	})
 
-	// cal, err := trading_mining.NewCalculator(ctx, logger, intervalSec, &startTime)
-	// if err != nil {
-	// 	logger.Error("calculator fail:%s", err)
-	// 	os.Exit(-3)
-	// }
-	// group.Go(func() error {
-	// 	return cal.Run()
-	// })
+	cal, err := trading_mining.NewCalculator(ctx, logger, 60, &startTime)
+	if err != nil {
+		logger.Error("calculator fail:%s", err)
+		os.Exit(-3)
+	}
+	group.Go(func() error {
+		return cal.Run()
+	})
 
 	if err := group.Wait(); err != nil {
 		logger.Critical("service stopped: %s", err)
