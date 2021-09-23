@@ -34,8 +34,8 @@ func main() {
 	go WaitExitSignal(stop, logger)
 	group, ctx := errgroup.WithContext(backgroundCtx)
 
-	startTime := time.Date(2021, time.September, 23, 16, 0, 0, 0, time.Local)
-	intervalSec := config.GetInt("INTERVAL_SECOND", 30)
+	startTime := time.Date(2021, time.September, 23, 22, 50, 0, 0, time.Local)
+	intervalSec := config.GetInt("INTERVAL_SECOND")
 
 	syn, err := syncer.NewSyncer(
 		ctx,
