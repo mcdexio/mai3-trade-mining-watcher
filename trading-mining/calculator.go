@@ -34,7 +34,7 @@ func NewCalculator(ctx context.Context, logger logging.Logger, intervalSec int, 
 		lastTimestamp: startTime,
 		initFee:       make(map[string]decimal.Decimal),
 	}
-	cal.intervalDecimal = decimal.NewFromFloat((cal.interval * time.Second).Seconds())
+	cal.intervalDecimal = decimal.NewFromFloat((cal.interval * time.Second).Minutes())
 	cal.startTimeDecimal = decimal.NewFromInt(cal.startTime.Unix())
 
 	var iniFee []struct {
@@ -107,20 +107,24 @@ func (c *Calculator) endThisEpoch() {
 
 func (c *Calculator) calculate() {
 	now := time.Now()
+	nowDecimal := decimal.NewFromInt(now.Unix())
+	lastTimestampDecimal := decimal.NewFromInt(c.lastTimestamp.Unix())
 	if c.startTime.After(now) {
 		// not yet
 		return
 	}
 
+	minuteDecimal := decimal.NewFromInt(60)
+
 	c.logger.Info("Calculation trading mining...")
-	fromStartTimeToNow := decimal.NewFromInt(now.Unix()).Add(c.startTimeDecimal.Neg())
+	fromStartTimeToNow := (nowDecimal.Add(c.startTimeDecimal.Neg())).Div(minuteDecimal)
 	c.logger.Debug("fromStartTimeToNow %s", fromStartTimeToNow.String())
 	if fromStartTimeToNow.LessThanOrEqual(decimal.Zero) {
 		c.logger.Error("start time decimal %s", c.startTimeDecimal.String())
 		c.logger.Error("now %d", now.Unix())
 		return
 	}
-	fromStartTimeToLast := decimal.NewFromInt(c.lastTimestamp.Unix()).Add(c.startTimeDecimal.Neg())
+	fromStartTimeToLast := (lastTimestampDecimal.Add(c.startTimeDecimal.Neg())).Div(minuteDecimal)
 	c.logger.Debug("fromStartTimeToLast %s", fromStartTimeToLast.String())
 	if fromStartTimeToLast.LessThanOrEqual(decimal.Zero) {
 		c.logger.Warn("it will happen when first time doing calculation")
@@ -167,8 +171,8 @@ func (c *Calculator) calculate() {
 		userAdd := r.UserAdd
 		fee := r.Fee
 		timestamp := r.Timestamp
-		stack := decimal.Zero
-		entryValue := decimal.Zero
+		var stack decimal.Decimal
+		var entryValue decimal.Decimal
 		err = c.db.Model(&mining.Stack{}).Limit(1).Select("user_add, AVG(stack) as stack").Where("user_add = ? and timestamp > ?", userAdd, c.lastTimestamp.Unix()).Group("user_add").Scan(&stackResults).Error
 		if err != nil {
 			c.logger.Error("failed to get stack %s", err)
@@ -178,6 +182,7 @@ func (c *Calculator) calculate() {
 			stack = stackResults[0].Stack
 		} else if len(stackResults) == 0 {
 			// means this user don't have stack now.
+			stack = decimal.Zero
 		}
 
 		err = c.db.Model(&mining.Position{}).Limit(1).Select("user_add, AVG(entry_value) as entry_value").Where("user_add = ? and timestamp > ?", userAdd, c.lastTimestamp.Unix()).Group("user_add").Scan(&positionResults).Error
@@ -188,6 +193,7 @@ func (c *Calculator) calculate() {
 		if len(positionResults) == 1 {
 			entryValue = positionResults[0].EntryValue
 		} else if len(positionResults) == 0 {
+			entryValue = decimal.Zero
 			// means this user don't have position now.
 		}
 
