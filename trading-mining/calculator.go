@@ -113,7 +113,7 @@ func (c *Calculator) calculate() {
 		Timestamp int64
 	}
 
-	err := c.db.Model(&mining.Fee{}).Select("DISTINCT user_add").Where("created_at > ?", c.lastTimestamp).Scan(&feeResults).Error
+	err := c.db.Model(&mining.Fee{}).Select("DISTINCT user_add").Where("timestamp > ?", c.lastTimestamp.Unix()).Scan(&feeResults).Error
 	if err != nil {
 		c.logger.Error("failed to get fee %s", err)
 		return
@@ -121,7 +121,7 @@ func (c *Calculator) calculate() {
 	userCount := len(feeResults)
 
 	// only get the latest one
-	err = c.db.Model(&mining.Fee{}).Limit(userCount).Order("timestamp desc").Select("user_add, fee, timestamp").Where("created_at > ?", c.lastTimestamp).Scan(&feeResults).Error
+	err = c.db.Model(&mining.Fee{}).Limit(userCount).Order("timestamp desc").Select("user_add, fee, timestamp").Where("timestamp > ?", c.lastTimestamp.Unix()).Scan(&feeResults).Error
 	if err != nil {
 		c.logger.Error("failed to get fee %s", err)
 		return
@@ -130,7 +130,7 @@ func (c *Calculator) calculate() {
 	uniqueUser := make(map[string]*info)
 	for _, r := range feeResults {
 		uniqueUser[r.UserAdd] = &info{Fee: r.Fee, Timestamp: r.Timestamp}
-		err = c.db.Model(&mining.Stack{}).Select("user_add, AVG(stack) as stack").Where("user_add = ? and created_at > ?", r.UserAdd, c.lastTimestamp).Group("user_add").Scan(&stackResults).Error
+		err = c.db.Model(&mining.Stack{}).Select("user_add, AVG(stack) as stack").Where("user_add = ? and timestamp > ?", r.UserAdd, c.lastTimestamp.Unix()).Group("user_add").Scan(&stackResults).Error
 		if err != nil {
 			c.logger.Error("failed to get stack %s", err)
 			return
@@ -151,7 +151,7 @@ func (c *Calculator) calculate() {
 			return
 		}
 
-		err = c.db.Model(&mining.Position{}).Select("user_add, AVG(entry_value) as entry_value").Where("user_add = ? and created_at > ?", r.UserAdd, c.lastTimestamp).Group("user_add").Scan(&positionResults).Error
+		err = c.db.Model(&mining.Position{}).Select("user_add, AVG(entry_value) as entry_value").Where("user_add = ? and timestamp > ?", r.UserAdd, c.lastTimestamp.Unix()).Group("user_add").Scan(&positionResults).Error
 		if err != nil {
 			c.logger.Error("failed to get position %s", err)
 			return
@@ -198,7 +198,7 @@ func (c *Calculator) calculate() {
 			pre := userInfoResults[0]
 			preEntryValue := pre.OI.Mul(fromStartTimeToLast)
 			preStack := pre.Stack.Mul(fromStartTimeToLast)
-			err = c.db.Model(&mining.UserInfo{}).Limit(1).Order("timestamp desc").Select("fee").Where("user_add = ? and created_at < ?", k, c.startTime).Scan(&userInfoResults).Error
+			err = c.db.Model(&mining.UserInfo{}).Limit(1).Order("timestamp desc").Select("fee").Where("user_add = ? and timestamp < ?", k, c.startTime.Unix()).Scan(&userInfoResults).Error
 			if err != nil {
 				c.logger.Error("failed to get user info %s", err)
 			}
