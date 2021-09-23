@@ -2,7 +2,6 @@ package trading_mining
 
 import (
 	"context"
-	"fmt"
 	"github.com/mcdexio/mai3-trade-mining-watcher/database/models/mining"
 	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
@@ -13,23 +12,43 @@ import (
 )
 
 type Calculator struct {
-	logger         logging.Logger
-	ctx            context.Context
-	db             *gorm.DB
-	interval       time.Duration
-	lastCheckpoint *time.Time
-	lastTimestamp  *time.Time
-	startTime      *time.Time
+	logger           logging.Logger
+	ctx              context.Context
+	db               *gorm.DB
+	interval         time.Duration
+	intervalDecimal  decimal.Decimal
+	lastCheckpoint   *time.Time
+	lastTimestamp    *time.Time
+	startTime        *time.Time
+	startTimeDecimal decimal.Decimal
+	initFee          map[string]decimal.Decimal
 }
 
 func NewCalculator(ctx context.Context, logger logging.Logger, intervalSec int, startTime *time.Time) (*Calculator, error) {
 	cal := &Calculator{
-		ctx:       ctx,
-		logger:    logger,
-		db:        database.GetDB(),
-		interval:  time.Duration(intervalSec),
-		startTime: startTime,
+		ctx:           ctx,
+		logger:        logger,
+		db:            database.GetDB(),
+		interval:      time.Duration(intervalSec),
+		startTime:     startTime,
 		lastTimestamp: startTime,
+		initFee:       make(map[string]decimal.Decimal),
+	}
+	cal.intervalDecimal = decimal.NewFromFloat((cal.interval * time.Second).Seconds())
+	cal.startTimeDecimal = decimal.NewFromInt(cal.startTime.Unix())
+
+	var iniFee []struct {
+		UserAdd string
+		Fee     decimal.Decimal
+	}
+
+	// get the init fee
+	err := cal.db.Model(&mining.UserInfo{}).Limit(1).Order("timestamp desc").Select("fee").Where("timestamp < ?", startTime.Unix()).Scan(&iniFee).Error
+	if err != nil {
+		logger.Error("failed to get user info %s", err)
+	}
+	for _, fee := range iniFee {
+		cal.initFee[fee.UserAdd] = fee.Fee
 	}
 	return cal, nil
 }
@@ -43,7 +62,7 @@ func (c *Calculator) Run() error {
 			c.calculate()
 		case <-time.After(60 * time.Minute): // 1 hour TODO(champFu): checkpoint
 			c.checkpoint()
-		case <-time.After(350 * time.Hour): // 14 days TODO(champFu): endThisEpoch
+		case <-time.After(350 * time.Hour): // 14 days
 			c.endThisEpoch()
 		}
 	}
@@ -72,8 +91,25 @@ func (c *Calculator) endThisEpoch() {
 		// not yet
 		return
 	}
-	c.logger.Info("End this epoch...")
+	c.logger.Info("Endding this epoch...")
+	// main logic TODO(champFu): endThisEpoch
+
+	// setup
 	c.startTime = &now
+	c.startTimeDecimal = decimal.NewFromInt(c.startTime.Unix())
+
+	// get the init fee
+	var iniFee []struct {
+		UserAdd string
+		Fee     decimal.Decimal
+	}
+	err := c.db.Model(&mining.UserInfo{}).Limit(1).Order("timestamp desc").Select("fee").Where("timestamp < ?", c.startTime.Unix()).Scan(&iniFee).Error
+	if err != nil {
+		c.logger.Error("failed to get user info %s", err)
+	}
+	for _, fee := range iniFee {
+		c.initFee[fee.UserAdd] = fee.Fee
+	}
 }
 
 func (c *Calculator) calculate() {
@@ -83,28 +119,24 @@ func (c *Calculator) calculate() {
 		return
 	}
 
-	intervalDecimal := decimal.NewFromFloat((c.interval * time.Second).Seconds())
-	starTimeDecimal := decimal.NewFromInt(c.startTime.Unix())
-	fromStartTimeToNow := decimal.NewFromInt(now.Unix()).Add(starTimeDecimal.Neg())
+	c.logger.Info("Calculation trading mining...")
+	fromStartTimeToNow := decimal.NewFromInt(now.Unix()).Add(c.startTimeDecimal.Neg())
+	c.logger.Debug("fromStartTimeToNow %s", fromStartTimeToNow.String())
 	if fromStartTimeToNow.LessThanOrEqual(decimal.Zero) {
-		c.logger.Error("fromStartTimeToNow is less than zero")
-		c.logger.Error("value %s", fromStartTimeToNow.String())
-		c.logger.Error("start time decimal %s", starTimeDecimal.String())
+		c.logger.Error("start time decimal %s", c.startTimeDecimal.String())
 		c.logger.Error("start time %d", c.startTime.Unix())
 		c.logger.Error("now %d", now.Unix())
 		return
 	}
-	fromStartTimeToLast := decimal.NewFromInt(c.lastTimestamp.Unix()).Add(starTimeDecimal.Neg())
+	fromStartTimeToLast := decimal.NewFromInt(c.lastTimestamp.Unix()).Add(c.startTimeDecimal.Neg())
+	c.logger.Debug("fromStartTimeToLast %s", fromStartTimeToLast.String())
 	if fromStartTimeToLast.LessThanOrEqual(decimal.Zero) {
-		c.logger.Error("fromStartTimeToLast is less than zero")
-		c.logger.Error("value %s", fromStartTimeToLast.String())
-		c.logger.Error("start time decimal %s", starTimeDecimal.String())
+		c.logger.Error("start time decimal %s", c.startTimeDecimal.String())
 		c.logger.Error("start time %d", c.startTime.Unix())
 		c.logger.Error("last %d", c.lastTimestamp.Unix())
 		return
 	}
 
-	c.logger.Info("Calculation trading mining...")
 	var feeResults []struct {
 		UserAdd   string
 		Fee       decimal.Decimal
@@ -125,10 +157,6 @@ func (c *Calculator) calculate() {
 		OI        decimal.Decimal
 		Timestamp int64
 	}
-	var userInfoBegin []struct {
-		UserAdd   string
-		Fee       decimal.Decimal
-	}
 
 	err := c.db.Model(&mining.Fee{}).Select("DISTINCT user_add").Where("timestamp > ?", c.lastTimestamp.Unix()).Scan(&feeResults).Error
 	if err != nil {
@@ -137,89 +165,78 @@ func (c *Calculator) calculate() {
 	}
 	userCount := len(feeResults)
 
-	// only get the latest one
+	// only get the latest one for all user {userCount}
 	err = c.db.Model(&mining.Fee{}).Limit(userCount).Order("timestamp desc").Select("user_add, fee, timestamp").Where("timestamp > ?", c.lastTimestamp.Unix()).Scan(&feeResults).Error
 	if err != nil {
 		c.logger.Error("failed to get fee %s", err)
 		return
 	}
 
-	uniqueUser := make(map[string]*info)
 	for _, r := range feeResults {
-		uniqueUser[r.UserAdd] = &info{Fee: r.Fee, Timestamp: r.Timestamp}
-		err = c.db.Model(&mining.Stack{}).Select("user_add, AVG(stack) as stack").Where("user_add = ? and timestamp > ?", r.UserAdd, c.lastTimestamp.Unix()).Group("user_add").Scan(&stackResults).Error
+		userAdd := r.UserAdd
+		fee := r.Fee
+		timestamp := r.Timestamp
+		stack := decimal.Zero
+		entryValue := decimal.Zero
+		err = c.db.Model(&mining.Stack{}).Limit(1).Select("user_add, AVG(stack) as stack").Where("user_add = ? and timestamp > ?", userAdd, c.lastTimestamp.Unix()).Group("user_add").Scan(&stackResults).Error
 		if err != nil {
 			c.logger.Error("failed to get stack %s", err)
 			return
 		}
 		if len(stackResults) == 1 {
-			// means this user has stack now.
-			if in, match := uniqueUser[r.UserAdd]; match {
-				// also has fee
-				in.Stack = stackResults[0].Stack
-			} else {
-				// don't have fee
-				uniqueUser[r.UserAdd] = &info{Stack: stackResults[0].Stack, Timestamp: r.Timestamp}
-			}
+			stack = stackResults[0].Stack
 		} else if len(stackResults) == 0 {
 			// means this user don't have stack now.
-		} else {
-			c.logger.Error("can't reach here")
-			return
 		}
 
-		err = c.db.Model(&mining.Position{}).Select("user_add, AVG(entry_value) as entry_value").Where("user_add = ? and timestamp > ?", r.UserAdd, c.lastTimestamp.Unix()).Group("user_add").Scan(&positionResults).Error
+		err = c.db.Model(&mining.Position{}).Limit(1).Select("user_add, AVG(entry_value) as entry_value").Where("user_add = ? and timestamp > ?", userAdd, c.lastTimestamp.Unix()).Group("user_add").Scan(&positionResults).Error
 		if err != nil {
 			c.logger.Error("failed to get position %s", err)
 			return
 		}
 		if len(positionResults) == 1 {
-			// means this user has position now.
-			if in, match := uniqueUser[r.UserAdd]; match {
-				// also has fee or stack
-				in.EntryValue = positionResults[0].EntryValue
-			} else {
-				// don't have fee and stack
-				uniqueUser[r.UserAdd] = &info{EntryValue: positionResults[0].EntryValue, Timestamp: r.Timestamp}
-			}
+			entryValue = positionResults[0].EntryValue
 		} else if len(positionResults) == 0 {
 			// means this user don't have position now.
-		} else {
-			c.logger.Error("can't reach here")
-			return
 		}
-	}
 
-	for k, v := range uniqueUser {
 		// the fee is now_fee - start_fee.
 		// the stack is (stack * interval) + (pre_stack * (lastTimeStamp - start_time)) / now - start_time
 		// the oi is (oi * interval) + (pre_oi * (lastTimeStamp - start_time)) / now - start_time
-		fee := v.Fee // default
-		thisEntryValue := v.EntryValue.Mul(intervalDecimal)
-		thisStackValue := v.Stack.Mul(intervalDecimal)
+		if iFee, match := c.initFee[r.UserAdd]; match {
+			fee = fee.Add(iFee.Neg())
+			if fee.LessThanOrEqual(decimal.Zero) {
+				c.logger.Error("feeResult %+v", r)
+				c.logger.Error("fee %s", fee.String())
+				c.logger.Error("init fee %s", iFee.Neg().String())
+				return
+			}
+		}
+		thisEntryValue := entryValue.Mul(c.intervalDecimal)
+		thisStackValue := stack.Mul(c.intervalDecimal)
 		if thisStackValue.LessThanOrEqual(decimal.Zero) {
 			c.logger.Error("thisStackValue is less than zero")
-			c.logger.Error("value %s", v.Stack.String())
+			c.logger.Error("value %s", stack.String())
 			return
 		}
 		if thisEntryValue.LessThanOrEqual(decimal.Zero) {
 			c.logger.Error("thisEntryValue is less than zero")
-			c.logger.Error("value %s", v.EntryValue.String())
+			c.logger.Error("value %s", entryValue.String())
 			return
 		}
 
-		err = c.db.Model(&mining.UserInfo{}).Limit(1).Order("timestamp desc").Select("fee, stack, oi").Where("user_add = ?", k).Scan(&userInfoResults).Error
+		err = c.db.Model(&mining.UserInfo{}).Limit(1).Order("timestamp desc").Select("fee, stack, oi").Where("user_add = ?", userAdd).Scan(&userInfoResults).Error
 		if err != nil {
 			c.logger.Error("failed to get user info %s", err)
 		}
 		if len(userInfoResults) == 0 {
 			// there is no previous info, means fee equal to totalFee, stack without pre_stack, oi without pre_oi
 			c.db.Create(&mining.UserInfo{
-				UserAdd:   k,
+				UserAdd:   userAdd,
 				Fee:       fee,
 				OI:        thisEntryValue.Div(fromStartTimeToNow),
 				Stack:     thisStackValue.Div(fromStartTimeToNow),
-				Timestamp: v.Timestamp,
+				Timestamp: timestamp,
 			})
 		} else {
 			pre := userInfoResults[0]
@@ -235,29 +252,14 @@ func (c *Calculator) calculate() {
 				c.logger.Error("value %s", pre.Stack.String())
 				return
 			}
-			err = c.db.Model(&mining.UserInfo{}).Limit(1).Order("timestamp desc").Select("fee").Where("user_add = ? and timestamp < ?", k, c.startTime.Unix()).Scan(&userInfoBegin).Error
-			if err != nil {
-				c.logger.Error("failed to get user info %s", err)
-			}
-			if len(userInfoBegin) == 1 {
-				begin := userInfoBegin[0]
-				fee = fee.Add(begin.Fee.Neg())
-				if fee.Equal(decimal.Zero) {
-					fmt.Println(userInfoBegin[0])
-					c.logger.Error("v.fee %s", v.Fee.String())
-					c.logger.Error("begin fee neg %s", begin.Fee.Neg().String())
-				}
-				return
-			}
 			c.db.Create(&mining.UserInfo{
-				UserAdd: k,
-				Fee:     fee,
-				OI:      thisEntryValue.Add(preEntryValue).Div(fromStartTimeToNow),
-				Stack:   thisStackValue.Add(preStack).Div(fromStartTimeToNow),
-				Timestamp: v.Timestamp,
+				UserAdd:   userAdd,
+				Fee:       fee,
+				OI:        (thisEntryValue.Add(preEntryValue)).Div(fromStartTimeToNow),
+				Stack:     (thisStackValue.Add(preStack)).Div(fromStartTimeToNow),
+				Timestamp: timestamp,
 			})
 		}
 	}
-
 	c.lastTimestamp = &now
 }
