@@ -2,15 +2,16 @@ package main
 
 import (
 	"context"
+	"github.com/mcdexio/mai3-trade-mining-watcher/syncer"
 	"golang.org/x/sync/errgroup"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/mcdexio/mai3-trade-mining-watcher/common/config"
 	cerrors "github.com/mcdexio/mai3-trade-mining-watcher/common/errors"
 	"github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
-	"github.com/mcdexio/mai3-trade-mining-watcher/syncer"
 )
 
 func main() {
@@ -32,9 +33,18 @@ func main() {
 	go WaitExitSignal(stop, logger)
 	group, ctx := errgroup.WithContext(backgroundCtx)
 
-	intervalSec := config.GetInt("INTERVAL_SECOND", 60)
+	intervalSec := config.GetInt("INTERVAL_SECOND", 3)
 
-	syn, err := syncer.NewSyncer(ctx, logger, config.GetString("MAI3_TRADE_MINING"), config.GetString("MAI3_PERPETUAL"), "",intervalSec)
+	startTime := time.Date(2021, time.September, 23, 16, 0, 0, 0, time.Local)
+	syn, err := syncer.NewSyncer(
+		ctx,
+		logger,
+		config.GetString("MAI3_TRADE_MINING"),
+		config.GetString("MAI3_PERPETUAL"),
+		config.GetString("MAI3_STACK", ""),
+		intervalSec,
+		&startTime,
+	)
 	if err != nil {
 		logger.Error("syncer fail:%s", err)
 		os.Exit(-3)
@@ -43,7 +53,7 @@ func main() {
 		return syn.Run()
 	})
 
-	// cal, err := trading_mining.NewCalculator(ctx, logger, intervalSec)
+	// cal, err := trading_mining.NewCalculator(ctx, logger, intervalSec, &startTime)
 	// if err != nil {
 	// 	logger.Error("calculator fail:%s", err)
 	// 	os.Exit(-3)
