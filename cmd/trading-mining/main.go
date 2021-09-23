@@ -33,14 +33,15 @@ func main() {
 	group, ctx := errgroup.WithContext(backgroundCtx)
 
 	mai3TradingMiningURL := config.GetString("MAI3_TRADE_MINING")
+	mai3PerpetualURL := config.GetString("MAI3_PERPETUAL")
 
-	feeSyncer, err := syncer.NewFeeSyncer(ctx, logger, mai3TradingMiningURL, 10)
+	syn, err := syncer.NewSyncer(ctx, logger, mai3TradingMiningURL, mai3PerpetualURL, 60)
 	if err != nil {
-		logger.Error("NewFeeSyncer fail:%s", err)
+		logger.Error("syncer fail:%s", err)
 		os.Exit(-3)
 	}
 	group.Go(func() error {
-		return feeSyncer.Run()
+		return syn.Run()
 	})
 	if err := group.Wait(); err != nil {
 		logger.Critical("service stopped: %s", err)
