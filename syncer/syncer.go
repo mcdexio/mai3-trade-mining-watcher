@@ -114,7 +114,7 @@ func (f *Syncer) syncPosition(timestamp time.Time) {
 		for _, account := range response.Data.MarginAccounts {
 			newPosition := &mining.Position{
 				PerpetualAdd: account.ID,
-				UserAdd:      account.User.ID,
+				Trader:      account.User.ID,
 				Position:     account.Position,
 				EntryValue:   account.EntryValue, // TODO(ChampFu): OI = position * mark_price(from oracle)
 				Timestamp:    timestamp.Unix(),
@@ -171,7 +171,7 @@ func (f *Syncer) syncFee(timestamp time.Time) {
 
 		for _, user := range response.Data.Users {
 			newFee := &mining.Fee{
-				UserAdd:   user.ID,
+				Trader:   user.ID,
 				Fee:       user.TotalFee,
 				Timestamp: timestamp.Unix(),
 			}
@@ -180,7 +180,7 @@ func (f *Syncer) syncFee(timestamp time.Time) {
 
 		for _, user := range response.Data.Users {
 			newStake := &mining.Stake{
-				UserAdd:   user.ID,
+				Trader:   user.ID,
 				Stake:     decimal.NewFromInt(100), // TODO(ChampFu)
 				Timestamp: timestamp.Unix(),
 			}
