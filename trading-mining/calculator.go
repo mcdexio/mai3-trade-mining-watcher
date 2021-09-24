@@ -38,7 +38,7 @@ func NewCalculator(ctx context.Context, logger logging.Logger, intervalSec int, 
 	cal.startTimeDecimal = decimal.NewFromInt(cal.startTime.Unix())
 
 	var iniFee []struct {
-		UserAdd string
+		Trader string
 		Fee     decimal.Decimal
 	}
 
@@ -48,7 +48,7 @@ func NewCalculator(ctx context.Context, logger logging.Logger, intervalSec int, 
 		logger.Error("failed to get user info %s", err)
 	}
 	for _, fee := range iniFee {
-		cal.initFee[fee.UserAdd] = fee.Fee
+		cal.initFee[fee.Trader] = fee.Fee
 	}
 	return cal, nil
 }
@@ -93,7 +93,7 @@ func (c *Calculator) endThisEpoch() {
 
 	// get the init fee
 	var iniFee []struct {
-		UserAdd string
+		Trader string
 		Fee     decimal.Decimal
 	}
 	err := c.db.Model(&mining.UserInfo{}).Limit(1).Order("timestamp desc").Select("fee").Where("timestamp < ?", c.startTime.Unix()).Scan(&iniFee).Error
@@ -101,7 +101,7 @@ func (c *Calculator) endThisEpoch() {
 		c.logger.Error("failed to get user info %s", err)
 	}
 	for _, fee := range iniFee {
-		c.initFee[fee.UserAdd] = fee.Fee
+		c.initFee[fee.Trader] = fee.Fee
 	}
 }
 
@@ -133,27 +133,27 @@ func (c *Calculator) calculate() {
 	}
 
 	var feeResults []struct {
-		UserAdd   string
+		Trader   string
 		Fee       decimal.Decimal
 		Timestamp int64
 	}
 	var stakeResults []struct {
-		UserAdd string
+		Trader string
 		Stake   decimal.Decimal
 	}
 	var positionResults []struct {
-		UserAdd    string
+		Trader    string
 		EntryValue decimal.Decimal
 	}
 	var userInfoResults []struct {
-		UserAdd   string
+		Trader   string
 		Fee       decimal.Decimal
 		Stake     decimal.Decimal
 		OI        decimal.Decimal
 		Timestamp int64
 	}
 
-	err := c.db.Model(&mining.Fee{}).Select("DISTINCT user_add").Where("timestamp > ?", c.lastTimestamp.Unix()).Scan(&feeResults).Error
+	err := c.db.Model(&mining.Fee{}).Select("DISTINCT trader").Where("timestamp > ?", c.lastTimestamp.Unix()).Scan(&feeResults).Error
 	if err != nil {
 		c.logger.Error("failed to get fee %s", err)
 		return
@@ -161,19 +161,19 @@ func (c *Calculator) calculate() {
 	userCount := len(feeResults)
 
 	// only get the latest one for all user {userCount}
-	err = c.db.Model(&mining.Fee{}).Limit(userCount).Order("timestamp desc").Select("user_add, fee, timestamp").Where("timestamp > ?", c.lastTimestamp.Unix()).Scan(&feeResults).Error
+	err = c.db.Model(&mining.Fee{}).Limit(userCount).Order("timestamp desc").Select("trader, fee, timestamp").Where("timestamp > ?", c.lastTimestamp.Unix()).Scan(&feeResults).Error
 	if err != nil {
 		c.logger.Error("failed to get fee %s", err)
 		return
 	}
 
 	for _, r := range feeResults {
-		userAdd := r.UserAdd
+		trader := r.Trader
 		fee := r.Fee
 		timestamp := r.Timestamp
 		var stake decimal.Decimal
 		var entryValue decimal.Decimal
-		err = c.db.Model(&mining.Stake{}).Limit(1).Select("user_add, AVG(stake) as stake").Where("user_add = ? and timestamp > ?", userAdd, c.lastTimestamp.Unix()).Group("user_add").Scan(&stakeResults).Error
+		err = c.db.Model(&mining.Stake{}).Limit(1).Select("trader, AVG(stake) as stake").Where("trader = ? and timestamp > ?", trader, c.lastTimestamp.Unix()).Group("trader").Scan(&stakeResults).Error
 		if err != nil {
 			c.logger.Error("failed to get stake %s", err)
 			return
@@ -185,7 +185,7 @@ func (c *Calculator) calculate() {
 			stake = decimal.Zero
 		}
 
-		err = c.db.Model(&mining.Position{}).Limit(1).Select("user_add, AVG(entry_value) as entry_value").Where("user_add = ? and timestamp > ?", userAdd, c.lastTimestamp.Unix()).Group("user_add").Scan(&positionResults).Error
+		err = c.db.Model(&mining.Position{}).Limit(1).Select("trader, AVG(entry_value) as entry_value").Where("trader = ? and timestamp > ?", trader, c.lastTimestamp.Unix()).Group("trader").Scan(&positionResults).Error
 		if err != nil {
 			c.logger.Error("failed to get position %s", err)
 			return
@@ -200,7 +200,7 @@ func (c *Calculator) calculate() {
 		// the fee is now_fee - start_fee.
 		// the stake is (stake * interval) + (pre_stake * (lastTimeStamp - start_time)) / now - start_time
 		// the oi is (oi * interval) + (pre_oi * (lastTimeStamp - start_time)) / now - start_time
-		if iFee, match := c.initFee[r.UserAdd]; match {
+		if iFee, match := c.initFee[r.Trader]; match {
 			fee = fee.Add(iFee.Neg())
 			if fee.LessThanOrEqual(decimal.Zero) {
 				c.logger.Error("feeResult %+v", r)
@@ -222,14 +222,14 @@ func (c *Calculator) calculate() {
 			return
 		}
 
-		err = c.db.Model(&mining.UserInfo{}).Limit(1).Order("timestamp desc").Select("fee, stake, oi").Where("user_add = ?", userAdd).Scan(&userInfoResults).Error
+		err = c.db.Model(&mining.UserInfo{}).Limit(1).Order("timestamp desc").Select("fee, stake, oi").Where("trader = ?", trader).Scan(&userInfoResults).Error
 		if err != nil {
 			c.logger.Error("failed to get user info %s", err)
 		}
 		if len(userInfoResults) == 0 {
 			// there is no previous info, means fee equal to totalFee, stake without pre_stake, oi without pre_oi
 			c.db.Create(&mining.UserInfo{
-				UserAdd:   userAdd,
+				Trader:   trader,
 				Fee:       fee,
 				OI:        thisEntryValue.Div(fromStartTimeToNow),
 				Stake:     thisStakeValue.Div(fromStartTimeToNow),
@@ -250,7 +250,7 @@ func (c *Calculator) calculate() {
 				return
 			}
 			c.db.Create(&mining.UserInfo{
-				UserAdd:   userAdd,
+				Trader:   trader,
 				Fee:       fee,
 				OI:        (thisEntryValue.Add(preEntryValue)).Div(fromStartTimeToNow),
 				Stake:     (thisStakeValue.Add(preStake)).Div(fromStartTimeToNow),
