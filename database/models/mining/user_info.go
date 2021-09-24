@@ -14,6 +14,7 @@ type UserInfo struct {
 	Stake  decimal.Decimal `gorm:"column:stake;type:decimal(38,18);not null" json:"stake"`
 	// Timestamps.
 	Timestamp int64 `gorm:"column:timestamp;type:bigint;not null" json:"timestamp"`
+	Epoch     int64 `gorm:"column:epoch;type:bigint;not null" json:"epoch"`
 
 	models.Base
 }
