@@ -5,6 +5,7 @@ import (
 	"github.com/mcdexio/mai3-trade-mining-watcher/database/models/mining"
 	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
+	"math"
 	"time"
 
 	"github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
@@ -287,10 +288,9 @@ func (c *Calculator) calculate(now time.Time) {
 }
 
 func (c *Calculator) calScore(fee, oi, stake decimal.Decimal) decimal.Decimal {
-	zeroSeven := decimal.NewFromFloat(0.7)
-	zeroThree := decimal.NewFromFloat(0.3)
-	feeInflate := fee.Pow(zeroSeven)
-	oiInflate := oi.Pow(zeroThree)
-	stakeInflate := stake.Pow(zeroThree)
-	return feeInflate.Add(oiInflate).Add(stakeInflate)
+	feeInflate, _ := fee.Float64()
+	oiInflate, _ := oi.Float64()
+	stakeInflate, _ := stake.Float64()
+	score := math.Pow(feeInflate, 0.7) + math.Pow(oiInflate, 0.3) + math.Pow(stakeInflate, 0.3)
+	return decimal.NewFromFloat(score)
 }
