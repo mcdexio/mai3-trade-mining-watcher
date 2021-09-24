@@ -22,3 +22,4 @@ export MAI3_STAKE_URL
 
 # setting
 export INTERVAL_SECOND=60
+export START_TIME="2021-09-24T08:00:00+08:00"
