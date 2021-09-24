@@ -11,14 +11,14 @@ import (
 )
 
 type Aligner struct {
-	feeUrl string
-	oiUrl string
-	stakeUrl string
-	ctx context.Context
-	httpClient *utils.Client
-	logger logging.Logger
+	feeUrl         string
+	oiUrl          string
+	stakeUrl       string
+	ctx            context.Context
+	httpClient     *utils.Client
+	logger         logging.Logger
 	intervalSecond time.Duration
-	db *gorm.DB
+	db             *gorm.DB
 }
 
 func NewAligner(
@@ -28,16 +28,16 @@ func NewAligner(
 	oiUrl string,
 	stakeUrl string,
 	intervalSecond int,
-	) *Aligner {
+) *Aligner {
 	aligner := &Aligner{
-		ctx: ctx,
-		httpClient: utils.NewHttpClient(transport,logger),
-		logger: logger,
-		feeUrl: feeUrl,
-		oiUrl: oiUrl,
-		stakeUrl: stakeUrl,
+		ctx:            ctx,
+		httpClient:     utils.NewHttpClient(transport, logger),
+		logger:         logger,
+		feeUrl:         feeUrl,
+		oiUrl:          oiUrl,
+		stakeUrl:       stakeUrl,
 		intervalSecond: time.Duration(intervalSecond),
-		db:database.GetDB(),
+		db:             database.GetDB(),
 	}
 	return aligner
 }

@@ -7,9 +7,9 @@ import (
 
 // Fee defines struct to contain information of fee
 type Fee struct {
-	ID      int64           `gorm:"column:id;primary_key;AUTO_INCREMENT;not null"`
+	ID     int64           `gorm:"column:id;primary_key;AUTO_INCREMENT;not null"`
 	Trader string          `gorm:"column:trader;type:varchar(128);not null" json:"trader"`
-	Fee     decimal.Decimal `gorm:"column:fee;type:decimal(38,18);not null" json:"fee"`
+	Fee    decimal.Decimal `gorm:"column:fee;type:decimal(38,18);not null" json:"fee"`
 
 	// Timestamps.
 	Timestamp int64 `gorm:"column:timestamp;type:bigint;not null" json:"timestamp"`

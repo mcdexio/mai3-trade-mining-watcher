@@ -7,11 +7,11 @@ import (
 
 // UserInfo defines struct to contain information of a user info
 type UserInfo struct {
-	ID      int64           `gorm:"column:id;primary_key;AUTO_INCREMENT;not null"`
+	ID     int64           `gorm:"column:id;primary_key;AUTO_INCREMENT;not null"`
 	Trader string          `gorm:"column:trader;type:varchar(128);not null" json:"trader"`
-	Fee     decimal.Decimal `gorm:"column:fee;type:decimal(38,18);not null" json:"fee"`
-	OI      decimal.Decimal `gorm:"column:oi;type:decimal(38,18);not null" json:"oi"`
-	Stake   decimal.Decimal `gorm:"column:stake;type:decimal(38,18);not null" json:"stake"`
+	Fee    decimal.Decimal `gorm:"column:fee;type:decimal(38,18);not null" json:"fee"`
+	OI     decimal.Decimal `gorm:"column:oi;type:decimal(38,18);not null" json:"oi"`
+	Stake  decimal.Decimal `gorm:"column:stake;type:decimal(38,18);not null" json:"stake"`
 	// Timestamps.
 	Timestamp int64 `gorm:"column:timestamp;type:bigint;not null" json:"timestamp"`
 
