@@ -137,9 +137,9 @@ func (c *Calculator) calculate() {
 		Fee       decimal.Decimal
 		Timestamp int64
 	}
-	var stackResults []struct {
+	var stakeResults []struct {
 		UserAdd string
-		Stack   decimal.Decimal
+		Stake   decimal.Decimal
 	}
 	var positionResults []struct {
 		UserAdd    string
@@ -148,7 +148,7 @@ func (c *Calculator) calculate() {
 	var userInfoResults []struct {
 		UserAdd   string
 		Fee       decimal.Decimal
-		Stack     decimal.Decimal
+		Stake     decimal.Decimal
 		OI        decimal.Decimal
 		Timestamp int64
 	}
@@ -171,18 +171,18 @@ func (c *Calculator) calculate() {
 		userAdd := r.UserAdd
 		fee := r.Fee
 		timestamp := r.Timestamp
-		var stack decimal.Decimal
+		var stake decimal.Decimal
 		var entryValue decimal.Decimal
-		err = c.db.Model(&mining.Stack{}).Limit(1).Select("user_add, AVG(stack) as stack").Where("user_add = ? and timestamp > ?", userAdd, c.lastTimestamp.Unix()).Group("user_add").Scan(&stackResults).Error
+		err = c.db.Model(&mining.Stake{}).Limit(1).Select("user_add, AVG(stake) as stake").Where("user_add = ? and timestamp > ?", userAdd, c.lastTimestamp.Unix()).Group("user_add").Scan(&stakeResults).Error
 		if err != nil {
-			c.logger.Error("failed to get stack %s", err)
+			c.logger.Error("failed to get stake %s", err)
 			return
 		}
-		if len(stackResults) == 1 {
-			stack = stackResults[0].Stack
-		} else if len(stackResults) == 0 {
-			// means this user don't have stack now.
-			stack = decimal.Zero
+		if len(stakeResults) == 1 {
+			stake = stakeResults[0].Stake
+		} else if len(stakeResults) == 0 {
+			// means this user don't have stake now.
+			stake = decimal.Zero
 		}
 
 		err = c.db.Model(&mining.Position{}).Limit(1).Select("user_add, AVG(entry_value) as entry_value").Where("user_add = ? and timestamp > ?", userAdd, c.lastTimestamp.Unix()).Group("user_add").Scan(&positionResults).Error
@@ -198,7 +198,7 @@ func (c *Calculator) calculate() {
 		}
 
 		// the fee is now_fee - start_fee.
-		// the stack is (stack * interval) + (pre_stack * (lastTimeStamp - start_time)) / now - start_time
+		// the stake is (stake * interval) + (pre_stake * (lastTimeStamp - start_time)) / now - start_time
 		// the oi is (oi * interval) + (pre_oi * (lastTimeStamp - start_time)) / now - start_time
 		if iFee, match := c.initFee[r.UserAdd]; match {
 			fee = fee.Add(iFee.Neg())
@@ -210,10 +210,10 @@ func (c *Calculator) calculate() {
 			}
 		}
 		thisEntryValue := entryValue.Mul(c.intervalDecimal)
-		thisStackValue := stack.Mul(c.intervalDecimal)
-		if thisStackValue.LessThan(decimal.Zero) {
-			c.logger.Error("thisStackValue is less than zero")
-			c.logger.Error("value %s", stack.String())
+		thisStakeValue := stake.Mul(c.intervalDecimal)
+		if thisStakeValue.LessThan(decimal.Zero) {
+			c.logger.Error("thisStakeValue is less than zero")
+			c.logger.Error("value %s", stake.String())
 			return
 		}
 		if thisEntryValue.LessThan(decimal.Zero) {
@@ -222,17 +222,17 @@ func (c *Calculator) calculate() {
 			return
 		}
 
-		err = c.db.Model(&mining.UserInfo{}).Limit(1).Order("timestamp desc").Select("fee, stack, oi").Where("user_add = ?", userAdd).Scan(&userInfoResults).Error
+		err = c.db.Model(&mining.UserInfo{}).Limit(1).Order("timestamp desc").Select("fee, stake, oi").Where("user_add = ?", userAdd).Scan(&userInfoResults).Error
 		if err != nil {
 			c.logger.Error("failed to get user info %s", err)
 		}
 		if len(userInfoResults) == 0 {
-			// there is no previous info, means fee equal to totalFee, stack without pre_stack, oi without pre_oi
+			// there is no previous info, means fee equal to totalFee, stake without pre_stake, oi without pre_oi
 			c.db.Create(&mining.UserInfo{
 				UserAdd:   userAdd,
 				Fee:       fee,
 				OI:        thisEntryValue.Div(fromStartTimeToNow),
-				Stack:     thisStackValue.Div(fromStartTimeToNow),
+				Stake:     thisStakeValue.Div(fromStartTimeToNow),
 				Timestamp: timestamp,
 			})
 		} else {
@@ -243,17 +243,17 @@ func (c *Calculator) calculate() {
 				c.logger.Error("value %s", pre.OI.String())
 				return
 			}
-			preStack := pre.Stack.Mul(fromStartTimeToLast)
-			if preStack.LessThan(decimal.Zero) {
-				c.logger.Error("preStack is less than zero")
-				c.logger.Error("value %s", pre.Stack.String())
+			preStake := pre.Stake.Mul(fromStartTimeToLast)
+			if preStake.LessThan(decimal.Zero) {
+				c.logger.Error("preStake is less than zero")
+				c.logger.Error("value %s", pre.Stake.String())
 				return
 			}
 			c.db.Create(&mining.UserInfo{
 				UserAdd:   userAdd,
 				Fee:       fee,
 				OI:        (thisEntryValue.Add(preEntryValue)).Div(fromStartTimeToNow),
-				Stack:     (thisStackValue.Add(preStack)).Div(fromStartTimeToNow),
+				Stake:     (thisStakeValue.Add(preStake)).Div(fromStartTimeToNow),
 				Timestamp: timestamp,
 			})
 		}

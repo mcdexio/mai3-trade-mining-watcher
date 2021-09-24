@@ -40,9 +40,9 @@ func main() {
 	syn, err := syncer.NewSyncer(
 		ctx,
 		logger,
-		config.GetString("MAI3_TRADE_MINING"),
-		config.GetString("MAI3_PERPETUAL"),
-		config.GetString("MAI3_STACK", ""),
+		config.GetString("MAI3_TRADE_MINING_URL"),
+		config.GetString("MAI3_PERPETUAL_URL"),
+		config.GetString("MAI3_STAKE_URL", ""),
 		intervalSec,
 		&startTime,
 	)

@@ -11,7 +11,7 @@ type UserInfo struct {
 	UserAdd string          `gorm:"column:user_add;type:varchar(128);not null" json:"user_add"`
 	Fee     decimal.Decimal `gorm:"column:fee;type:decimal(38,18);not null" json:"fee"`
 	OI      decimal.Decimal `gorm:"column:oi;type:decimal(38,18);not null" json:"oi"`
-	Stack   decimal.Decimal `gorm:"column:stack;type:decimal(38,18);not null" json:"stack"`
+	Stake   decimal.Decimal `gorm:"column:stake;type:decimal(38,18);not null" json:"stake"`
 	// Timestamps.
 	Timestamp int64 `gorm:"column:timestamp;type:bigint;not null" json:"timestamp"`
 
