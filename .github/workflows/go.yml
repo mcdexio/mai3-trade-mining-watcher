@@ -1,4 +1,4 @@
-name: Go
+name: Push to GCR GitHub Action
 
 on:
   push:
@@ -6,45 +6,23 @@ on:
     - v*
     branches:
     - master
-    
-jobs:
 
-  build:
-    name: Build
+jobs:
+  build-and-push-to-gcr:
     runs-on: ubuntu-latest
     steps:
-    - name: Get the version
-      id: get_version
-      run: echo ::set-output name=VERSION::$(echo $GITHUB_REF | cut -d / -f 3)
-      
-    - name: Set up Go 1.17.1
-      uses: actions/setup-go@v1
-      with:
-        go-version: 1.17.1
-      id: go
-      
-    - name: Go env
-      run: |
-        echo "GOPATH=$(go env GOPATH)" >> $GITHUB_ENV
-        echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
-    - uses: actions/checkout@v2 # without submodules
-    - name: Disable the keychain credential helper
-      run: git config --global credential.helper ""
-    - name: Enable the local store credential helper
-      run: git config --global --add credential.helper store
-
-    # copied from RafikFarhad/push-to-gcr-github-action@v3.0.2
-    - name: Login to google
-      run: |
-        echo ${{ secrets.GCLOUD_SERVICE_KEY }} | python -m base64 -d >/tmp/key.json 2>/dev/null
-        cat /tmp/key.json | docker login -u _json_key --password-stdin https://us.gcr.io
-  
-    - name: Build
-      run: |
-        mkdir -p dist
-        go build -v -o dist ./cmd/api
+      - name: Get the version
+        id: get_version
+        run: echo ::set-output name=VERSION::$(echo $GITHUB_REF | cut -d / -f 3)
         
-    - name: Upload to google
-      run: |
-        docker build -t us.gcr.io/mcdex3/mai3-trade-mining2-watcher:${{ steps.get_version.outputs.VERSION }} .
-        docker push us.gcr.io/mcdex3/mai3-trade-mining2-watcher:${{ steps.get_version.outputs.VERSION }}
+      - uses: actions/checkout@v2
+        
+      - name: Login to google
+        run: |
+          echo ${{ secrets.GCLOUD_SERVICE_KEY }} | python -m base64 -d >/tmp/key.json 2>/dev/null
+          cat /tmp/key.json | docker login -u _json_key --password-stdin https://us.gcr.io
+    
+      - name: Build
+        run: |
+          docker build -t us.gcr.io/mcdex3/mai3-trade-mining2:${{ steps.get_version.outputs.VERSION }} .
+          docker push us.gcr.io/mcdex3/mai3-trade-mining2:${{ steps.get_version.outputs.VERSION }}
