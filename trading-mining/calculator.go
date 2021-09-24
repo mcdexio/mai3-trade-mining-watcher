@@ -247,16 +247,12 @@ func (c *Calculator) calculate(now time.Time) {
 			c.logger.Error("failed to get user info %s", err)
 			return
 		}
+		var finalOI decimal.Decimal
+		var finalStake decimal.Decimal
 		if len(userInfoResults) == 0 {
 			// there is no previous info, means stake without pre_stake, oi without pre_oi
-			c.db.Create(&mining.UserInfo{
-				Trader:    trader,
-				Fee:       fee,
-				OI:        thisEntryValue.Div(fromThisEpochStartTimeToNow),
-				Stake:     thisStakeValue.Div(fromThisEpochStartTimeToNow),
-				Timestamp: timestamp,
-				Epoch:     c.epoch,
-			})
+			finalOI = thisEntryValue.Div(fromThisEpochStartTimeToNow)
+			finalStake = thisStakeValue.Div(fromThisEpochStartTimeToNow)
 		} else {
 			// the stake is (stake * interval) + (pre_stake * (lastTimeStamp - start_time)) / now - start_time
 			// the oi is (oi * interval) + (pre_oi * (lastTimeStamp - start_time)) / now - start_time
@@ -273,15 +269,28 @@ func (c *Calculator) calculate(now time.Time) {
 				c.logger.Error("value %s", pre.Stake.String())
 				return
 			}
-			c.db.Create(&mining.UserInfo{
-				Trader:    trader,
-				Fee:       fee,
-				OI:        (thisEntryValue.Add(preEntryValue)).Div(fromThisEpochStartTimeToNow),
-				Stake:     (thisStakeValue.Add(preStake)).Div(fromThisEpochStartTimeToNow),
-				Timestamp: timestamp,
-				Epoch:     c.epoch,
-			})
+			finalOI = (thisEntryValue.Add(preEntryValue)).Div(fromThisEpochStartTimeToNow)
+			finalStake = (thisStakeValue.Add(preStake)).Div(fromThisEpochStartTimeToNow)
 		}
+		score := c.calScore(fee, finalOI, finalStake)
+		c.db.Create(&mining.UserInfo{
+			Trader:    trader,
+			Fee:       fee,
+			OI:        finalOI,
+			Stake:     finalStake,
+			Score:     score,
+			Timestamp: timestamp,
+			Epoch:     c.epoch,
+		})
 	}
 	c.lastTimestamp = &now
+}
+
+func (c *Calculator) calScore(fee, oi, stake decimal.Decimal) decimal.Decimal {
+	zeroSeven := decimal.NewFromFloat(0.7)
+	zeroThree := decimal.NewFromFloat(0.3)
+	feeInflate := fee.Pow(zeroSeven)
+	oiInflate := oi.Pow(zeroThree)
+	stakeInflate := stake.Pow(zeroThree)
+	return feeInflate.Add(oiInflate).Add(stakeInflate)
 }

@@ -12,6 +12,7 @@ type UserInfo struct {
 	Fee    decimal.Decimal `gorm:"column:fee;type:decimal(38,18);not null" json:"fee"`
 	OI     decimal.Decimal `gorm:"column:oi;type:decimal(38,18);not null" json:"oi"`
 	Stake  decimal.Decimal `gorm:"column:stake;type:decimal(38,18);not null" json:"stake"`
+	Score  decimal.Decimal `gorm:"column:score;type:decimal(38,18);not null" json:"score"`
 	// Timestamps.
 	Timestamp int64 `gorm:"column:timestamp;type:bigint;not null" json:"timestamp"`
 	Epoch     int64 `gorm:"column:epoch;type:bigint;not null" json:"epoch"`
