@@ -9,5 +9,5 @@ var AllModels = []interface{}{
 	&Fee{},
 	&Position{},
 	&UserInfo{},
-	&Stack{},
+	&Stake{},
 }

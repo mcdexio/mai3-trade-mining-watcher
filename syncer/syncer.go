@@ -28,7 +28,7 @@ var transport = &http.Transport{
 type Syncer struct {
 	feeUrl         string
 	oiUrl          string
-	stackUrl       string
+	stakeUrl       string
 	ctx            context.Context
 	httpClient     *utils.Client
 	logger         logging.Logger
@@ -37,14 +37,14 @@ type Syncer struct {
 	db             *gorm.DB
 }
 
-func NewSyncer(ctx context.Context, logger logging.Logger, feeUrl string, oiUrl string, stackUrl string, intervalSecond int, startTime *time.Time) (*Syncer, error) {
+func NewSyncer(ctx context.Context, logger logging.Logger, feeUrl string, oiUrl string, stakeUrl string, intervalSecond int, startTime *time.Time) (*Syncer, error) {
 	syncer := &Syncer{
 		ctx:            ctx,
 		httpClient:     utils.NewHttpClient(transport, logger),
 		logger:         logger,
 		feeUrl:         feeUrl,
 		oiUrl:          oiUrl,
-		stackUrl:       stackUrl,
+		stakeUrl:       stakeUrl,
 		intervalSecond: time.Duration(intervalSecond),
 		startTime:      startTime,
 		db:             database.GetDB(),
@@ -58,12 +58,12 @@ func (f *Syncer) Run() error {
 		case <-f.ctx.Done():
 			return nil
 		case <-time.After(f.intervalSecond * time.Second):
-			f.logger.Info("Sync Fee, Position, Stack")
+			f.logger.Info("Sync Fee, Position, Stake")
 			now := time.Now()
 			if f.startTime.Before(now) {
 				f.syncFee(now)
 				f.syncPosition(now)
-				f.syncStack(now)
+				f.syncStake(now)
 			}
 		}
 	}
@@ -131,7 +131,7 @@ func (f *Syncer) syncPosition(timestamp time.Time) {
 	}
 }
 
-func (f *Syncer) syncStack(timestamp time.Time) {
+func (f *Syncer) syncStake(timestamp time.Time) {
 
 }
 
@@ -179,12 +179,12 @@ func (f *Syncer) syncFee(timestamp time.Time) {
 		}
 
 		for _, user := range response.Data.Users {
-			newStack := &mining.Stack{
+			newStake := &mining.Stake{
 				UserAdd:   user.ID,
-				Stack:     decimal.NewFromInt(100), // TODO(ChampFu)
+				Stake:     decimal.NewFromInt(100), // TODO(ChampFu)
 				Timestamp: timestamp.Unix(),
 			}
-			f.db.Create(newStack)
+			f.db.Create(newStake)
 		}
 		if len(response.Data.Users) == 500 {
 			// means there are more data to get
