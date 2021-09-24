@@ -39,7 +39,7 @@ func NewCalculator(ctx context.Context, logger logging.Logger, intervalSec int, 
 
 	var iniFee []struct {
 		Trader string
-		Fee     decimal.Decimal
+		Fee    decimal.Decimal
 	}
 
 	// get the init fee
@@ -94,7 +94,7 @@ func (c *Calculator) endThisEpoch() {
 	// get the init fee
 	var iniFee []struct {
 		Trader string
-		Fee     decimal.Decimal
+		Fee    decimal.Decimal
 	}
 	err := c.db.Model(&mining.UserInfo{}).Limit(1).Order("timestamp desc").Select("fee").Where("timestamp < ?", c.startTime.Unix()).Scan(&iniFee).Error
 	if err != nil {
@@ -133,20 +133,20 @@ func (c *Calculator) calculate() {
 	}
 
 	var feeResults []struct {
-		Trader   string
+		Trader    string
 		Fee       decimal.Decimal
 		Timestamp int64
 	}
 	var stakeResults []struct {
 		Trader string
-		Stake   decimal.Decimal
+		Stake  decimal.Decimal
 	}
 	var positionResults []struct {
-		Trader    string
+		Trader     string
 		EntryValue decimal.Decimal
 	}
 	var userInfoResults []struct {
-		Trader   string
+		Trader    string
 		Fee       decimal.Decimal
 		Stake     decimal.Decimal
 		OI        decimal.Decimal
@@ -229,7 +229,7 @@ func (c *Calculator) calculate() {
 		if len(userInfoResults) == 0 {
 			// there is no previous info, means fee equal to totalFee, stake without pre_stake, oi without pre_oi
 			c.db.Create(&mining.UserInfo{
-				Trader:   trader,
+				Trader:    trader,
 				Fee:       fee,
 				OI:        thisEntryValue.Div(fromStartTimeToNow),
 				Stake:     thisStakeValue.Div(fromStartTimeToNow),
@@ -250,7 +250,7 @@ func (c *Calculator) calculate() {
 				return
 			}
 			c.db.Create(&mining.UserInfo{
-				Trader:   trader,
+				Trader:    trader,
 				Fee:       fee,
 				OI:        (thisEntryValue.Add(preEntryValue)).Div(fromStartTimeToNow),
 				Stake:     (thisStakeValue.Add(preStake)).Div(fromStartTimeToNow),

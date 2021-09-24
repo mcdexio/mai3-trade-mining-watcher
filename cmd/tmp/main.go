@@ -25,7 +25,7 @@ func main() {
 	db := database.GetDB()
 	var result mining.UserInfo
 	err := db.Model(&mining.UserInfo{}).Limit(1).Order("timestamp desc").Select("fee, oi, stake, timestamp").Where(
-	            "trader = ?", "0xe2163420248c37d2d16378e0761c95646659762b").Scan(&result).Error
+		"trader = ?", "0xe2163420248c37d2d16378e0761c95646659762b").Scan(&result).Error
 	if err != nil {
 		panic(fmt.Errorf("failed to get value from system table err=%w", err))
 	}

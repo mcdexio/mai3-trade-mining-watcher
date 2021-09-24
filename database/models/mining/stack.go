@@ -7,9 +7,9 @@ import (
 
 // Stake defines struct to contain information of open interest
 type Stake struct {
-	ID      int64           `gorm:"column:id;primary_key;AUTO_INCREMENT;not null"`
+	ID     int64           `gorm:"column:id;primary_key;AUTO_INCREMENT;not null"`
 	Trader string          `gorm:"column:trader;type:varchar(128);not null" json:"trader"`
-	Stake   decimal.Decimal `gorm:"column:stake;type:decimal(38,18);not null" json:"stake"`
+	Stake  decimal.Decimal `gorm:"column:stake;type:decimal(38,18);not null" json:"stake"`
 
 	// Timestamps.
 	Timestamp int64 `gorm:"column:timestamp;type:bigint;not null" json:"timestamp"`
