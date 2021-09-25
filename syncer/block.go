@@ -42,13 +42,14 @@ func (s *BlockSyncer) Run() error {
 	s.catchup()
 	for {
 		select {
+		// priority by order
 		case <-s.ctx.Done():
 			s.logger.Info("BlockSyncer receives shutdown signal.")
 			return nil
-		case <-time.After(15 * time.Second):
-			s.syncPer15Second()
 		case <-time.After(60 * time.Minute):
 			s.updateBlockFromCheckpoint()
+		case <-time.After(15 * time.Second):
+			s.syncPer15Second()
 		}
 	}
 }
