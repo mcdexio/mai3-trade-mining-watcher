@@ -42,13 +42,13 @@ func main() {
 		os.Exit(-3)
 	}
 
-	tmServer, err := api.NewTMServer(ctx, logger, 120)
+	tmServer := api.NewTMServer(ctx, logger, 120)
 	if err != nil {
 		logger.Error("Failed to trading mining server:%s", err)
 		os.Exit(-3)
 	}
 
-	go WaitExitSignal(stop, logger, tmServer)
+	go WaitExitSignalWithServer(stop, logger, tmServer)
 	group.Go(func() error {
 		return syn.Run()
 	})
@@ -61,7 +61,7 @@ func main() {
 	}
 }
 
-func WaitExitSignal(ctxStop context.CancelFunc, logger logging.Logger, server *api.TMServer) {
+func WaitExitSignalWithServer(ctxStop context.CancelFunc, logger logging.Logger, server *api.TMServer) {
 	var exitSignal = make(chan os.Signal, 1)
 	signal.Notify(exitSignal, syscall.SIGTERM)
 	signal.Notify(exitSignal, syscall.SIGINT)

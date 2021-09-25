@@ -1,15 +1,17 @@
 package mining
 
-import "github.com/mcdexio/mai3-trade-mining-watcher/database/models"
+import (
+	"github.com/mcdexio/mai3-trade-mining-watcher/database/models"
+	"github.com/shopspring/decimal"
+)
 
 type Schedule struct {
-	ID        string `gorm:"column:id;type:varchar(129);not null;primary_key" json:"id"`
-	Epoch     int64  `gorm:"column:epoch;type:bigint;not null" json:"epoch"`
-	From      int64  `gorm:"column:from;type:bigint;not null" json:"from"`
-	To        int64  `gorm:"column:to;type:bigint;not null" json:"to"`
-	WeightFee int64  `gorm:"column:weight_fee;type:bigint;not null" json:"weight_fee"`
-	WeightOI  int64  `gorm:"column:weight_oi;type:bigint;not null" json:"weight_oi"`
-	WeightMCB int64  `gorm:"column:weight_mcb;type:bigint;not null" json:"weight_mcb"`
+	Epoch     int64           `gorm:"column:epoch;type:bigint;not null" json:"epoch"`
+	From      int64           `gorm:"column:from;type:bigint;not null" json:"from"`
+	To        int64           `gorm:"column:to;type:bigint;not null" json:"to"`
+	WeightFee decimal.Decimal `gorm:"column:weight_fee;type:decimal(38,18);not null" json:"weight_fee"`
+	WeightOI  decimal.Decimal `gorm:"column:weight_oi;type:decimal(38,18);not null" json:"weight_oi"`
+	WeightMCB decimal.Decimal `gorm:"column:weight_mcb;type:decimal(38,18);not null" json:"weight_mcb"`
 }
 
 // ForeignKeyConstraints create foreign key constraints.

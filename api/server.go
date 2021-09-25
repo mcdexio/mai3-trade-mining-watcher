@@ -9,7 +9,9 @@ import (
 	"github.com/mcdexio/mai3-trade-mining-watcher/database/models/mining"
 	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 	"net/http"
+	"strconv"
 	"time"
 )
 
@@ -24,7 +26,7 @@ type TMServer struct {
 	score       map[int]decimal.Decimal
 }
 
-func NewTMServer(ctx context.Context, logger logging.Logger, intervalSec int) (*TMServer, error) {
+func NewTMServer(ctx context.Context, logger logging.Logger, intervalSec int) *TMServer {
 	tmServer := &TMServer{
 		logger:      logger,
 		db:          database.GetDB(),
@@ -34,17 +36,21 @@ func NewTMServer(ctx context.Context, logger logging.Logger, intervalSec int) (*
 	mux := http.NewServeMux()
 	mux.HandleFunc("/tradingMining", tmServer.OnQueryTradingMining)
 	mux.HandleFunc("/healthCheckup", tmServer.OnQueryHealthCheckup)
+	mux.HandleFunc("/setEpoch", tmServer.OnQuerySetEpoch)
 	tmServer.server = &http.Server{
 		Addr:         ":9487",
 		WriteTimeout: time.Second * 25,
 		Handler:      mux,
 	}
-	return tmServer, nil
+	return tmServer
 }
 
 func (s *TMServer) OnQueryHealthCheckup(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.WriteHeader(http.StatusOK)
+	resp := make(map[string]string)
+	resp["message"] = "alive"
+	json.NewEncoder(w).Encode(resp)
 }
 
 func (s *TMServer) Shutdown() error {
@@ -87,7 +93,7 @@ func (s *TMServer) getEpoch() {
 	// get the epoch
 	err := s.db.Model(&mining.UserInfo{}).Limit(1).Order("epoch desc").Select("epoch").Scan(&epochs).Error
 	if err != nil {
-		s.logger.Error("failed to get user info %s", err)
+		s.logger.Error("Failed to get user info %s", err)
 	}
 	if len(epochs) == 0 {
 		// there is no epoch
@@ -153,6 +159,105 @@ type EpochTradingMiningResp struct {
 	Proportion string `json:"proportion"`
 }
 
+func (s *TMServer) OnQuerySetEpoch(w http.ResponseWriter, r *http.Request) {
+	defer func() {
+		if r := recover(); r != nil {
+			_, ok := r.(error)
+			if !ok {
+				err := fmt.Errorf("%v", r)
+				s.logger.Error("recover err:%s", err)
+				s.jsonError(w, "internal error.", 400)
+				return
+			}
+		}
+	}()
+
+	if r.Method != "POST" {
+		s.jsonError(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	query := r.URL.Query()
+	epoch := query["epoch"]
+	from := query["from"]
+	to := query["to"]
+	weightFee := query["weightFee"]
+	weightOI := query["weightOI"]
+	weightMCB := query["weightMCB"]
+	if (len(epoch) == 0 || epoch[0] == "") ||
+		(len(from) == 0 || from[0] == "") ||
+		(len(to) == 0 || to[0] == "") ||
+		(len(weightOI) == 0 || weightOI[0] == "") ||
+		(len(weightFee) == 0 || weightFee[0] == "") ||
+		(len(weightMCB) == 0 || weightMCB[0] == "") {
+		s.logger.Info("empty parameter:%#v", query)
+		s.jsonError(w, "empty parameter", 400)
+		return
+	}
+	s.logger.Debug(
+		"epoch %s, from %s, to %s, weightFee %s, weightOI %s, weightMCB %s",
+		epoch, from, to, weightFee, weightOI, weightMCB,
+	)
+
+	e, err := strconv.Atoi(epoch[0])
+	if err != nil {
+		s.logger.Info("parameter invalid:%#v", query)
+		s.jsonError(w, "parameter invalid", 400)
+		return
+	}
+	f, err := strconv.Atoi(from[0])
+	if err != nil {
+		s.logger.Info("parameter invalid:%#v", query)
+		s.jsonError(w, "parameter invalid", 400)
+		return
+	}
+	t, err := strconv.Atoi(to[0])
+	if err != nil {
+		s.logger.Info("parameter invalid:%#v", query)
+		s.jsonError(w, "parameter invalid", 400)
+		return
+	}
+	wo, err := decimal.NewFromString(weightOI[0])
+	if err != nil {
+		s.logger.Info("parameter invalid:%#v", query)
+		s.jsonError(w, "parameter invalid", 400)
+		return
+	}
+	wm, err := decimal.NewFromString(weightMCB[0])
+	if err != nil {
+		s.logger.Info("parameter invalid:%#v", query)
+		s.jsonError(w, "parameter invalid", 400)
+		return
+	}
+	wf, err := decimal.NewFromString(weightFee[0])
+	if err != nil {
+		s.logger.Info("parameter invalid:%#v", query)
+		s.jsonError(w, "parameter invalid", 400)
+		return
+	}
+
+	schedule := &mining.Schedule{
+		Epoch:     int64(e),
+		From:      int64(f),
+		To:        int64(t),
+		WeightFee: wf,
+		WeightMCB: wm,
+		WeightOI:  wo,
+	}
+	err = s.upsertSchedule(schedule)
+	if err != nil {
+		s.logger.Error("failed to write into db, %+v", schedule)
+		s.jsonError(w, "internal error", 400)
+		return
+	}
+
+	resp := make(map[string]string)
+	resp["message"] = "Success"
+	json.NewEncoder(w).Encode(resp)
+}
+
 func (s *TMServer) OnQueryTradingMining(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -167,7 +272,7 @@ func (s *TMServer) OnQueryTradingMining(w http.ResponseWriter, r *http.Request) 
 	}()
 
 	if r.Method != "GET" {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		s.jsonError(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
@@ -176,9 +281,9 @@ func (s *TMServer) OnQueryTradingMining(w http.ResponseWriter, r *http.Request) 
 	// request
 	query := r.URL.Query()
 	trader := query["trader"]
-	if len(trader) == 0 {
-		s.logger.Info("parameter invalid:%#v", query)
-		http.Error(w, "empty parameter.", 400)
+	if len(trader) == 0 || trader[0] == "" {
+		s.logger.Info("empty parameter:%#v", query)
+		s.jsonError(w, "empty parameter", 400)
 		return
 	}
 	queryTradingMiningResp := make(map[int]*EpochTradingMiningResp)
@@ -208,4 +313,31 @@ func (s *TMServer) OnQueryTradingMining(w http.ResponseWriter, r *http.Request) 
 
 	s.logger.Info("%+v", queryTradingMiningResp)
 	json.NewEncoder(w).Encode(queryTradingMiningResp)
+}
+
+func (s *TMServer) upsertSchedule(schedule *mining.Schedule) error {
+	err := database.Transaction(s.db, func(tx *gorm.DB) error {
+		e := tx.Clauses(
+			clause.OnConflict{
+				Columns:   []clause.Column{{Name: "epoch"}},
+				UpdateAll: true,
+			}).Create(schedule).Error
+		if e != nil {
+			return e
+		} else {
+			return nil
+		}
+	})
+	return err
+}
+
+func (s *TMServer) jsonError(w http.ResponseWriter, err interface{}, code int) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.WriteHeader(code)
+	var msg struct {
+		Error string `json:"error"`
+	}
+	msg.Error = err.(string)
+	json.NewEncoder(w).Encode(msg)
 }
