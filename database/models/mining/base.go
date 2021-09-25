@@ -7,4 +7,5 @@ var AllModels = []interface{}{
 	&models.System{},
 
 	&Block{},
+	&Progress{},
 }

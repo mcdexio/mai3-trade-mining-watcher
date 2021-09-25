@@ -15,3 +15,10 @@ type SysVar string
 const (
 	SysVarSchemaVersion SysVar = "schema_version"
 )
+
+// TableName specifies table name.
+type TableName string
+
+const(
+	Block TableName = "Block"
+)

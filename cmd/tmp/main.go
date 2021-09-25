@@ -3,10 +3,10 @@ package main
 import (
 	"context"
 	"github.com/mcdexio/mai3-trade-mining-watcher/api"
+	"github.com/mcdexio/mai3-trade-mining-watcher/common/config"
 	"github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
-	database "github.com/mcdexio/mai3-trade-mining-watcher/database/db"
-	"github.com/mcdexio/mai3-trade-mining-watcher/database/models/mining"
-	"gorm.io/gorm/clause"
+	"github.com/mcdexio/mai3-trade-mining-watcher/syncer"
+	"golang.org/x/sync/errgroup"
 	"os"
 	"os/signal"
 	"syscall"
@@ -19,37 +19,27 @@ func main() {
 	defer logging.Finalize()
 	logger := logging.NewLoggerTag(name)
 
-	db := database.GetDB()
+	backgroundCtx, stop := context.WithCancel(context.Background())
+	group, ctx := errgroup.WithContext(backgroundCtx)
 
-	db.Clauses(clause.OnConflict{
-		UpdateAll: true,
-	}).Create(&mining.Block{
-		ID:     "0xec0644a24137ea17476bea10240bcd0386ae9699c4800543237afdf7d8344c17",
-		Number: 1, // origin "1597480"
+	arbBlockGraphUrl := config.GetString("ARB_BLOCKS_GRAPH_URL")
+
+	startTime, err := config.ParseTimeConfig(config.GetString("SYNCER_BLOCK_START_TIME"))
+	if err != nil {
+		logger.Error("Failed to parse time config", err)
+		return
+	} else {
+		logger.Info("start time %s", startTime.String())
+	}
+	app := syncer.NewBlockSyncer(ctx, logger, arbBlockGraphUrl, &startTime)
+	go WaitExitSignal(stop, logger)
+	group.Go(func() error {
+		return app.Run()
 	})
-	logger.Info("start")
 
-	//backgroundCtx, stop := context.WithCancel(context.Background())
-	//group, ctx := errgroup.WithContext(backgroundCtx)
-
-	//arbBlockGraphUrl := config.GetString("ARB_BLOCKS_GRAPH_URL")
-
-	//startTime, err := config.ParseTimeConfig(config.GetString("SYNCER_BLOCK_START_TIME"))
-	//if err != nil {
-	//	logger.Error("Failed to parse time config", err)
-	//	return
-	//} else {
-	//	logger.Info("start time %s", startTime.String())
-	//}
-	//app := syncer.NewBlockSyncer(ctx, logger, arbBlockGraphUrl, &startTime)
-	//go WaitExitSignal(stop, logger)
-	//group.Go(func() error {
-	//	return app.Run()
-	//})
-
-	//if err := group.Wait(); err != nil {
-	//	logger.Critical("service stopped: %s", err)
-	//}
+	if err := group.Wait(); err != nil {
+		logger.Critical("service stopped: %s", err)
+	}
 }
 
 func WaitExitSignal(ctxStop context.CancelFunc, logger logging.Logger) {

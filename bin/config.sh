@@ -21,4 +21,4 @@ export ARB_BLOCKS_GRAPH_URL=https://api.thegraph.com/subgraphs/name/ianlapham/ar
 
 # setting
 export INTERVAL_SECOND=60
-export SYNCER_BLOCK_START_TIME="2021-09-25T14:00:00+08:00"
+export SYNCER_BLOCK_START_TIME="2021-09-25T15:00:00+08:00"
