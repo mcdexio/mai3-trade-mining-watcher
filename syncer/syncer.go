@@ -84,7 +84,7 @@ func (f *Syncer) syncPosition(timestamp time.Time) {
 	skip := 0
 	for {
 		params.Query = fmt.Sprintf(queryFormat, skip)
-		err, code, res := f.httpClient.Post(f.oiUrl, nil, params, nil)
+		err, code, res := f.httpClient.Post(f.graphUrl, nil, params, nil)
 		if err != nil || code != 200 {
 			f.logger.Info("get fee error. err:%s, code:%d", err, code)
 			return
@@ -146,7 +146,7 @@ func (f *Syncer) syncFee(timestamp time.Time) {
 	skip := 0
 	for {
 		params.Query = fmt.Sprintf(queryFormat, skip)
-		err, code, res := f.httpClient.Post(f.feeUrl, nil, params, nil)
+		err, code, res := f.httpClient.Post(f.graphUrl, nil, params, nil)
 		if err != nil || code != 200 {
 			f.logger.Info("get fee error. err:%s, code:%d", err, code)
 			return

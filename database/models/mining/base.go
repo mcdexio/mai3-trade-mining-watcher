@@ -6,8 +6,5 @@ import "github.com/mcdexio/mai3-trade-mining-watcher/database/models"
 var AllModels = []interface{}{
 	&models.System{},
 
-	&Fee{},
-	&Position{},
-	&UserInfo{},
-	&Stake{},
+	&Block{},
 }
