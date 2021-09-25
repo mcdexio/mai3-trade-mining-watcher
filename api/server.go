@@ -33,12 +33,18 @@ func NewTMServer(ctx context.Context, logger logging.Logger, intervalSec int) (*
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/tradingMining", tmServer.OnQueryTradingMining)
+	mux.HandleFunc("/healthCheckup", tmServer.OnQueryHealthCheckup)
 	tmServer.server = &http.Server{
 		Addr:         ":9487",
 		WriteTimeout: time.Second * 25,
 		Handler:      mux,
 	}
 	return tmServer, nil
+}
+
+func (s *TMServer) OnQueryHealthCheckup(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.WriteHeader(http.StatusOK)
 }
 
 func (s *TMServer) Shutdown() error {
