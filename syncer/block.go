@@ -40,15 +40,19 @@ func NewBlockSyncer(ctx context.Context, logger logging.Logger, blockSyncerGraph
 
 func (s *BlockSyncer) Run() error {
 	s.catchup()
+	ticker15seconds := time.NewTicker(15 * time.Second)
+	ticker1Hour := time.NewTicker(60 * time.Minute)
 	for {
 		select {
 		// priority by order
 		case <-s.ctx.Done():
+			ticker15seconds.Stop()
+			ticker1Hour.Stop()
 			s.logger.Info("BlockSyncer receives shutdown signal.")
 			return nil
-		case <-time.After(60 * time.Minute):
+		case <-ticker1Hour.C:
 			s.updateBlockFromCheckpoint()
-		case <-time.After(15 * time.Second):
+		case <-ticker15seconds.C:
 			s.syncPer15Second()
 		}
 	}
@@ -134,13 +138,13 @@ func (s *BlockSyncer) syncFromTo(from, to int64) {
 func (s *BlockSyncer) catchup() {
 	s.logger.Info("Catchup block from %s until now", s.startTime.String())
 	endTime := time.Now().Unix()
-	s.checkpoint = endTime-60*60 // 1 hour
+	s.checkpoint = endTime - 60*60 // 1 hour
 	s.syncFromTo(s.startTime.Unix(), endTime)
 	s.db.Clauses(clause.OnConflict{UpdateAll: true}).Create(
 		&mining.Progress{
-			TableName: types.Block,
-			From: s.startTime.Unix(),
-			To: endTime,
+			TableName:  types.Block,
+			From:       s.startTime.Unix(),
+			To:         endTime,
 			Checkpoint: s.checkpoint,
 		})
 	s.logger.Info("Catchup block done, from %d, checkpoint %d, end %d", s.startTime.Unix(), s.checkpoint, endTime)
@@ -203,17 +207,17 @@ func (s *BlockSyncer) syncPer15Second() {
 func (s *BlockSyncer) updateBlockFromCheckpoint() {
 	s.logger.Info("Update block from checkpoint %d to one hour ago", s.checkpoint)
 	end := time.Now().Unix() - 60*60
-	s.syncFromTo(s.checkpoint,end)
+	s.syncFromTo(s.checkpoint, end)
 	s.db.Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "table_name"}},
 		DoUpdates: clause.AssignmentColumns([]string{"checkpoint"}),
 	}).Create(
 		&mining.Progress{
-			TableName: types.Block,
+			TableName:  types.Block,
 			Checkpoint: end,
 		})
 	s.checkpoint = end
-	s.logger.Info("Update checkpoint %d",end)
+	s.logger.Info("Update checkpoint %d", end)
 }
 
 // Insert a block into db, update a block if block hash is already there.

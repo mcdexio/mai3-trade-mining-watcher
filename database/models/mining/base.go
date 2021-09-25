@@ -8,4 +8,5 @@ var AllModels = []interface{}{
 
 	&Block{},
 	&Progress{},
+	&Schedule{},
 }
