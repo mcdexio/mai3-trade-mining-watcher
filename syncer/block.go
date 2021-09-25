@@ -22,7 +22,12 @@ type BlockSyncer struct {
 	graphUrl   string
 	startTime  *time.Time
 	db         *gorm.DB
-	checkpoint int64
+}
+
+type Block struct {
+	ID        string `json:"id"`
+	Number    string `json:"number"`
+	Timestamp string `json:"timestamp"`
 }
 
 func NewBlockSyncer(ctx context.Context, logger logging.Logger, blockSyncerGraphUrl string, startTime *time.Time) *BlockSyncer {
@@ -33,27 +38,26 @@ func NewBlockSyncer(ctx context.Context, logger logging.Logger, blockSyncerGraph
 		blockSyncerGraphUrl,
 		startTime,
 		database.GetDB(),
-		0,
 	}
 	return syncer
 }
 
+func (s *BlockSyncer) Init() {
+	now := time.Now()
+	s.catchup(s.startTime.Unix(), now.Unix())
+}
+
 func (s *BlockSyncer) Run() error {
-	s.catchup()
-	ticker15seconds := time.NewTicker(15 * time.Second)
-	ticker1Hour := time.NewTicker(60 * time.Minute)
+	ticker := time.NewTicker(60 * time.Second)
 	for {
 		select {
 		// priority by order
 		case <-s.ctx.Done():
-			ticker15seconds.Stop()
-			ticker1Hour.Stop()
+			ticker.Stop()
 			s.logger.Info("BlockSyncer receives shutdown signal.")
 			return nil
-		case <-ticker1Hour.C:
-			s.updateBlockFromCheckpoint()
-		case <-ticker15seconds.C:
-			s.syncPer15Second()
+		case <-ticker.C:
+			s.sync()
 		}
 	}
 }
@@ -84,11 +88,7 @@ func (s *BlockSyncer) syncFromTo(from, to int64) {
 
 		var response struct {
 			Data struct {
-				Blocks []struct {
-					ID        string `json:"id"`
-					Number    string `json:"number"`
-					Timestamp string `json:"timestamp"`
-				}
+				Blocks []*Block
 			}
 		}
 		err = json.Unmarshal(res, &response)
@@ -98,24 +98,13 @@ func (s *BlockSyncer) syncFromTo(from, to int64) {
 		}
 
 		for _, block := range response.Data.Blocks {
-			number, err := strconv.Atoi(block.Number)
-			if err != nil {
-				s.logger.Error("Failed to convert block number from string to int err:%s", err)
-				return
-			}
-			timestamp, err := strconv.Atoi(block.Timestamp)
-			if err != nil {
-				s.logger.Error("Failed to convert block timestamp from string to int err:%s", err)
-				return
-			}
-			b := &mining.Block{
-				ID:        block.ID,
-				Number:    int64(number),
-				Timestamp: int64(timestamp),
+			b := s.marshal(block)
+			if b == nil {
+				continue
 			}
 			s.upsertBlockIntoDB(b)
-			if int64(timestamp) > latestTime {
-				latestTime = int64(timestamp)
+			if b.Timestamp > latestTime {
+				latestTime = b.Timestamp
 			}
 		}
 		if len(response.Data.Blocks) == 500 {
@@ -134,30 +123,53 @@ func (s *BlockSyncer) syncFromTo(from, to int64) {
 	}
 }
 
-// catchup from startTime to now.
-func (s *BlockSyncer) catchup() {
-	s.logger.Info("Catchup block from %s until now", s.startTime.String())
-	endTime := time.Now().Unix()
-	s.checkpoint = endTime - 60*60 // 1 hour
-	s.syncFromTo(s.startTime.Unix(), endTime)
-	s.db.Clauses(clause.OnConflict{UpdateAll: true}).Create(
-		&mining.Progress{
-			TableName:  types.Block,
-			From:       s.startTime.Unix(),
-			To:         endTime,
-			Checkpoint: s.checkpoint,
+// catchup from startTime to endTime.
+func (s *BlockSyncer) catchup(startTime int64, endTime int64) {
+	var blockProgress mining.Progress
+	err := s.db.Model(mining.Progress{}).Scan(&blockProgress).Where("table_name = block").Error
+	if err != nil || blockProgress.TableName == "" {
+		s.logger.Warn("Progress is empty")
+		s.logger.Info("sync from startTime %d to %d", startTime, endTime)
+		s.syncFromTo(startTime, endTime)
+		s.db.Create(&mining.Progress{
+			TableName: types.Block,
+			From:      startTime,
+			To:        endTime,
 		})
-	s.logger.Info("Catchup block done, from %d, checkpoint %d, end %d", s.startTime.Unix(), s.checkpoint, endTime)
+		return
+	}
+
+	if startTime < blockProgress.From {
+		s.logger.Info("sync from startTime %d to %d", startTime, blockProgress.From)
+		s.syncFromTo(startTime, blockProgress.From)
+		s.db.Clauses(
+			clause.OnConflict{
+				Columns:   []clause.Column{{Name: "table_name"}},
+				DoUpdates: clause.AssignmentColumns([]string{"from"}),
+			},
+		).Create(&mining.Progress{TableName: types.Block, From: startTime})
+	}
+
+	if endTime > blockProgress.To {
+		s.logger.Info("sync from startTime %d to %d", blockProgress.To, endTime)
+		s.syncFromTo(blockProgress.To, endTime)
+		s.db.Clauses(
+			clause.OnConflict{
+				Columns:   []clause.Column{{Name: "table_name"}},
+				DoUpdates: clause.AssignmentColumns([]string{"to"}),
+			},
+		).Create(&mining.Progress{TableName: types.Block, To: endTime})
+	}
 }
 
-// syncPerSecond syncs latest 3 blocks per 15 seconds.
-func (s *BlockSyncer) syncPer15Second() {
-	s.logger.Info("Sync per 15 seconds")
+// sync latest 30 blocks per 60 seconds.
+func (s *BlockSyncer) sync() {
+	s.logger.Info("Block sync per 60 seconds")
 	var params struct {
 		Query string `json:"query"`
 	}
 	queryFormat := `{
-		blocks(first:3, orderBy: timestamp, orderDirection: desc) {
+		blocks(first:30, orderBy: timestamp, orderDirection: desc) {
 			id
 			number
 			timestamp
@@ -170,11 +182,7 @@ func (s *BlockSyncer) syncPer15Second() {
 	}
 	var response struct {
 		Data struct {
-			Blocks []struct {
-				ID        string `json:"id"`
-				Number    string `json:"number"`
-				Timestamp string `json:"timestamp"`
-			}
+			Blocks []*Block
 		}
 	}
 	err = json.Unmarshal(res, &response)
@@ -183,41 +191,12 @@ func (s *BlockSyncer) syncPer15Second() {
 		return
 	}
 	for _, block := range response.Data.Blocks {
-		number, err := strconv.Atoi(block.Number)
-		if err != nil {
-			s.logger.Error("Failed to convert block number from string to int err:%s", err)
-			return
-		}
-		timestamp, err := strconv.Atoi(block.Timestamp)
-		if err != nil {
-			s.logger.Error("Failed to convert block timestamp from string to int err:%s", err)
-			return
-		}
-		b := &mining.Block{
-			ID:        block.ID,
-			Number:    int64(number),
-			Timestamp: int64(timestamp),
+		b := s.marshal(block)
+		if b == nil {
+			continue
 		}
 		s.upsertBlockIntoDB(b)
 	}
-}
-
-// updateBlockFromCheckpoint updates from last checkpoint until one hour ago,
-// in order to prevent block rollback.
-func (s *BlockSyncer) updateBlockFromCheckpoint() {
-	s.logger.Info("Update block from checkpoint %d to one hour ago", s.checkpoint)
-	end := time.Now().Unix() - 60*60
-	s.syncFromTo(s.checkpoint, end)
-	s.db.Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "table_name"}},
-		DoUpdates: clause.AssignmentColumns([]string{"checkpoint"}),
-	}).Create(
-		&mining.Progress{
-			TableName:  types.Block,
-			Checkpoint: end,
-		})
-	s.checkpoint = end
-	s.logger.Info("Update checkpoint %d", end)
 }
 
 // Insert a block into db, update a block if block hash is already there.
@@ -225,4 +204,23 @@ func (s *BlockSyncer) upsertBlockIntoDB(newBlock *mining.Block) {
 	s.db.Clauses(clause.OnConflict{
 		UpdateAll: true,
 	}).Create(newBlock)
+}
+
+func (s *BlockSyncer) marshal(block *Block) *mining.Block {
+	number, err := strconv.Atoi(block.Number)
+	if err != nil {
+		s.logger.Error("Failed to convert block number from string to int err:%s", err)
+		return nil
+	}
+	timestamp, err := strconv.Atoi(block.Timestamp)
+	if err != nil {
+		s.logger.Error("Failed to convert block timestamp from string to int err:%s", err)
+		return nil
+	}
+	b := &mining.Block{
+		ID:        block.ID,
+		Number:    int64(number),
+		Timestamp: int64(timestamp),
+	}
+	return b
 }

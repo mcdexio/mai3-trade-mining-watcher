@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"github.com/mcdexio/mai3-trade-mining-watcher/api"
+	"github.com/mcdexio/mai3-trade-mining-watcher/common/config"
 	"github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
+	"github.com/mcdexio/mai3-trade-mining-watcher/syncer"
 	"golang.org/x/sync/errgroup"
 	"os"
 	"os/signal"
@@ -20,26 +22,26 @@ func main() {
 	backgroundCtx, stop := context.WithCancel(context.Background())
 	group, ctx := errgroup.WithContext(backgroundCtx)
 
-	server := api.NewTMServer(ctx, logger, 60)
+	server := api.NewTMServer(ctx, logger)
 	go WaitExitSignalWithServer(stop, logger, server)
 	group.Go(func() error {
 		return server.Run()
 	})
 
-	// arbBlockGraphUrl := config.GetString("ARB_BLOCKS_GRAPH_URL")
+	arbBlockGraphUrl := config.GetString("ARB_BLOCKS_GRAPH_URL")
 
-	// startTime, err := config.ParseTimeConfig(config.GetString("SYNCER_BLOCK_START_TIME"))
-	// if err != nil {
-	// 	logger.Error("Failed to parse time config", err)
-	// 	return
-	// } else {
-	// 	logger.Info("start time %s", startTime.String())
-	// }
-	// app := syncer.NewBlockSyncer(ctx, logger, arbBlockGraphUrl, &startTime)
-	// go WaitExitSignal(stop, logger)
-	// group.Go(func() error {
-	// 	return app.Run()
-	// })
+	startTime, err := config.ParseTimeConfig(config.GetString("SYNCER_BLOCK_START_TIME"))
+	if err != nil {
+		logger.Error("Failed to parse time config", err)
+		return
+	} else {
+		logger.Info("start time %s", startTime.String())
+	}
+	app := syncer.NewBlockSyncer(ctx, logger, arbBlockGraphUrl, &startTime)
+	app.Init()
+	group.Go(func() error {
+		return app.Run()
+	})
 
 	if err := group.Wait(); err != nil {
 		logger.Critical("service stopped: %s", err)

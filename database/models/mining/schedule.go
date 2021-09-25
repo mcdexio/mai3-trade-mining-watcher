@@ -7,8 +7,8 @@ import (
 
 type Schedule struct {
 	Epoch     int64           `gorm:"column:epoch;type:bigint;not null" json:"epoch"`
-	From      int64           `gorm:"column:from;type:bigint;not null" json:"from"`
-	To        int64           `gorm:"column:to;type:bigint;not null" json:"to"`
+	StartTime int64           `gorm:"column:start_time;type:bigint;not null" json:"start_time"`
+	EndTime   int64           `gorm:"column:end_time;type:bigint;not null" json:"end_time"`
 	WeightFee decimal.Decimal `gorm:"column:weight_fee;type:decimal(38,18);not null" json:"weight_fee"`
 	WeightOI  decimal.Decimal `gorm:"column:weight_oi;type:decimal(38,18);not null" json:"weight_oi"`
 	WeightMCB decimal.Decimal `gorm:"column:weight_mcb;type:decimal(38,18);not null" json:"weight_mcb"`

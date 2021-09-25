@@ -9,7 +9,7 @@ type Progress struct {
 	TableName  types.TableName `gorm:"column:table_name;type:varchar(129);not null;primary_key" json:"table_name"`
 	From       int64           `gorm:"column:from;type:bigint;not null" json:"from"`
 	To         int64           `gorm:"column:to;type:bigint;not null" json:"to"`
-	Checkpoint int64           `gorm:"column:checkpoint;type:bigint;not null" json:"checkpoint"`
+	Checkpoint int64           `gorm:"column:checkpoint;type:bigint;" json:"checkpoint"`
 
 	models.Base
 }
