@@ -1,72 +1,49 @@
 package main
 
 import (
-	"fmt"
-	cerrors "github.com/mcdexio/mai3-trade-mining-watcher/common/errors"
+	"context"
+	"github.com/mcdexio/mai3-trade-mining-watcher/api"
 	"github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
-	database "github.com/mcdexio/mai3-trade-mining-watcher/database/db"
-	"github.com/mcdexio/mai3-trade-mining-watcher/database/models/mining"
-	"github.com/shopspring/decimal"
-	"math"
+	"golang.org/x/sync/errgroup"
+	"os"
+	"os/signal"
+	"syscall"
 )
 
-type EpochTradingMiningResp struct {
-	Trader     string `json:"trader"`
-	Fee        string `json:"fee"`
-	OI         string `json:"oi"`
-	Stake      string `json:"stake"`
-	Score      string `json:"score"`
-	Epoch      int    `json:"epoch"`
-	Proportion string `json:"proportion"`
-	// Timestamps.
-	Timestamp int64 `json:"timestamp"`
-}
-
-type QueryTradingMiningResp struct {
-	Epochs map[int]*EpochTradingMiningResp `json:"epoch"`
-}
-
 func main() {
-	name := "tmp"
+	name := "trading-mining"
 	// Initialize logger.
 	logging.Initialize(name)
 	defer logging.Finalize()
-
 	logger := logging.NewLoggerTag(name)
 
-	// Setup panic handler.
-	cerrors.Initialize(logger)
-	defer cerrors.Catch()
+	backgroundCtx, stop := context.WithCancel(context.Background())
+	group, ctx := errgroup.WithContext(backgroundCtx)
 
-	logger.Info("%s service started.", name)
-	logger.Info("Initializing.")
-
-	// response := QueryTradingMiningResp{
-	// 	Epochs: make(map[int]*EpochTradingMiningResp, 0),
-	// }
-	var epochs []struct {
-		Epoch int
-	}
-	db := database.GetDB()
-	err := db.Model(&mining.UserInfo{}).Limit(1).Order("epoch desc").Select("epoch").Scan(&epochs).Error
+	tmServer, err := api.NewTMServer(ctx, logger, 120)
 	if err != nil {
-		logger.Error("failed to get user info %s", err)
+		logger.Error("trading mining server failed:%s", err)
 	}
-	fmt.Println(epochs)
+	go WaitExitSignal(stop, logger, tmServer)
+	group.Go(func() error {
+		return tmServer.Run()
+	})
 
-	// var result mining.UserInfo
-	// err := db.Model(&mining.UserInfo{}).Limit(1).Order("timestamp desc").Select("fee, oi, stake, timestamp").Where(
-	// 	"trader = ?", "0xe2163420248c37d2d16378e0761c95646659762b").Scan(&result).Error
-	// if err != nil {
-	// 	panic(fmt.Errorf("failed to get value from system table err=%w", err))
-	// }
-	// logger.Info("%+v", result)
+	if err := group.Wait(); err != nil {
+		logger.Critical("service stopped: %s", err)
+	}
+
 }
 
-func calScore(fee, oi, stake decimal.Decimal) decimal.Decimal {
-	feeInflate, _ := fee.Float64()
-	oiInflate, _ := oi.Float64()
-	stakeInflate, _ := stake.Float64()
-	score := math.Pow(feeInflate, 0.7) + math.Pow(oiInflate, 0.3) + math.Pow(stakeInflate, 0.3)
-	return decimal.NewFromFloat(score)
+func WaitExitSignal(ctxStop context.CancelFunc, logger logging.Logger, server *api.TMServer) {
+	var exitSignal = make(chan os.Signal, 1)
+	signal.Notify(exitSignal, syscall.SIGTERM)
+	signal.Notify(exitSignal, syscall.SIGINT)
+
+	sig := <-exitSignal
+	logger.Info("caught sig: %+v, Stopping...\n", sig)
+	if err := server.Shutdown(); err != nil {
+		logger.Error("Server shutdown failed:%+v", err)
+	}
+	ctxStop()
 }

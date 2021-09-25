@@ -31,7 +31,18 @@ func NewTMServer(ctx context.Context, logger logging.Logger, intervalSec int) (*
 		ctx:         ctx,
 		intervalSec: time.Duration(intervalSec),
 	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/tradingMining", tmServer.OnQueryTradingMining)
+	tmServer.server = &http.Server{
+		Addr:         ":9487",
+		WriteTimeout: time.Second * 25,
+		Handler:      mux,
+	}
 	return tmServer, nil
+}
+
+func (s *TMServer) Shutdown() error {
+	return s.server.Shutdown(s.ctx)
 }
 
 func (s *TMServer) Run() error {
@@ -39,23 +50,19 @@ func (s *TMServer) Run() error {
 	s.getEpoch()
 	s.calculateStatus()
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/tradingMining", s.OnQueryTradingMining)
-	s.server = &http.Server{
-		Addr:         ":9487",
-		WriteTimeout: time.Second * 25,
-		Handler:      mux,
-	}
-
 	s.logger.Info("Starting trading mining httpserver")
-	err := s.server.ListenAndServe()
-	if err != nil {
-		if err == http.ErrServerClosed {
-			s.logger.Critical("Server closed under request")
-		} else {
-			s.logger.Critical("Server closed unexpected", err)
+
+	go func() {
+		err := s.server.ListenAndServe()
+		if err != nil {
+			if err == http.ErrServerClosed {
+				s.logger.Critical("Server closed under request")
+			} else {
+				s.logger.Critical("Server closed unexpected", err)
+			}
 		}
-	}
+	}()
+
 	for {
 		select {
 		case <-s.ctx.Done():
