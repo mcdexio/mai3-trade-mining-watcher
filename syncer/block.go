@@ -190,13 +190,23 @@ func (s *BlockSyncer) sync() {
 		s.logger.Error("Failed to unmarshal err:%s", err)
 		return
 	}
+	var endTime int64
 	for _, block := range response.Data.Blocks {
 		b := s.marshal(block)
 		if b == nil {
 			continue
 		}
+		if endTime < b.Timestamp {
+			endTime = b.Timestamp
+		}
 		s.upsertBlockIntoDB(b)
 	}
+	s.db.Clauses(
+		clause.OnConflict{
+			Columns:   []clause.Column{{Name: "table_name"}},
+			DoUpdates: clause.AssignmentColumns([]string{"to"}),
+		},
+	).Create(&mining.Progress{TableName: types.Block, To: endTime})
 }
 
 // Insert a block into db, update a block if block hash is already there.

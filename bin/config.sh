@@ -17,8 +17,8 @@ export DB_ARGS=postgres://mcdex@localhost:5432/mcdex?sslmode=disable # Disable s
 
 # Graph URL
 export MAI3_TRADE_MINING_GRAPH_URL=https://api.thegraph.com/subgraphs/name/champfu-mcdex/mai3-trading-mining2
-export ARB_BLOCKS_GRAPH_URL=https://api.thegraph.com/subgraphs/name/ianlapham/arbitrum-one-blocks
+# export ARB_BLOCKS_GRAPH_URL=https://api.thegraph.com/subgraphs/name/ianlapham/arbitrum-one-blocks
+export ARB_BLOCKS_GRAPH_URL=https://api.thegraph.com/subgraphs/name/renpu-mcarlo/arbitrum-rinkeby-blocks
 
 # setting
-export INTERVAL_SECOND=60
-export SYNCER_BLOCK_START_TIME="2021-09-25T15:00:00+08:00"
+export SYNCER_BLOCK_START_TIME="2021-09-26T01:00:00+08:00"

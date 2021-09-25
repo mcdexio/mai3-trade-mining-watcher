@@ -2,20 +2,20 @@ package syncer
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
-	"github.com/shopspring/decimal"
+	"github.com/mcdexio/mai3-trade-mining-watcher/database/models/mining"
 	"gorm.io/gorm"
-	"math"
 	"net"
 	"net/http"
 	"time"
 
 	"github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
 	database "github.com/mcdexio/mai3-trade-mining-watcher/database/db"
-	"github.com/mcdexio/mai3-trade-mining-watcher/database/models/mining"
 	utils "github.com/mcdexio/mai3-trade-mining-watcher/utils/http"
 )
+
+var EPOCH_ERROR = errors.New("failed to get epoch from schedule db")
 
 var transport = &http.Transport{
 	DialContext: (&net.Dialer{
@@ -27,185 +27,293 @@ var transport = &http.Transport{
 }
 
 type Syncer struct {
-	graphUrl       string
-	epoch          int64
-	ctx            context.Context
-	httpClient     *utils.Client
-	logger         logging.Logger
-	intervalSecond time.Duration
-	startTime      *time.Time
-	db             *gorm.DB
+	ctx        context.Context
+	httpClient *utils.Client
+	logger     logging.Logger
+	db         *gorm.DB
+
+	// block syncer
+	blockGraphUrl   string
+	blockCheckpoint int64
+	blockSyncer     *BlockSyncer
+
+	mai3GraphUrl       string
+	epoch              int64
+	thisEpochStartTime int64
+	thisEpochEndTime   int64
 }
 
-func NewSyncer(ctx context.Context, logger logging.Logger, graphUrl string, intervalSecond int, startTime *time.Time) (*Syncer, error) {
+func NewSyncer(
+	ctx context.Context, logger logging.Logger, mai3GraphUrl string,
+	blockGraphUrl string, blockStartTime *time.Time,
+) *Syncer {
 	syncer := &Syncer{
-		ctx:            ctx,
-		httpClient:     utils.NewHttpClient(transport, logger),
-		logger:         logger,
-		graphUrl:       graphUrl,
-		intervalSecond: time.Duration(intervalSecond),
-		startTime:      startTime,
-		db:             database.GetDB(),
+		ctx:             ctx,
+		httpClient:      utils.NewHttpClient(transport, logger),
+		logger:          logger,
+		mai3GraphUrl:    mai3GraphUrl,
+		blockGraphUrl:   blockGraphUrl,
+		blockSyncer:     NewBlockSyncer(ctx, logger, blockGraphUrl, blockStartTime),
+		db:              database.GetDB(),
+		blockCheckpoint: 0,
 	}
-	return syncer, nil
+	return syncer
 }
 
-func (f *Syncer) Run() error {
+func (s Syncer) Init() {
+	s.blockSyncer.Init()
+
+	// get this epoch number, thisEpochStartTime, thisEpochEndTime
+	err := s.getEpoch()
+	if err == EPOCH_ERROR {
+		s.logger.Warn("right now is not in this epoch")
+	} else if err != nil {
+		panic(err)
+	}
+
+	s.catchup()
+}
+
+func (s *Syncer) Run() error {
+	// sync block
+	go func() {
+		err := s.blockSyncer.Run()
+		if err != nil {
+			s.logger.Error("block syncer err=%s", err)
+			return
+		}
+	}()
+
+	ticker1min := time.NewTicker(1 * time.Minute)
 	for {
 		select {
-		case <-f.ctx.Done():
+		case <-s.ctx.Done():
+			ticker1min.Stop()
+			s.logger.Info("Syncer receives shutdown signal.")
 			return nil
-		case <-time.After(f.intervalSecond * time.Second):
-			f.logger.Info("Sync Fee, Position, Stake")
-			now := time.Now()
-			if f.startTime.Before(now) {
-				f.syncFee(now)
-				f.syncPosition(now)
-				f.syncStake(now)
-			}
+		case <-ticker1min.C:
+			s.syncState()
 		}
 	}
 }
 
-func (f *Syncer) syncPosition(timestamp time.Time) {
-	var params struct {
-		Query string `json:"query"`
+func (s *Syncer) catchup() {
+	// depend on this epoch, catchup to now
+	s.logger.Info("Catchup stats from %d until now", s.thisEpochStartTime)
+	s.blockSyncer.catchup(s.thisEpochStartTime-60, time.Now().Unix())
+	var blockInfo mining.Block
+	err := s.db.Model(&mining.Block{}).Limit(1).Order(
+		"number desc").Where(
+		"timestamp < ?", s.thisEpochStartTime,
+	).Scan(&blockInfo).Error
+	if err != nil {
+		s.logger.Error("Failed to get block info %s", err)
+		return
 	}
-	queryFormat := `{
-		marginAccounts(where: {position_gt: "0"} first: 500 skip: %d) {
-			id
-			user {
-				id
-			}
-			position
-			entryValue
-		}
-	}`
-	skip := 0
-	for {
-		params.Query = fmt.Sprintf(queryFormat, skip)
-		err, code, res := f.httpClient.Post(f.graphUrl, nil, params, nil)
-		if err != nil || code != 200 {
-			f.logger.Info("get fee error. err:%s, code:%d", err, code)
-			return
-		}
+	fmt.Println(blockInfo)
 
-		var response struct {
-			Data struct {
-				MarginAccounts []struct {
-					ID   string `json:"id"`
-					User struct {
-						ID string `json:"id"`
-					}
-					Position   decimal.Decimal `json:"position"`
-					EntryValue decimal.Decimal `json:"entryValue"`
-				} `json:"marginAccounts"`
-			} `json:"data"`
-		}
+	// var params struct {
+	// 	Query string `json:"query"`
+	// }
+	// queryFormat := `{
+	// 	users(first: 500, skip: %d, block: { number: %d }) {
+	// 		id
+	// 		stakedMCB
+	// 		totalFee
+	// 		marginAccounts {
+	//   			id
+	//   			position
+	// 		}
+	// 	}
+	// }`
+	// skip := 0
+	// for {
+	// 	params.Query = fmt.Sprintf(queryFormat, skip, )
+	// 	err, code, res := s.httpClient.Post(s.graphUrl, nil, params, nil)
+	// 	if err != nil || code != 200 {
+	// 		s.logger.Info("Failed to get MAI3 Trading Mining2 info err:%s, code:%d", err, code)
+	// 	}
+	// 	var response struct {
+	// 		Data struct {
+	// 			Users []struct{
+	// 				ID string `json:"id"`
+	// 				StakedMCB decimal.Decimal `json:"stakedMCB"`
+	// 				TotalFee decimal.Decimal `json:"totalFee"`
+	// 				MarginAccounts []struct{
+	// 					ID string `json:"id"`
+	// 					Position decimal.Decimal `json:"position"`
+	// 				}
+	// 			}
+	// 		}
+	// 	}
+	// 	err = json.Unmarshal(res, &response)
+	// 	if err != nil {
+	// 		s.logger.Error("Failed to unmarshal err:%s", err)
+	// 		return
+	// 	}
+	// 	for _, user := range response.Data.Users {
+	// 		s.logger.Debug("totalFee %s", user.TotalFee.String())
+	// 		s.logger.Debug("stakedMCB %s", user.StakedMCB.String())
+	// 		for _, marginAccount := range user.MarginAccounts {
+	// 			s.logger.Debug("id %s", marginAccount.ID)
+	// 			s.logger.Debug("position %s", marginAccount.Position.String())
+	// 		}
+	// 	}
 
-		err = json.Unmarshal(res, &response)
-		if err != nil {
-			f.logger.Error("Unmarshal error. err:%s", err)
-			return
-		}
+	// 	if len(response.Data.Users) == 500 {
+	// 		// means there are more data to get
+	// 		skip += 500
+	// 		if skip == 5000 {
+	// 			// TODO(champFu): there are no variables can be used to filter
+	// 			break
+	// 		}
+	// 	} else {
+	// 		break
+	// 	}
+	// }
+}
 
-		for _, account := range response.Data.MarginAccounts {
-			newPosition := &mining.Position{
-				PerpetualAdd: account.ID,
-				Trader:       account.User.ID,
-				Position:     account.Position,
-				EntryValue:   account.EntryValue, // TODO(ChampFu): OI = position * mark_price(from oracle)
-				Timestamp:    timestamp.Unix(),
-			}
-			f.db.Create(newPosition)
-		}
-		if len(response.Data.MarginAccounts) == 500 {
-			// means there are more data to get
-			skip += 500
-		} else {
-			// we have got all
-			break
+func (s *Syncer) syncState() {
+	s.logger.Info("Sync state")
+}
+
+//func (s *Syncer) syncPosition(timestamp time.Time) {
+//	var params struct {
+//		Query string `json:"query"`
+//	}
+//	queryFormat := `{
+//		marginAccounts(where: {position_gt: "0"} first: 500 skip: %d) {
+//			id
+//			user {
+//				id
+//			}
+//			position
+//			entryValue
+//		}
+//	}`
+//	skip := 0
+//	for {
+//		params.Query = fmt.Sprintf(queryFormat, skip)
+//		err, code, res := f.httpClient.Post(f.graphUrl, nil, params, nil)
+//		if err != nil || code != 200 {
+//			f.logger.Info("get fee error. err:%s, code:%d", err, code)
+//			return
+//		}
+//
+//		var response struct {
+//			Data struct {
+//				MarginAccounts []struct {
+//					ID   string `json:"id"`
+//					User struct {
+//						ID string `json:"id"`
+//					}
+//					Position   decimal.Decimal `json:"position"`
+//					EntryValue decimal.Decimal `json:"entryValue"`
+//				} `json:"marginAccounts"`
+//			} `json:"data"`
+//		}
+//
+//		err = json.Unmarshal(res, &response)
+//		if err != nil {
+//			f.logger.Error("Unmarshal error. err:%s", err)
+//			return
+//		}
+//
+//		for _, account := range response.Data.MarginAccounts {
+//			newPosition := &mining.Position{
+//				PerpetualAdd: account.ID,
+//				Trader:       account.User.ID,
+//				Position:     account.Position,
+//				Timestamp:    timestamp.Unix(),
+//			}
+//			f.db.Create(newPosition)
+//		}
+//		if len(response.Data.MarginAccounts) == 500 {
+//			// means there are more data to get
+//			skip += 500
+//		} else {
+//			// we have got all
+//			break
+//		}
+//	}
+//}
+
+func (s *Syncer) syncStake(timestamp time.Time) {
+
+}
+
+// func (s *Syncer) syncFee(timestamp time.Time) {
+// 	var params struct {
+// 		Query string `json:"query"`
+// 	}
+// 	queryFormat := `{
+// 		users(first: 500 skip: %d) {
+// 			id
+// 			totalFee
+// 		}
+// 	}`
+// 	skip := 0
+// 	for {
+// 		params.Query = fmt.Sprintf(queryFormat, skip)
+// 		err, code, res := f.httpClient.Post(f.graphUrl, nil, params, nil)
+// 		if err != nil || code != 200 {
+// 			f.logger.Info("get fee error. err:%s, code:%d", err, code)
+// 			return
+// 		}
+//
+// 		var response struct {
+// 			Data struct {
+// 				Users []struct {
+// 					ID       string          `json:"id"`
+// 					TotalFee decimal.Decimal `json:"totalFee"`
+// 				} `json:"users"`
+// 			} `json:"data"`
+// 		}
+//
+// 		err = json.Unmarshal(res, &response)
+// 		if err != nil {
+// 			f.logger.Error("Unmarshal error. err:%s", err)
+// 			return
+// 		}
+//
+// 		if len(response.Data.Users) == 500 {
+// 			// means there are more data to get
+// 			skip += 500
+// 		} else {
+// 			// we have got all
+// 			break
+// 		}
+// 	}
+// }
+
+func (s *Syncer) getEpoch() error {
+	// get epoch from schedule database.
+	now := time.Now().Unix()
+	var schedules []*mining.Schedule
+	err := s.db.Model(&mining.Schedule{}).Scan(&schedules).Error
+	if err != nil {
+		s.logger.Error("Failed to get schedule %s", err)
+		return err
+	}
+	for _, schedule := range schedules {
+		if now > schedule.StartTime && now < schedule.EndTime {
+			s.epoch = schedule.Epoch
+			s.thisEpochStartTime = schedule.StartTime
+			s.thisEpochEndTime = schedule.EndTime
+			return nil
 		}
 	}
+	return EPOCH_ERROR
 }
 
-func (f *Syncer) syncStake(timestamp time.Time) {
-
-}
-
-func (f *Syncer) syncFee(timestamp time.Time) {
-	var params struct {
-		Query string `json:"query"`
-	}
-	queryFormat := `{
-		users(first: 500 skip: %d) {
-			id
-			totalFee
-		}
-	}`
-	skip := 0
-	for {
-		params.Query = fmt.Sprintf(queryFormat, skip)
-		err, code, res := f.httpClient.Post(f.graphUrl, nil, params, nil)
-		if err != nil || code != 200 {
-			f.logger.Info("get fee error. err:%s, code:%d", err, code)
-			return
-		}
-
-		var response struct {
-			Data struct {
-				Users []struct {
-					ID       string          `json:"id"`
-					TotalFee decimal.Decimal `json:"totalFee"`
-				} `json:"users"`
-			} `json:"data"`
-		}
-
-		err = json.Unmarshal(res, &response)
-		if err != nil {
-			f.logger.Error("Unmarshal error. err:%s", err)
-			return
-		}
-
-		for _, user := range response.Data.Users {
-			newFee := &mining.Fee{
-				Trader:    user.ID,
-				Fee:       user.TotalFee,
-				Timestamp: timestamp.Unix(),
-			}
-			f.db.Create(newFee)
-		}
-
-		for _, user := range response.Data.Users {
-			newStake := &mining.Stake{
-				Trader:    user.ID,
-				Stake:     decimal.NewFromInt(100), // TODO(ChampFu)
-				Timestamp: timestamp.Unix(),
-			}
-			f.db.Create(newStake)
-		}
-		if len(response.Data.Users) == 500 {
-			// means there are more data to get
-			skip += 500
-		} else {
-			// we have got all
-			break
-		}
-	}
-}
-
-func (f *Syncer) updateEpoch(now time.Time) {
-	f.epoch = (now.Unix() - f.startTime.Unix()) / 60 / 60 / 24 / 14
-}
-
-func (f *Syncer) calScore(fee, oi, stake decimal.Decimal) decimal.Decimal {
-	// there are issue on decimal pow, so using float64
-	feeInflate, _ := fee.Float64()
-	oiInflate, _ := oi.Float64()
-	stakeInflate, _ := stake.Float64()
-	score := math.Pow(feeInflate, 0.7) + math.Pow(oiInflate, 0.3) + math.Pow(stakeInflate, 0.3)
-	return decimal.NewFromFloat(score)
-}
+// func (s *Syncer) calScore() decimal.Decimal {
+// 	// there are issue on decimal pow, so using float64
+// 	feeInflate, _ := fee.Float64()
+// 	oiInflate, _ := oi.Float64()
+// 	stakeInflate, _ := stake.Float64()
+// 	score := math.Pow(feeInflate, 0.7) + math.Pow(oiInflate, 0.3) + math.Pow(stakeInflate, 0.3)
+// 	return decimal.NewFromFloat(score)
+// }
 
 // func (c *Calculator) updateInitFee() {
 // 	// reset
