@@ -32,7 +32,7 @@ type Block struct {
 
 func NewBlockSyncer(ctx context.Context, logger logging.Logger, blockSyncerGraphUrl string, startTime *time.Time) *BlockSyncer {
 	syncer := &BlockSyncer{
-		utils.NewHttpClient(transport, logger),
+		utils.NewHttpClient(Transport, logger),
 		ctx,
 		logger,
 		blockSyncerGraphUrl,

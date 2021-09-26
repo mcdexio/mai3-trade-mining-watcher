@@ -25,6 +25,14 @@ type TMServer struct {
 	score    map[int]decimal.Decimal
 }
 
+type EpochTradingMiningResp struct {
+	Fee        string `json:"fee"`
+	OI         string `json:"oi"`
+	Stake      string `json:"stake"`
+	Score      string `json:"score"`
+	Proportion string `json:"proportion"`
+}
+
 func NewTMServer(ctx context.Context, logger logging.Logger) *TMServer {
 	tmServer := &TMServer{
 		logger: logger,
@@ -95,60 +103,52 @@ func (s *TMServer) getEpoch() {
 	s.logger.Info("Epoch %d", s.nowEpoch)
 }
 
-func (s *TMServer) calculateStatus() {
-	var startEpoch int
-	if len(s.score) == 0 {
-		// first time start this server
-		s.score = make(map[int]decimal.Decimal)
-		// sync from epoch 0
-		startEpoch = 0
-	} else {
-		// only sync from this epoch
-		startEpoch = s.nowEpoch
-		s.score[s.nowEpoch] = decimal.Zero
-	}
-
-	s.logger.Info("calculate total status")
-	for i := startEpoch; i <= s.nowEpoch; i++ {
-		var countsTrader []struct {
-			Trader string
-		}
-		var traders []struct {
-			Trader string
-			Score  decimal.Decimal
-			Epoch  int
-		}
-		// get distinct count
-		err := s.db.Model(&mining.UserInfo{}).Select("DISTINCT trader").Where("epoch = ?", i).Scan(&countsTrader).Error
-		if err != nil {
-			s.logger.Error("failed to get value from user info table err=%w", err)
-		}
-		count := len(countsTrader)
-		if count == 0 {
-			s.logger.Warn("there are no trader in this epoch %d", i)
-			s.score[i] = decimal.Zero
-			return
-		} else {
-			s.logger.Info("there are %d trader in this epoch %d", count, i)
-		}
-		err = s.db.Model(&mining.UserInfo{}).Limit(count).Select("trader, score").Order("timestamp desc").Where("epoch = ?", s.nowEpoch).Scan(&traders).Error
-		if err != nil {
-			s.logger.Error("failed to get value from user info table err=%w", err)
-		}
-		for _, t := range traders {
-			s.score[i] = s.score[i].Add(t.Score)
-		}
-		s.logger.Info("this epoch %d total score %s", i, s.score[i])
-	}
-}
-
-type EpochTradingMiningResp struct {
-	Fee        string `json:"fee"`
-	OI         string `json:"oi"`
-	Stake      string `json:"stake"`
-	Score      string `json:"score"`
-	Proportion string `json:"proportion"`
-}
+// func (s *TMServer) calculateStatus() {
+// 	var startEpoch int
+// 	if len(s.score) == 0 {
+// 		// first time start this server
+// 		s.score = make(map[int]decimal.Decimal)
+// 		// sync from epoch 0
+// 		startEpoch = 0
+// 	} else {
+// 		// only sync from this epoch
+// 		startEpoch = s.nowEpoch
+// 		s.score[s.nowEpoch] = decimal.Zero
+// 	}
+//
+// 	s.logger.Info("calculate total status")
+// 	for i := startEpoch; i <= s.nowEpoch; i++ {
+// 		var countsTrader []struct {
+// 			Trader string
+// 		}
+// 		var traders []struct {
+// 			Trader string
+// 			Score  decimal.Decimal
+// 			Epoch  int
+// 		}
+// 		// get distinct count
+// 		err := s.db.Model(&mining.UserInfo{}).Select("DISTINCT trader").Where("epoch = ?", i).Scan(&countsTrader).Error
+// 		if err != nil {
+// 			s.logger.Error("failed to get value from user info table err=%w", err)
+// 		}
+// 		count := len(countsTrader)
+// 		if count == 0 {
+// 			s.logger.Warn("there are no trader in this epoch %d", i)
+// 			s.score[i] = decimal.Zero
+// 			return
+// 		} else {
+// 			s.logger.Info("there are %d trader in this epoch %d", count, i)
+// 		}
+// 		err = s.db.Model(&mining.UserInfo{}).Limit(count).Select("trader, score").Order("timestamp desc").Where("epoch = ?", s.nowEpoch).Scan(&traders).Error
+// 		if err != nil {
+// 			s.logger.Error("failed to get value from user info table err=%w", err)
+// 		}
+// 		for _, t := range traders {
+// 			s.score[i] = s.score[i].Add(t.Score)
+// 		}
+// 		s.logger.Info("this epoch %d total score %s", i, s.score[i])
+// 	}
+// }
 
 func (s *TMServer) OnQuerySetEpoch(w http.ResponseWriter, r *http.Request) {
 	defer func() {
@@ -249,62 +249,62 @@ func (s *TMServer) OnQuerySetEpoch(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
-func (s *TMServer) OnQueryTradingMining(w http.ResponseWriter, r *http.Request) {
-	defer func() {
-		if r := recover(); r != nil {
-			_, ok := r.(error)
-			if !ok {
-				err := fmt.Errorf("%v", r)
-				s.logger.Error("recover err:%s", err)
-				http.Error(w, "internal error.", 400)
-				return
-			}
-		}
-	}()
-
-	if r.Method != "GET" {
-		s.jsonError(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-
-	// request
-	query := r.URL.Query()
-	trader := query["trader"]
-	if len(trader) == 0 || trader[0] == "" {
-		s.logger.Info("empty parameter:%#v", query)
-		s.jsonError(w, "empty parameter", 400)
-		return
-	}
-	queryTradingMiningResp := make(map[int]*EpochTradingMiningResp)
-	for i := 0; i <= s.nowEpoch; i++ {
-		rsp := mining.UserInfo{}
-		err := s.db.Model(&mining.UserInfo{}).Limit(1).Order("timestamp desc").Select(
-			"score, fee, oi, stake, timestamp").Where("trader = ? and epoch = ?", trader[0], i).Scan(&rsp).Error
-		if err != nil {
-			s.logger.Error("failed to get value from user info table err=%w", err)
-		}
-		s.logger.Info("%+v", rsp)
-		s.logger.Debug("score %+v", s.score)
-		totalScore, match := s.score[i]
-		if !match {
-			s.logger.Error("failed to get total score %+v", s.score)
-		}
-		proportion := (rsp.Score.Div(totalScore)).String()
-		resp := EpochTradingMiningResp{
-			Fee:        rsp.Fee.String(),
-			OI:         rsp.OI.String(),
-			Stake:      rsp.Stake.String(),
-			Score:      rsp.Score.String(),
-			Proportion: proportion,
-		}
-		queryTradingMiningResp[i] = &resp
-	}
-
-	s.logger.Info("%+v", queryTradingMiningResp)
-	json.NewEncoder(w).Encode(queryTradingMiningResp)
-}
+// func (s *TMServer) OnQueryTradingMining(w http.ResponseWriter, r *http.Request) {
+// 	defer func() {
+// 		if r := recover(); r != nil {
+// 			_, ok := r.(error)
+// 			if !ok {
+// 				err := fmt.Errorf("%v", r)
+// 				s.logger.Error("recover err:%s", err)
+// 				http.Error(w, "internal error.", 400)
+// 				return
+// 			}
+// 		}
+// 	}()
+//
+// 	if r.Method != "GET" {
+// 		s.jsonError(w, "method not allowed", http.StatusMethodNotAllowed)
+// 		return
+// 	}
+//
+// 	w.Header().Set("Access-Control-Allow-Origin", "*")
+//
+// 	// request
+// 	query := r.URL.Query()
+// 	trader := query["trader"]
+// 	if len(trader) == 0 || trader[0] == "" {
+// 		s.logger.Info("empty parameter:%#v", query)
+// 		s.jsonError(w, "empty parameter", 400)
+// 		return
+// 	}
+// 	queryTradingMiningResp := make(map[int]*EpochTradingMiningResp)
+// 	for i := 0; i <= s.nowEpoch; i++ {
+// 		rsp := mining.UserInfo{}
+// 		err := s.db.Model(&mining.UserInfo{}).Limit(1).Order("timestamp desc").Select(
+// 			"score, fee, oi, stake, timestamp").Where("trader = ? and epoch = ?", trader[0], i).Scan(&rsp).Error
+// 		if err != nil {
+// 			s.logger.Error("failed to get value from user info table err=%w", err)
+// 		}
+// 		s.logger.Info("%+v", rsp)
+// 		s.logger.Debug("score %+v", s.score)
+// 		totalScore, match := s.score[i]
+// 		if !match {
+// 			s.logger.Error("failed to get total score %+v", s.score)
+// 		}
+// 		proportion := (rsp.Score.Div(totalScore)).String()
+// 		resp := EpochTradingMiningResp{
+// 			Fee:        rsp.Fee.String(),
+// 			OI:         rsp.OI.String(),
+// 			Stake:      rsp.Stake.String(),
+// 			Score:      rsp.Score.String(),
+// 			Proportion: proportion,
+// 		}
+// 		queryTradingMiningResp[i] = &resp
+// 	}
+//
+// 	s.logger.Info("%+v", queryTradingMiningResp)
+// 	json.NewEncoder(w).Encode(queryTradingMiningResp)
+// }
 
 func (s *TMServer) upsertSchedule(schedule *mining.Schedule) error {
 	err := database.Transaction(s.db, func(tx *gorm.DB) error {

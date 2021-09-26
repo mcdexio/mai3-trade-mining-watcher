@@ -2,9 +2,11 @@ package syncer
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/mcdexio/mai3-trade-mining-watcher/database/models/mining"
+	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
 	"net"
 	"net/http"
@@ -17,7 +19,7 @@ import (
 
 var EPOCH_ERROR = errors.New("failed to get epoch from schedule db")
 
-var transport = &http.Transport{
+var Transport = &http.Transport{
 	DialContext: (&net.Dialer{
 		Timeout: 500 * time.Millisecond,
 	}).DialContext,
@@ -33,14 +35,24 @@ type Syncer struct {
 	db         *gorm.DB
 
 	// block syncer
-	blockGraphUrl   string
-	blockCheckpoint int64
-	blockSyncer     *BlockSyncer
+	blockGraphUrl string
+	blockSyncer   *BlockSyncer
 
 	mai3GraphUrl       string
 	epoch              int64
 	thisEpochStartTime int64
 	thisEpochEndTime   int64
+	blockNumber        int64
+}
+
+type User struct {
+	ID             string          `json:"id"`
+	StakedMCB      decimal.Decimal `json:"stakedMCB"`
+	TotalFee       decimal.Decimal `json:"totalFee"`
+	MarginAccounts []struct {
+		ID       string          `json:"id"`
+		Position decimal.Decimal `json:"position"`
+	}
 }
 
 func NewSyncer(
@@ -48,14 +60,13 @@ func NewSyncer(
 	blockGraphUrl string, blockStartTime *time.Time,
 ) *Syncer {
 	syncer := &Syncer{
-		ctx:             ctx,
-		httpClient:      utils.NewHttpClient(transport, logger),
-		logger:          logger,
-		mai3GraphUrl:    mai3GraphUrl,
-		blockGraphUrl:   blockGraphUrl,
-		blockSyncer:     NewBlockSyncer(ctx, logger, blockGraphUrl, blockStartTime),
-		db:              database.GetDB(),
-		blockCheckpoint: 0,
+		ctx:           ctx,
+		httpClient:    utils.NewHttpClient(Transport, logger),
+		logger:        logger,
+		mai3GraphUrl:  mai3GraphUrl,
+		blockGraphUrl: blockGraphUrl,
+		blockSyncer:   NewBlockSyncer(ctx, logger, blockGraphUrl, blockStartTime),
+		db:            database.GetDB(),
 	}
 	return syncer
 }
@@ -97,74 +108,101 @@ func (s *Syncer) Run() error {
 	}
 }
 
-func (s *Syncer) catchup() {
-	// depend on this epoch, catchup to now
-	s.logger.Info("Catchup stats from %d until now", s.thisEpochStartTime)
-	s.blockSyncer.catchup(s.thisEpochStartTime-60, time.Now().Unix())
+func (s *Syncer) GetUsersBasedOnBlockNumber(blockNumber int64) ([]*User, error) {
+	var retUser []*User
+	s.logger.Info("get users based on block number %d", blockNumber)
+	var params struct {
+		Query string `json:"query"`
+	}
+	queryFormat := `{
+		users(first: 500, skip: %d, block: { number: %d }, where: {totalFee_gt: 0}) {
+			id
+			stakedMCB
+			totalFee
+			marginAccounts(where:{position_gt: 0}){
+	  			id
+	  			position
+			}
+		}
+	}`
+	skip := 0
+	for {
+		params.Query = fmt.Sprintf(queryFormat, skip, blockNumber)
+		err, code, res := s.httpClient.Post(s.mai3GraphUrl, nil, params, nil)
+		if err != nil || code != 200 {
+			s.logger.Info("Failed to get MAI3 Trading Mining2 info err:%s, code:%d", err, code)
+			return nil, err
+		}
+		var response struct {
+			Data struct {
+				Users []User
+			}
+		}
+		err = json.Unmarshal(res, &response)
+		if err != nil {
+			s.logger.Error("Failed to unmarshal err:%s", err)
+			return nil, err
+		}
+		for _, user := range response.Data.Users {
+			retUser = append(retUser, &user)
+		}
+		if len(response.Data.Users) == 500 {
+			// means there are more data to get
+			skip += 500
+			if skip == 5000 {
+				s.logger.Warn("user more than 500, but we don't have filter")
+				break
+			}
+		} else {
+			break
+		}
+	}
+	return retUser, nil
+}
+
+func (s *Syncer) TimestampToBlockNumber(startTime int64) (int64, error) {
+	s.logger.Debug("transform timestamp %d to block number", startTime)
 	var blockInfo mining.Block
 	err := s.db.Model(&mining.Block{}).Limit(1).Order(
 		"number desc").Where(
-		"timestamp < ?", s.thisEpochStartTime,
+		"timestamp < ?", startTime,
 	).Scan(&blockInfo).Error
 	if err != nil {
-		s.logger.Error("Failed to get block info %s", err)
+		s.logger.Error("Failed to get block info %+v %s", blockInfo, err)
+		return -1, err
+	}
+	return blockInfo.Number, nil
+}
+
+func (s *Syncer) catchup() {
+	var err error
+	// depend on this epoch, catchup to now
+	s.logger.Info("Catchup stats from %d until now", s.thisEpochStartTime)
+	s.blockSyncer.catchup(s.thisEpochStartTime-60, time.Now().Unix())
+	s.blockNumber, err = s.TimestampToBlockNumber(s.thisEpochStartTime)
+	if err != nil {
+		s.logger.Error("Failed to get timestampToBlockNumber %d", s.thisEpochStartTime)
 		return
 	}
-	fmt.Println(blockInfo)
-
-	// var params struct {
-	// 	Query string `json:"query"`
+	//	user, err := s.GetUsersBasedOnBlockNumber(s.blockNumber)
+	// for _, u := range user {
+	// 	var userInfo = &mining.UserInfo{
+	// 		Trader: u.ID,
+	// 		Fee:u.TotalFee,
+	// 		Stake: u.StakedMCB,
+	// 	}
 	// }
-	// queryFormat := `{
-	// 	users(first: 500, skip: %d, block: { number: %d }) {
-	// 		id
-	// 		stakedMCB
-	// 		totalFee
-	// 		marginAccounts {
-	//   			id
-	//   			position
-	// 		}
-	// 	}
-	// }`
-	// skip := 0
-	// for {
-	// 	params.Query = fmt.Sprintf(queryFormat, skip, )
-	// 	err, code, res := s.httpClient.Post(s.graphUrl, nil, params, nil)
-	// 	if err != nil || code != 200 {
-	// 		s.logger.Info("Failed to get MAI3 Trading Mining2 info err:%s, code:%d", err, code)
-	// 	}
-	// 	var response struct {
-	// 		Data struct {
-	// 			Users []struct{
-	// 				ID string `json:"id"`
-	// 				StakedMCB decimal.Decimal `json:"stakedMCB"`
-	// 				TotalFee decimal.Decimal `json:"totalFee"`
-	// 				MarginAccounts []struct{
-	// 					ID string `json:"id"`
-	// 					Position decimal.Decimal `json:"position"`
-	// 				}
-	// 			}
-	// 		}
-	// 	}
-	// 	err = json.Unmarshal(res, &response)
-	// 	if err != nil {
-	// 		s.logger.Error("Failed to unmarshal err:%s", err)
-	// 		return
-	// 	}
-	// 	for _, user := range response.Data.Users {
-	// 		s.logger.Debug("totalFee %s", user.TotalFee.String())
-	// 		s.logger.Debug("stakedMCB %s", user.StakedMCB.String())
-	// 		for _, marginAccount := range user.MarginAccounts {
-	// 			s.logger.Debug("id %s", marginAccount.ID)
-	// 			s.logger.Debug("position %s", marginAccount.Position.String())
-	// 		}
-	// 	}
+	//		var userInfo := &mining.UserInfo{
+	//			Trader: user.ID,
+	//			Fee: user.TotalFee,
+	//			Stake: user.StakedMCB,
+	//		}
+	return
 
 	// 	if len(response.Data.Users) == 500 {
 	// 		// means there are more data to get
 	// 		skip += 500
 	// 		if skip == 5000 {
-	// 			// TODO(champFu): there are no variables can be used to filter
 	// 			break
 	// 		}
 	// 	} else {
@@ -175,6 +213,45 @@ func (s *Syncer) catchup() {
 
 func (s *Syncer) syncState() {
 	s.logger.Info("Sync state")
+}
+
+func (s *Syncer) GetMarkPriceBasedOnBlockNumber(blockNumber int64, poolAddr string, perpetualIndex int) (*decimal.Decimal, error) {
+	s.logger.Info("Get mark price based on block number %d", blockNumber)
+	id := fmt.Sprintf("%s-%d", poolAddr, perpetualIndex)
+	var params struct {
+		Query string `json:"query"`
+	}
+	queryFormat := `{
+		markPrices(first: 1, block: { number: %d }, where: {id: "%s"}) {
+    		id
+    		price
+    		timestamp
+		}
+	}`
+	params.Query = fmt.Sprintf(queryFormat, blockNumber, id)
+	err, code, res := s.httpClient.Post(s.mai3GraphUrl, nil, params, nil)
+	if err != nil || code != 200 {
+		s.logger.Info("Failed to get MAI3 Trading Mining2 info err:%s, code:%d", err, code)
+		return nil, err
+	}
+	var response struct {
+		Data struct {
+			MarkPrices []struct {
+				ID    string          `json:"id"`
+				Price decimal.Decimal `json:"price"`
+			}
+		}
+	}
+	err = json.Unmarshal(res, &response)
+	if err != nil {
+		s.logger.Error("Unmarshal error. err:%s", err)
+		return nil, err
+	}
+	fmt.Println(response.Data.MarkPrices)
+	if len(response.Data.MarkPrices) == 0 {
+		return nil, errors.New("empty mark price")
+	}
+	return &response.Data.MarkPrices[0].Price, nil
 }
 
 //func (s *Syncer) syncPosition(timestamp time.Time) {

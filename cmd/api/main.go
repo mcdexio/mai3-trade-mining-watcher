@@ -22,30 +22,33 @@ func main() {
 	backgroundCtx, stop := context.WithCancel(context.Background())
 	group, ctx := errgroup.WithContext(backgroundCtx)
 
-	startTimeString := config.GetString("START_TIME")
-	startTime, err := config.ParseTimeConfig(startTimeString)
+	syncerBlockStartTime := config.GetString("SYNCER_BLOCK_START_TIME")
+	startTime, err := config.ParseTimeConfig(syncerBlockStartTime)
 	if err != nil {
-		logger.Error("Failed to parse start time:%s", err)
+		logger.Error("Failed to parse block start time %s:%s", err)
+		os.Exit(-3)
 		return
 	}
-	intervalSec := config.GetInt("INTERVAL_SECOND")
 
-	syn, err := syncer.NewSyncer(
+	syn := syncer.NewSyncer(
 		ctx,
 		logger,
 		config.GetString("MAI3_TRADE_MINING_GRAPH_URL"),
-		intervalSec,
+		config.GetString("ARB_BLOCKS_GRAPH_URL"),
 		&startTime,
 	)
+	syn.Init()
 	if err != nil {
 		logger.Error("Failed to start syncer:%s", err)
 		os.Exit(-3)
+		return
 	}
 
-	tmServer := api.NewTMServer(ctx, logger, 120)
+	tmServer := api.NewTMServer(ctx, logger)
 	if err != nil {
 		logger.Error("Failed to trading mining server:%s", err)
 		os.Exit(-3)
+		return
 	}
 
 	go WaitExitSignalWithServer(stop, logger, tmServer)
