@@ -305,7 +305,13 @@ func (s *TMServer) OnQueryTradingMining(w http.ResponseWriter, r *http.Request) 
 			s.jsonError(w, "internal error", 400)
 			return
 		}
-		proportion := (rsp.Score.Div(totalScore)).String()
+		var proportion string
+		if totalScore.IsZero() {
+			proportion = "0"
+		} else {
+			proportion = (rsp.Score.Div(totalScore)).String()
+		}
+
 		resp := EpochTradingMiningResp{
 			Fee:        rsp.Fee.String(),
 			OI:         rsp.OI.String(),
