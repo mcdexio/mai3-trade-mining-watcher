@@ -28,16 +28,6 @@ func main() {
 	backgroundCtx, stop := context.WithCancel(context.Background())
 	group, ctx := errgroup.WithContext(backgroundCtx)
 
-	tmServer := api.NewTMServer(ctx, logger)
-	group.Go(func() error {
-		return tmServer.Run()
-	})
-
-	internalServer := api.NewInternalServer(ctx, logger)
-	group.Go(func() error {
-		return internalServer.Run()
-	})
-
 	syncerBlockStartTime := config.GetString("SYNCER_BLOCK_START_TIME")
 	startTime, err := config.ParseTimeConfig(syncerBlockStartTime)
 	if err != nil {
@@ -55,10 +45,21 @@ func main() {
 	)
 	syn.Init()
 
-	go WaitExitSignalWithServer(stop, logger, tmServer)
 	group.Go(func() error {
 		return syn.Run()
 	})
+
+	tmServer := api.NewTMServer(ctx, logger)
+	group.Go(func() error {
+		return tmServer.Run()
+	})
+
+	internalServer := api.NewInternalServer(ctx, logger)
+	group.Go(func() error {
+		return internalServer.Run()
+	})
+
+	go WaitExitSignalWithServer(stop, logger, tmServer)
 
 	if err := group.Wait(); err != nil {
 		logger.Critical("service stopped: %s", err)

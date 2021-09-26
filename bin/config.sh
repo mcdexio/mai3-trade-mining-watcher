@@ -7,7 +7,7 @@ export CI=false
 export SERVER_LOG_TO_STACKDRIVER=false
 export SERVER_LOG_TO_STDOUT=true
 export SERVER_PROJECT_ID=mai3-trade-mining-watcher
-export SERVER_LOGLEVEL=6
+export SERVER_LOGLEVEL=5
 export HOSTNAME=localhost
 
 # DB parameters
@@ -21,4 +21,4 @@ export MAI3_TRADE_MINING_GRAPH_URL=https://api.thegraph.com/subgraphs/name/champ
 export ARB_BLOCKS_GRAPH_URL=https://api.thegraph.com/subgraphs/name/renpu-mcarlo/arbitrum-rinkeby-blocks
 
 # setting
-export SYNCER_BLOCK_START_TIME="2021-09-26T01:00:00+08:00"
+export SYNCER_BLOCK_START_TIME="2021-09-26T22:00:00+08:00"
