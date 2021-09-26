@@ -207,15 +207,14 @@ func (s *BlockSyncer) sync() {
 			Columns:   []clause.Column{{Name: "table_name"}},
 			DoUpdates: clause.AssignmentColumns([]string{"to"}),
 		},
-	).Create(&mining.Progress{TableName: types.Block, To: endTime})
+	).Create(&mining.Progress{TableName: types.Block, To: endTime}).Logger.LogMode(logger.Silent)
 }
 
 // Insert a block into db, update a block if block hash is already there.
 func (s *BlockSyncer) upsertBlockIntoDB(newBlock *mining.Block) {
-	s.db.Logger.LogMode(logger.Silent)
 	s.db.Clauses(clause.OnConflict{
 		UpdateAll: true,
-	}).Create(newBlock)
+	}).Create(newBlock).Logger.LogMode(logger.Silent)
 }
 
 func (s *BlockSyncer) marshal(block *Block) *mining.Block {
