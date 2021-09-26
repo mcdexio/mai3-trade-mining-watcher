@@ -33,6 +33,11 @@ func main() {
 		return tmServer.Run()
 	})
 
+	internalServer := api.NewInternalServer(ctx, logger)
+	group.Go(func() error {
+		return internalServer.Run()
+	})
+
 	syncerBlockStartTime := config.GetString("SYNCER_BLOCK_START_TIME")
 	startTime, err := config.ParseTimeConfig(syncerBlockStartTime)
 	if err != nil {
