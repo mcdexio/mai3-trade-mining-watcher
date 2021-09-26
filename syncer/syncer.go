@@ -273,6 +273,10 @@ func (s *Syncer) catchup() {
 
 	// 1. initFee on blockNumber
 	user, err := s.GetUsersBasedOnBlockNumber(blockNumber)
+	if err != nil {
+		s.logger.Error("failed to get user based on block number %d", blockNumber)
+		return
+	}
 	for _, u := range user {
 		preFee := s.getFee(u.ID, blockNumber-1)
 		s.initFee[u.ID] = preFee
@@ -313,12 +317,16 @@ func (s *Syncer) catchup() {
 			return
 		}
 		user, err = s.GetUsersBasedOnBlockNumber(blockNumber)
+		if err != nil {
+			s.logger.Error("failed to get user based on block number %d", blockNumber)
+			return
+		}
 		for _, u := range user {
-			var fee decimal.Decimal
+			fee := u.TotalFee
 			if iFee, match := s.initFee[u.ID]; !match {
 				s.initFee[u.ID] = decimal.Zero
 			} else {
-				fee = u.TotalFee.Add(iFee.Neg()) // this block number(time) - init fee
+				fee = fee.Add(iFee.Neg()) // this block number(time) - init fee
 			}
 
 			var stake decimal.Decimal
@@ -394,6 +402,10 @@ func (s *Syncer) syncState() {
 		return
 	}
 	user, err := s.GetUsersBasedOnBlockNumber(blockNumber)
+	if err != nil {
+		s.logger.Error("failed to get user based on block number %d", blockNumber)
+		return
+	}
 
 	starTimeDecimal := decimal.NewFromInt(s.thisEpochStartTime).Div(minuteDecimal) // to minute
 	now := time.Now().Unix()
