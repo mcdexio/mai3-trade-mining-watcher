@@ -11,6 +11,7 @@ import (
 	utils "github.com/mcdexio/mai3-trade-mining-watcher/utils/http"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+	"gorm.io/gorm/logger"
 	"strconv"
 	"time"
 )
@@ -211,6 +212,7 @@ func (s *BlockSyncer) sync() {
 
 // Insert a block into db, update a block if block hash is already there.
 func (s *BlockSyncer) upsertBlockIntoDB(newBlock *mining.Block) {
+	s.db.Logger.LogMode(logger.Silent)
 	s.db.Clauses(clause.OnConflict{
 		UpdateAll: true,
 	}).Create(newBlock)
