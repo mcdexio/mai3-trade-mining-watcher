@@ -23,7 +23,7 @@ func main() {
 
 	db := database.GetDB()
 	database.Initialize()
-	database.Reset(db, types.Watcher, true)
+	database.Reset(db, types.Watcher, false)
 
 	backgroundCtx, stop := context.WithCancel(context.Background())
 	group, ctx := errgroup.WithContext(backgroundCtx)

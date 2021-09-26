@@ -117,7 +117,7 @@ func (s *Syncer) setDefaultEpoch() {
 func (s *Syncer) Init() {
 	s.blockSyncer.Init()
 	// get this epoch number, thisEpochStartTime, thisEpochEndTime
-	err := s.getEpoch()
+	err := s.GetEpoch()
 	if err == NOT_IN_EPOCH {
 		s.logger.Warn("warn %s", err)
 	} else if err == EMPTY_SCHEDULE {
@@ -141,12 +141,15 @@ func (s *Syncer) Run() error {
 	}()
 
 	ticker1min := time.NewTicker(1 * time.Minute)
+	ticker1hour := time.NewTicker(1*time.Hour)
 	for {
 		select {
 		case <-s.ctx.Done():
 			ticker1min.Stop()
 			s.logger.Info("Syncer receives shutdown signal.")
 			return nil
+		case <-ticker1hour.C:
+			s.syncStatePreventRollback()
 		case <-ticker1min.C:
 			s.syncState()
 		}
@@ -217,6 +220,10 @@ func (s *Syncer) TimestampToBlockNumber(startTime int64) (int64, error) {
 		return -1, err
 	}
 	return blockInfo.Number, nil
+}
+
+func (s *Syncer) syncStatePreventRollback() {
+	s.logger.Info("Sync state until one hour ago for preventing rollback")
 }
 
 func (s *Syncer) GetPoolAddrIndexUserID(marginAccountID string) (poolAddr, userId string, perpetualIndex int, err error) {
@@ -361,6 +368,7 @@ func (s *Syncer) getFee(id string, blockNumber int64) decimal.Decimal {
 	err, code, res := s.httpClient.Post(s.mai3GraphUrl, nil, params, nil)
 	if err != nil || code != 200 {
 		s.logger.Error("Failed to get MAI3 Trading Mining2 info err:%s, code:%d", err, code)
+		return decimal.Zero
 	}
 	var response struct {
 		Data struct {
@@ -371,14 +379,10 @@ func (s *Syncer) getFee(id string, blockNumber int64) decimal.Decimal {
 	if err != nil {
 		s.logger.Error("Failed to unmarshal err:%s", err)
 	}
-	if len(response.Data.Users) == 0 {
+	if len(response.Data.Users) == 1 {
 		return response.Data.Users[0].TotalFee
 	}
 	return decimal.Zero
-}
-
-func (s *Syncer) syncStateBlockNumber(blockNumber int64) {
-	s.logger.Info("Sync state by block number %d", blockNumber)
 }
 
 func (s *Syncer) syncState() {
@@ -476,10 +480,10 @@ func (s *Syncer) GetMarkPriceBasedOnBlockNumber(blockNumber int64, poolAddr stri
 	return &response.Data.MarkPrices[0].Price, nil
 }
 
-func (s *Syncer) getEpoch() error {
+func (s *Syncer) GetEpoch() error {
 	// get epoch from schedule database.
 	now := time.Now().Unix()
-	var schedules []*mining.Schedule
+	var schedules []mining.Schedule
 	err := s.db.Model(&mining.Schedule{}).Scan(&schedules).Error
 	if err != nil {
 		s.logger.Error("Failed to get schedule %s", err)
