@@ -404,11 +404,11 @@ func (s *Syncer) syncState() {
 	fromStartTimeToLast := lastTimeDecimal.Add(starTimeDecimal.Neg())
 
 	for _, u := range user {
-		var fee decimal.Decimal
+		fee := u.TotalFee
 		if iFee, match := s.initFee[u.ID]; !match {
 			s.initFee[u.ID] = decimal.Zero
 		} else {
-			fee = u.TotalFee.Add(iFee.Neg()) // this block number(time) - init fee
+			fee = fee.Add(iFee.Neg()) // this block number(time) - init fee
 		}
 
 		var stake decimal.Decimal
