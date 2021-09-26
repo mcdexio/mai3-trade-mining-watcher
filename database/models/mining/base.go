@@ -10,5 +10,4 @@ var AllModels = []interface{}{
 	&Progress{},
 	&Schedule{},
 	&UserInfo{},
-	&MarkPrice{},
 }

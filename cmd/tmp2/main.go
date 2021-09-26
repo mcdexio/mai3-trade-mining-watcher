@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"github.com/mcdexio/mai3-trade-mining-watcher/api"
 	"github.com/mcdexio/mai3-trade-mining-watcher/common/config"
 	"github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
@@ -50,11 +49,19 @@ func main() {
 	// }
 	// fmt.Println(len(user))
 
-	price, err := syn.GetMarkPriceBasedOnBlockNumber(2771249, "0xc32a2dfee97e2babc90a2b5e6aef41e789ef2e13", 0)
-	if err != nil {
-		return
-	}
-	fmt.Println(price.String())
+	// price, err := syn.GetMarkPriceBasedOnBlockNumber(2771249, "0xc32a2dfee97e2babc90a2b5e6aef41e789ef2e13", 0)
+	// if err != nil {
+	// 	return
+	// }
+	// fmt.Println(price.String())
+
+	// poolAddr, userId, perpetualIndex, err := syn.GetPoolAddrIndexUserID("0xc32a2dfee97e2babc90a2b5e6aef41e789ef2e13-0-0x00233150044aec4cba478d0bf0ecda0baaf5ad19")
+	// if err != nil {
+	// 	return
+	// }
+	// fmt.Println(poolAddr)
+	// fmt.Println(userId)
+	// fmt.Println(perpetualIndex)
 
 	go WaitExitSignal(stop, logger)
 	syn.Init()

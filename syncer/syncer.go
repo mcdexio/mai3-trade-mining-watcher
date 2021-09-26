@@ -8,6 +8,7 @@ import (
 	"github.com/mcdexio/mai3-trade-mining-watcher/database/models/mining"
 	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
+	"math"
 	"net"
 	"net/http"
 	"strconv"
@@ -45,16 +46,23 @@ type Syncer struct {
 	thisEpochStartTime int64
 	thisEpochEndTime   int64
 	blockNumber        int64
+
+	// weight
+	thisEpochWeightOI  float64
+	thisEpochWeightMCB float64
+	thisEpochWeightFee float64
+}
+
+type MarginAccount struct {
+	ID       string          `json:"id"`
+	Position decimal.Decimal `json:"position"`
 }
 
 type User struct {
 	ID             string          `json:"id"`
 	StakedMCB      decimal.Decimal `json:"stakedMCB"`
 	TotalFee       decimal.Decimal `json:"totalFee"`
-	MarginAccounts []struct {
-		ID       string          `json:"id"`
-		Position decimal.Decimal `json:"position"`
-	}
+	MarginAccounts []*MarginAccount
 }
 
 func NewSyncer(
@@ -110,8 +118,8 @@ func (s *Syncer) Run() error {
 	}
 }
 
-func (s *Syncer) GetUsersBasedOnBlockNumber(blockNumber int64) ([]*User, error) {
-	var retUser []*User
+func (s *Syncer) GetUsersBasedOnBlockNumber(blockNumber int64) ([]User, error) {
+	var retUser []User
 	s.logger.Info("get users based on block number %d", blockNumber)
 	var params struct {
 		Query string `json:"query"`
@@ -146,7 +154,7 @@ func (s *Syncer) GetUsersBasedOnBlockNumber(blockNumber int64) ([]*User, error) 
 			return nil, err
 		}
 		for _, user := range response.Data.Users {
-			retUser = append(retUser, &user)
+			retUser = append(retUser, user)
 		}
 		if len(response.Data.Users) == 500 {
 			// means there are more data to get
@@ -187,11 +195,34 @@ func (s *Syncer) GetPoolAddrIndexUserID(marginAccountID string) (poolAddr, userI
 	return
 }
 
+func (s *Syncer) calculateOI(marginAccounts []*MarginAccount, blockNumber int64) decimal.Decimal {
+	s.logger.Debug("calculate OI based on marginAccounts and blockNumber")
+	if len(marginAccounts) == 0 {
+		return decimal.Zero
+	}
+	sumOI := decimal.Zero
+	for _, m := range marginAccounts {
+		poolAddr, _, perpetualIndex, err := s.GetPoolAddrIndexUserID(m.ID)
+		if err != nil {
+			continue
+		}
+		price, err := s.GetMarkPriceBasedOnBlockNumber(blockNumber, poolAddr, perpetualIndex)
+		if err != nil {
+			continue
+		}
+		oi := price.Mul(m.Position)
+		sumOI = sumOI.Add(oi)
+	}
+	return sumOI
+}
+
 func (s *Syncer) catchup() {
 	var err error
 	// depend on this epoch, catchup to now
 	s.logger.Info("Catchup stats from %d until now", s.thisEpochStartTime)
-	s.blockSyncer.catchup(s.thisEpochStartTime-60, time.Now().Unix())
+	if s.thisEpochStartTime != 0 {
+		s.blockSyncer.catchup(s.thisEpochStartTime-60, time.Now().Unix())
+	}
 	s.blockNumber, err = s.TimestampToBlockNumber(s.thisEpochStartTime)
 	if err != nil {
 		s.logger.Error("Failed to get timestampToBlockNumber %d", s.thisEpochStartTime)
@@ -199,16 +230,19 @@ func (s *Syncer) catchup() {
 	}
 	user, err := s.GetUsersBasedOnBlockNumber(s.blockNumber)
 	for _, u := range user {
-		for _, marginAccount := range u.MarginAccounts {
-			marginAccount.ID
-			s.GetMarkPriceBasedOnBlockNumber(s.blockNumber, .)
+		oi := s.calculateOI(u.MarginAccounts, s.blockNumber)
+		score := s.calScore(u.TotalFee, oi, u.StakedMCB)
+		var userInfo = &mining.UserInfo{
+			Trader:    u.ID,
+			Fee:       u.TotalFee,  // TODO(ChampFu): decrease
+			Stake:     u.StakedMCB, // TODO(chmpFU): calculate previous
+			OI:        oi,          // TODO(chmpFU): calculate previous
+			Score:     score,
+			Timestamp: s.thisEpochStartTime,
+			Epoch:     s.epoch,
 		}
+		s.db.Create(userInfo)
 	}
-	//		var userInfo := &mining.UserInfo{
-	//			Trader: user.ID,
-	//			Fee: user.TotalFee,
-	//			Stake: user.StakedMCB,
-	//		}
 	return
 
 	// 	if len(response.Data.Users) == 500 {
@@ -225,10 +259,32 @@ func (s *Syncer) catchup() {
 
 func (s *Syncer) syncState() {
 	s.logger.Info("Sync state")
+	var err error
+	s.blockNumber, err = s.TimestampToBlockNumber(s.thisEpochStartTime)
+	if err != nil {
+		s.logger.Error("Failed to get timestampToBlockNumber %d", s.thisEpochStartTime)
+		return
+	}
+	user, err := s.GetUsersBasedOnBlockNumber(s.blockNumber)
+	for _, u := range user {
+		oi := s.calculateOI(u.MarginAccounts, s.blockNumber)
+		score := s.calScore(u.TotalFee, oi, u.StakedMCB)
+		var userInfo = &mining.UserInfo{
+			Trader:    u.ID,
+			Fee:       u.TotalFee,  // TODO(ChampFu): decrease
+			Stake:     u.StakedMCB, // TODO(chmpFU): calculate previous
+			OI:        oi,          // TODO(chmpFU): calculate previous
+			Score:     score,
+			Timestamp: s.thisEpochStartTime,
+			Epoch:     s.epoch,
+		}
+		s.db.Create(userInfo)
+	}
+	return
 }
 
 func (s *Syncer) GetMarkPriceBasedOnBlockNumber(blockNumber int64, poolAddr string, perpetualIndex int) (*decimal.Decimal, error) {
-	s.logger.Info("Get mark price based on block number %d", blockNumber)
+	s.logger.Debug("Get mark price based on block number %d, poolAddr %s, perpetualIndex %d", blockNumber, poolAddr, perpetualIndex)
 	id := fmt.Sprintf("%s-%d", poolAddr, perpetualIndex)
 	var params struct {
 		Query string `json:"query"`
@@ -259,7 +315,6 @@ func (s *Syncer) GetMarkPriceBasedOnBlockNumber(blockNumber int64, poolAddr stri
 		s.logger.Error("Unmarshal error. err:%s", err)
 		return nil, err
 	}
-	fmt.Println(response.Data.MarkPrices)
 	if len(response.Data.MarkPrices) == 0 {
 		return nil, errors.New("empty mark price")
 	}
@@ -327,10 +382,6 @@ func (s *Syncer) GetMarkPriceBasedOnBlockNumber(blockNumber int64, poolAddr stri
 //	}
 //}
 
-func (s *Syncer) syncStake(timestamp time.Time) {
-
-}
-
 // func (s *Syncer) syncFee(timestamp time.Time) {
 // 	var params struct {
 // 		Query string `json:"query"`
@@ -389,20 +440,23 @@ func (s *Syncer) getEpoch() error {
 			s.epoch = schedule.Epoch
 			s.thisEpochStartTime = schedule.StartTime
 			s.thisEpochEndTime = schedule.EndTime
+			s.thisEpochWeightFee, _ = schedule.WeightFee.Float64()
+			s.thisEpochWeightOI, _ = schedule.WeightOI.Float64()
+			s.thisEpochWeightMCB, _ = schedule.WeightMCB.Float64()
 			return nil
 		}
 	}
 	return EPOCH_ERROR
 }
 
-// func (s *Syncer) calScore() decimal.Decimal {
-// 	// there are issue on decimal pow, so using float64
-// 	feeInflate, _ := fee.Float64()
-// 	oiInflate, _ := oi.Float64()
-// 	stakeInflate, _ := stake.Float64()
-// 	score := math.Pow(feeInflate, 0.7) + math.Pow(oiInflate, 0.3) + math.Pow(stakeInflate, 0.3)
-// 	return decimal.NewFromFloat(score)
-// }
+func (s *Syncer) calScore(fee, oi, stake decimal.Decimal) decimal.Decimal {
+	// there are issue on decimal pow, so using float64
+	feeInflate, _ := fee.Float64()
+	oiInflate, _ := oi.Float64()
+	stakeInflate, _ := stake.Float64()
+	score := math.Pow(feeInflate, s.thisEpochWeightFee) * math.Pow(oiInflate, s.thisEpochWeightOI) * math.Pow(stakeInflate, s.thisEpochWeightMCB)
+	return decimal.NewFromFloat(score)
+}
 
 // func (c *Calculator) updateInitFee() {
 // 	// reset

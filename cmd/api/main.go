@@ -22,6 +22,11 @@ func main() {
 	backgroundCtx, stop := context.WithCancel(context.Background())
 	group, ctx := errgroup.WithContext(backgroundCtx)
 
+	tmServer := api.NewTMServer(ctx, logger)
+	group.Go(func() error {
+		return tmServer.Run()
+	})
+
 	syncerBlockStartTime := config.GetString("SYNCER_BLOCK_START_TIME")
 	startTime, err := config.ParseTimeConfig(syncerBlockStartTime)
 	if err != nil {
@@ -44,19 +49,9 @@ func main() {
 		return
 	}
 
-	tmServer := api.NewTMServer(ctx, logger)
-	if err != nil {
-		logger.Error("Failed to trading mining server:%s", err)
-		os.Exit(-3)
-		return
-	}
-
 	go WaitExitSignalWithServer(stop, logger, tmServer)
 	group.Go(func() error {
 		return syn.Run()
-	})
-	group.Go(func() error {
-		return tmServer.Run()
 	})
 
 	if err := group.Wait(); err != nil {
