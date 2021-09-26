@@ -36,6 +36,16 @@ func main() {
 		return
 	}
 
+	internalServer := api.NewInternalServer(ctx, logger)
+	group.Go(func() error {
+		return internalServer.Run()
+	})
+
+	tmServer := api.NewTMServer(ctx, logger)
+	group.Go(func() error {
+		return tmServer.Run()
+	})
+
 	syn := syncer.NewSyncer(
 		ctx,
 		logger,
@@ -47,16 +57,6 @@ func main() {
 
 	group.Go(func() error {
 		return syn.Run()
-	})
-
-	tmServer := api.NewTMServer(ctx, logger)
-	group.Go(func() error {
-		return tmServer.Run()
-	})
-
-	internalServer := api.NewInternalServer(ctx, logger)
-	group.Go(func() error {
-		return internalServer.Run()
 	})
 
 	go WaitExitSignalWithServer(stop, logger, tmServer)
