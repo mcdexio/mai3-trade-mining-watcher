@@ -54,11 +54,6 @@ func main() {
 		&startTime,
 	)
 	syn.Init()
-	if err != nil {
-		logger.Error("Failed to start syncer:%s", err)
-		os.Exit(-3)
-		return
-	}
 
 	go WaitExitSignalWithServer(stop, logger, tmServer)
 	group.Go(func() error {
