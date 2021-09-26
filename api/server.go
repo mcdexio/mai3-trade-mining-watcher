@@ -80,7 +80,6 @@ func (s *TMServer) Run() error {
 }
 
 func (s *TMServer) getEpoch() {
-	s.logger.Info("get epoch")
 	var epochs []struct {
 		Epoch int
 	}
@@ -96,7 +95,7 @@ func (s *TMServer) getEpoch() {
 	} else {
 		s.nowEpoch = epochs[0].Epoch
 	}
-	s.logger.Info("Epoch %d", s.nowEpoch)
+	s.logger.Debug("get epoch: %d", s.nowEpoch)
 }
 
 func (s *TMServer) calculateStatus() {

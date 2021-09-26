@@ -22,40 +22,41 @@ func main() {
 	backgroundCtx, stop := context.WithCancel(context.Background())
 	group, ctx := errgroup.WithContext(backgroundCtx)
 
-	server := api.NewTMServer(ctx, logger)
-	go WaitExitSignalWithServer(stop, logger, server)
+	tmServer := api.NewTMServer(ctx, logger)
 	group.Go(func() error {
-		return server.Run()
+		return tmServer.Run()
 	})
 
-	arbBlockGraphUrl := config.GetString("ARB_BLOCKS_GRAPH_URL")
-
-	startTime, err := config.ParseTimeConfig(config.GetString("SYNCER_BLOCK_START_TIME"))
+	syncerBlockStartTime := config.GetString("SYNCER_BLOCK_START_TIME")
+	startTime, err := config.ParseTimeConfig(syncerBlockStartTime)
 	if err != nil {
-		logger.Error("Failed to parse time config", err)
+		logger.Error("Failed to parse block start time %s:%s", err)
+		os.Exit(-3)
 		return
-	} else {
-		logger.Info("start time %s", startTime.String())
 	}
-	app := syncer.NewBlockSyncer(ctx, logger, arbBlockGraphUrl, &startTime)
-	app.Init()
+
+	syn := syncer.NewSyncer(
+		ctx,
+		logger,
+		config.GetString("MAI3_TRADE_MINING_GRAPH_URL"),
+		config.GetString("ARB_BLOCKS_GRAPH_URL"),
+		&startTime,
+	)
+	syn.Init()
+	if err != nil {
+		logger.Error("Failed to start syncer:%s", err)
+		os.Exit(-3)
+		return
+	}
+
+	go WaitExitSignalWithServer(stop, logger, tmServer)
 	group.Go(func() error {
-		return app.Run()
+		return syn.Run()
 	})
 
 	if err := group.Wait(); err != nil {
 		logger.Critical("service stopped: %s", err)
 	}
-}
-
-func WaitExitSignal(ctxStop context.CancelFunc, logger logging.Logger) {
-	var exitSignal = make(chan os.Signal, 1)
-	signal.Notify(exitSignal, syscall.SIGTERM)
-	signal.Notify(exitSignal, syscall.SIGINT)
-
-	sig := <-exitSignal
-	logger.Info("caught sig: %+v, Stopping...\n", sig)
-	ctxStop()
 }
 
 func WaitExitSignalWithServer(ctxStop context.CancelFunc, logger logging.Logger, server *api.TMServer) {

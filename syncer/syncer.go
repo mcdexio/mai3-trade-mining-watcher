@@ -20,7 +20,8 @@ import (
 	utils "github.com/mcdexio/mai3-trade-mining-watcher/utils/http"
 )
 
-var EPOCH_ERROR = errors.New("failed to get epoch from schedule db")
+var NOT_IN_EPOCH = errors.New("not in epoch period")
+var EMPTY_SCHEDULE = errors.New("empty schedule")
 
 var Transport = &http.Transport{
 	DialContext: (&net.Dialer{
@@ -81,13 +82,37 @@ func NewSyncer(
 	return syncer
 }
 
-func (s Syncer) Init() {
-	s.blockSyncer.Init()
+func (s *Syncer) defaultEpoch() {
+	s.thisEpochStartTime = time.Now().Unix()
+	s.thisEpochEndTime = s.thisEpochEndTime + 60*60*24*14
+	s.thisEpochWeightMCB = 0.3
+	s.thisEpochWeightFee = 0.7
+	s.thisEpochWeightOI = 0.3
+	err := s.db.Create(
+		mining.Schedule{
+			Epoch: 0,
+			StartTime: s.thisEpochStartTime,
+			EndTime: s.thisEpochEndTime,
+			WeightFee: decimal.NewFromFloat(s.thisEpochWeightFee),
+			WeightMCB: decimal.NewFromFloat(s.thisEpochWeightMCB),
+			WeightOI: decimal.NewFromFloat(s.thisEpochWeightOI),
+		}).Error
+	if err != nil {
+		s.logger.Error("set default epoch error %s", err)
+		panic(err)
+	}
+}
 
+
+func (s *Syncer) Init() {
+	s.blockSyncer.Init()
 	// get this epoch number, thisEpochStartTime, thisEpochEndTime
 	err := s.getEpoch()
-	if err == EPOCH_ERROR {
-		s.logger.Warn("right now is not in this epoch")
+	if err == NOT_IN_EPOCH {
+		s.logger.Warn("warn %s", err)
+	} else if err == EMPTY_SCHEDULE {
+		s.logger.Warn("warn %s", err)
+		s.defaultEpoch()
 	} else if err != nil {
 		panic(err)
 	}
@@ -436,6 +461,9 @@ func (s *Syncer) getEpoch() error {
 		s.logger.Error("Failed to get schedule %s", err)
 		return err
 	}
+	if len(schedules) == 0 {
+		return EMPTY_SCHEDULE
+	}
 	for _, schedule := range schedules {
 		if now > schedule.StartTime && now < schedule.EndTime {
 			s.epoch = schedule.Epoch
@@ -447,7 +475,7 @@ func (s *Syncer) getEpoch() error {
 			return nil
 		}
 	}
-	return EPOCH_ERROR
+	return NOT_IN_EPOCH
 }
 
 func (s *Syncer) calScore(fee, oi, stake decimal.Decimal) decimal.Decimal {
