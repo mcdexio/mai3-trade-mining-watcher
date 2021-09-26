@@ -269,6 +269,7 @@ func (s *Syncer) syncState() {
 	for _, u := range user {
 		oi := s.calculateOI(u.MarginAccounts, s.blockNumber)
 		score := s.calScore(u.TotalFee, oi, u.StakedMCB)
+		s.logger.Debug("user %+v", u)
 		var userInfo = &mining.UserInfo{
 			Trader:    u.ID,
 			Fee:       u.TotalFee,  // TODO(ChampFu): decrease

@@ -53,6 +53,7 @@ func NewDB(args string, _ Host) (db *gorm.DB, err error) {
 		logger.Warn("failed to open gorm db err=%v", err)
 		return
 	}
+	db.Logger.LogMode(0)
 	var sqlDB *sql.DB
 	sqlDB, err = db.DB()
 	if err != nil {
