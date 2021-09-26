@@ -10,6 +10,8 @@ import (
 	"gorm.io/gorm"
 	"net"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
@@ -174,6 +176,17 @@ func (s *Syncer) TimestampToBlockNumber(startTime int64) (int64, error) {
 	return blockInfo.Number, nil
 }
 
+func (s *Syncer) GetPoolAddrIndexUserID(marginAccountID string) (poolAddr, userId string, perpetualIndex int, err error) {
+	rest := strings.Split(marginAccountID, "-")
+	perpetualIndex, err = strconv.Atoi(rest[1])
+	if err != nil {
+		return
+	}
+	poolAddr = rest[0]
+	userId = rest[2]
+	return
+}
+
 func (s *Syncer) catchup() {
 	var err error
 	// depend on this epoch, catchup to now
@@ -184,14 +197,13 @@ func (s *Syncer) catchup() {
 		s.logger.Error("Failed to get timestampToBlockNumber %d", s.thisEpochStartTime)
 		return
 	}
-	//	user, err := s.GetUsersBasedOnBlockNumber(s.blockNumber)
-	// for _, u := range user {
-	// 	var userInfo = &mining.UserInfo{
-	// 		Trader: u.ID,
-	// 		Fee:u.TotalFee,
-	// 		Stake: u.StakedMCB,
-	// 	}
-	// }
+	user, err := s.GetUsersBasedOnBlockNumber(s.blockNumber)
+	for _, u := range user {
+		for _, marginAccount := range u.MarginAccounts {
+			marginAccount.ID
+			s.GetMarkPriceBasedOnBlockNumber(s.blockNumber, .)
+		}
+	}
 	//		var userInfo := &mining.UserInfo{
 	//			Trader: user.ID,
 	//			Fee: user.TotalFee,
