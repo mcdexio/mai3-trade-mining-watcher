@@ -3,6 +3,13 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"net/url"
+	"regexp"
+	"runtime/debug"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/mcdexio/mai3-trade-mining-watcher/common/config"
 	"github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
 	"github.com/mcdexio/mai3-trade-mining-watcher/database/db/miningdb"
@@ -11,13 +18,8 @@ import (
 	"github.com/mcdexio/mai3-trade-mining-watcher/types"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	l "gorm.io/gorm/logger"
 	"gorm.io/gorm/schema"
-	"net/url"
-	"regexp"
-	"runtime/debug"
-	"strings"
-	"sync"
-	"time"
 )
 
 // Host specifies the database host.
@@ -47,6 +49,7 @@ func NewDB(args string, _ Host) (db *gorm.DB, err error) {
 			NamingStrategy: schema.NamingStrategy{
 				SingularTable: true,
 			},
+			Logger: l.Default.LogMode(l.Silent),
 		},
 	)
 	if err != nil {

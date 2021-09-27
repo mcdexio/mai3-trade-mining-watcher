@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 
 	"github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
 )
@@ -41,13 +40,13 @@ func NewHttpClient(transport *http.Transport, logger logging.Logger) *Client {
 const ErrorCode = -1
 
 func (h *Client) Request(method, u string, params []KeyValue, requestBody interface{}, headers []KeyValue) (err error, code int, respBody []byte) {
-	start := time.Now().UTC()
+	// start := time.Now().UTC()
 	code = ErrorCode
 	respBody = []byte{}
 	err = nil
 	defer func() {
 		// h.logger.Debug("###[%s]### cost[%.0f] %s %v %v %v ###[%d]###response###%s", method, float64(time.Since(start))/1000000, u, requestBody, params, headers, code, string(respBody))
-		h.logger.Debug("###[%s]### cost[%.0f] %s %v %v %v ###[%d]###response###", method, float64(time.Since(start))/1000000, u, requestBody, params, headers, code)
+		// h.logger.Debug("###[%s]### cost[%.0f] %s %v %v %v ###[%d]###response###", method, float64(time.Since(start))/1000000, u, requestBody, params, headers, code)
 	}()
 
 	if len(u) == 0 {
