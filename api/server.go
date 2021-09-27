@@ -4,13 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"time"
+
 	"github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
 	database "github.com/mcdexio/mai3-trade-mining-watcher/database/db"
 	"github.com/mcdexio/mai3-trade-mining-watcher/database/models/mining"
 	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
-	"net/http"
-	"time"
 )
 
 type TMServer struct {
@@ -111,7 +112,6 @@ func (s *TMServer) calculateStatus() {
 		startEpoch = s.nowEpoch
 		s.score[s.nowEpoch] = decimal.Zero
 	}
-
 	s.logger.Info("calculate total status")
 	for i := startEpoch; i <= s.nowEpoch; i++ {
 		var countsTrader []struct {
@@ -199,11 +199,10 @@ func (s *TMServer) OnQueryTradingMining(w http.ResponseWriter, r *http.Request) 
 		} else {
 			proportion = (rsp.Score.Div(totalScore)).String()
 		}
-
 		resp := EpochTradingMiningResp{
-			Fee:        rsp.Fee.String(),
-			OI:         rsp.OI.String(),
-			Stake:      rsp.Stake.String(),
+			Fee:        rsp.AccFee.String(),
+			OI:         rsp.AccPosValue.Add(rsp.CurPosValue).String(),
+			Stake:      rsp.AccStakeScore.Add(rsp.CurStakeScore).String(),
 			Score:      rsp.Score.String(),
 			Proportion: proportion,
 		}
