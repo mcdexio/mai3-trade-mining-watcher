@@ -49,7 +49,7 @@ func NewDB(args string, _ Host) (db *gorm.DB, err error) {
 			NamingStrategy: schema.NamingStrategy{
 				SingularTable: true,
 			},
-			Logger: l.Default.LogMode(l.Silent),
+			Logger: l.Default.LogMode(l.Silent), // silent orm logs
 		},
 	)
 	if err != nil {
