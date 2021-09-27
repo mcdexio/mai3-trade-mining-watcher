@@ -350,7 +350,7 @@ func (s *Syncer) catchup() {
 
 			var oi decimal.Decimal
 			thisOI := s.calOI(u.MarginAccounts, blockNumber)
-			if iOI, match := s.prevMCB[u.ID]; !match {
+			if iOI, match := s.prevOI[u.ID]; !match {
 				s.prevOI[u.ID] = thisOI
 			} else {
 				oi = ((iOI.Mul(fromStartTimeToLast)).Add(thisOI)).Div(fromStartTimeToNow)
@@ -445,7 +445,7 @@ func (s *Syncer) syncState() {
 
 		var oi decimal.Decimal
 		thisOI := s.calOI(u.MarginAccounts, blockNumber)
-		if iOI, match := s.prevMCB[u.ID]; !match {
+		if iOI, match := s.prevOI[u.ID]; !match {
 			s.prevOI[u.ID] = thisOI
 		} else {
 			oi = ((iOI.Mul(fromStartTimeToLast)).Add(thisOI)).Div(fromStartTimeToNow)
@@ -456,8 +456,8 @@ func (s *Syncer) syncState() {
 		userInfo := mining.UserInfo{
 			Trader:    u.ID,
 			Fee:       thisFee,
-			OI:        oi,    // (oi * 1 + preOI * (lastTime - start)) / now -start
-			Stake:     stake, // (s * 1 + preS * (lastTime - start)) / now -start
+			OI:        oi,    // (oi * 1 + preOI * (lastTime - start)) / (now -start)
+			Stake:     stake, // (s * 1 + preS * (lastTime - start)) / (now -start)
 			Score:     score,
 			Timestamp: s.lastTime,
 			Epoch:     s.thisEpoch,
