@@ -135,7 +135,7 @@ func (s *Syncer) Run() error {
 			}
 		}
 		s.logger.Warn("not in any epoch")
-		time.Sleep(1 * time.Minute)
+		time.Sleep(5 * time.Second)
 	}
 }
 
