@@ -95,7 +95,7 @@ func NewSyncer(
 
 func (s *Syncer) setDefaultEpoch() {
 	s.thisEpoch = 0
-	s.thisEpochStartTime = time.Now().Unix()
+	s.thisEpochStartTime = 1632828600
 	s.thisEpochEndTime = s.thisEpochStartTime + 60*60*24*14
 	s.thisEpochWeightMCB = decimal.NewFromFloat(0.3)
 	s.thisEpochWeightFee = decimal.NewFromFloat(0.7)
