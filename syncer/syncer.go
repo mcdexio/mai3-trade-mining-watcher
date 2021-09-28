@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net"
 	"net/http"
 	"strconv"
@@ -94,7 +95,7 @@ func NewSyncer(
 
 func (s *Syncer) setDefaultEpoch() {
 	s.thisEpoch = 0
-	s.thisEpochStartTime = 1632798801 // time.Now().Unix()
+	s.thisEpochStartTime = time.Now().Unix()
 	s.thisEpochEndTime = s.thisEpochStartTime + 60*60*24*14
 	s.thisEpochWeightMCB = decimal.NewFromFloat(0.3)
 	s.thisEpochWeightFee = decimal.NewFromFloat(0.7)
@@ -137,7 +138,7 @@ func (s *Syncer) Init() {
 	for {
 		err := s.initUserStates()
 		if err != nil {
-			s.logger.Warn("fail to initialize user state, retry in %v seconds %w", inv, err)
+			s.logger.Warn("fail to initialize user state, retry in %v %w", inv, err)
 			// TODO: do somthing with inv, backoff or make it configurable
 			time.Sleep(inv)
 			continue
@@ -438,7 +439,8 @@ func (s Syncer) getStakeScore(curTime int64, unlockTime int64, staked decimal.De
 	if unlockTime < curTime {
 		return decimal.Zero
 	}
-	days := normN(unlockTime-curTime, 86400)
+	// floor to 1 if less than 1 day
+	days := int64(math.Ceil(float64(unlockTime-curTime) / 86400))
 	return decimal.NewFromInt(days).Mul(staked)
 }
 
