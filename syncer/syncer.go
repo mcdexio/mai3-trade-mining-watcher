@@ -15,6 +15,7 @@ import (
 
 	"github.com/mcdexio/mai3-trade-mining-watcher/database/db"
 	"github.com/mcdexio/mai3-trade-mining-watcher/database/models/mining"
+	"github.com/mcdexio/mai3-trade-mining-watcher/types"
 	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -27,6 +28,11 @@ import (
 var NOT_IN_EPOCH = errors.New("not in epoch period")
 var EMPTY_SCHEDULE = errors.New("empty schedule")
 var minuteDecimal = decimal.NewFromInt(60)
+
+var (
+	PROGRESS_SYNC_STATE = "user_info" // compatible
+	PROGRESS_INIT_FEE   = "user_info.init_fee"
+)
 
 var Transport = &http.Transport{
 	DialContext: (&net.Dialer{
@@ -48,12 +54,7 @@ type Syncer struct {
 	blockGraphUrl string
 
 	// weight
-	thisEpoch          int64
-	thisEpochStartTime int64
-	thisEpochEndTime   int64
-	thisEpochWeightOI  decimal.Decimal
-	thisEpochWeightMCB decimal.Decimal
-	thisEpochWeightFee decimal.Decimal
+	curEpochConfig *mining.Schedule
 }
 
 type MarginAccount struct {
@@ -94,87 +95,82 @@ func NewSyncer(
 }
 
 func (s *Syncer) setDefaultEpoch() {
-	s.thisEpoch = 0
-	s.thisEpochStartTime = 1632828600
-	s.thisEpochEndTime = s.thisEpochStartTime + 60*60*24*14
-	s.thisEpochWeightMCB = decimal.NewFromFloat(0.3)
-	s.thisEpochWeightFee = decimal.NewFromFloat(0.7)
-	s.thisEpochWeightOI = decimal.NewFromFloat(0.3)
-	err := s.db.Create(
-		mining.Schedule{
-			Epoch:     s.thisEpoch,
-			StartTime: s.thisEpochStartTime,
-			EndTime:   s.thisEpochEndTime,
-			WeightFee: s.thisEpochWeightFee,
-			WeightMCB: s.thisEpochWeightMCB,
-			WeightOI:  s.thisEpochWeightOI,
-		}).Error
+	// start := time.Now().Unix()
+	start := int64(1632828600)
+	err := s.db.Where("epoch=0").Save(&mining.Schedule{
+		Epoch:     0,
+		StartTime: start,
+		EndTime:   start + 60*60*24*14,
+		WeightFee: decimal.NewFromFloat(0.3),
+		WeightMCB: decimal.NewFromFloat(0.7),
+		WeightOI:  decimal.NewFromFloat(0.3),
+	}).Error
 	if err != nil {
 		s.logger.Error("set default epoch error %s", err)
 		panic(err)
 	}
 }
 
-func (s *Syncer) Init() {
-	// get this epoch number, thisEpochStartTime, thisEpochEndTime
-	err := s.getEpoch()
-	if err != nil {
-		if err == NOT_IN_EPOCH {
-			s.logger.Warn("warn %s", err)
-		} else if err == EMPTY_SCHEDULE {
-			s.logger.Warn("warn %s", err)
-			s.setDefaultEpoch()
-		} else {
-			panic(err)
-		}
-	}
-	now := time.Now().Unix()
-	s.logger.Debug("check epoch started: eta=%v, now=%v", s.thisEpochStartTime, now)
-	if now > s.thisEpochStartTime {
-		s.logger.Warn("wait for epoch (%v, %v) starts", s.thisEpoch, s.thisEpochStartTime)
-		time.Sleep(time.Duration(now - s.thisEpochStartTime))
-	}
-	inv := 5 * time.Second
+func (s *Syncer) Run() error {
 	for {
-		err := s.initUserStates()
-		if err != nil {
-			s.logger.Warn("fail to initialize user state, retry in %v %w", inv, err)
-			// TODO: do somthing with inv, backoff or make it configurable
-			time.Sleep(inv)
+		if err := s.run(s.ctx); err != nil {
+			s.logger.Warn("error occurs while running: %w", err)
+			time.Sleep(5 * time.Second)
 			continue
 		}
-		break
+		// when not in epoch
+		time.Sleep(1 * time.Minute)
 	}
 }
 
-func (s *Syncer) Run() error {
-	t := time.NewTimer(0)
-	for {
+func (s *Syncer) run(ctx context.Context) error {
+	cp, err := s.getProgress(PROGRESS_SYNC_STATE)
+	if err != nil {
+		return err
+	}
+
+	// TODO(yz): !!!
+	// on very init state, here the cp should be 0
+	// which means it is impossible to detect which epoch we are in
+	// for test purpose, use default now
+	if cp == 0 {
+		cp = time.Now().Unix()
+		s.setDefaultEpoch()
+	}
+
+	e, err := s.detectEpoch(cp)
+	if err == NOT_IN_EPOCH {
+		return err
+	} else if err != nil {
+		return err
+	}
+	// set epoch
+	s.curEpochConfig = e
+	// set init fee
+	if err := s.initUserStates(); err != nil {
+		return fmt.Errorf("fail to init user states: %w", err)
+	}
+	// sync state
+	for cp < s.curEpochConfig.EndTime {
 		select {
-		case <-s.ctx.Done():
-			t.Stop()
-			s.logger.Info("Syncer receives shutdown signal.")
+		case <-ctx.Done():
 			return nil
-		case <-t.C:
-			for {
-				p, err := s.syncState()
-				if err != nil {
-					s.logger.Warn("fail to sync state, retry in 5 seconds %s", err)
-					t.Reset(5 * time.Second)
-					break
-				}
-				// p is the current aligned timestamp if success
-				// next is then coming timestamp of next run
-				next := p + 60
-				now := norm(time.Now().Unix())
-				if next > now {
-					t.Reset(time.Duration(next-now) * time.Second)
-					break
-				}
-				t.Reset(100 * time.Millisecond)
+		default:
+			p, err := s.syncState()
+			if err != nil {
+				s.logger.Warn("fail to sync state, retry in 5 seconds %s", err)
+				time.Sleep(5 * time.Second)
+				continue
+			}
+			np := p + 60
+			now := norm(time.Now().Unix())
+			if np > now {
+				// sleep until next tick
+				time.Sleep(time.Duration(np-now) * time.Second)
 			}
 		}
 	}
+	return nil
 }
 
 // getUserWithBlockNumberID try three times to get users depend on ID with order and filter
@@ -240,27 +236,21 @@ func (s *Syncer) GetPoolAddrIndexUserID(marginAccountID string) (poolAddr, userI
 	return
 }
 
-func (s *Syncer) getSyncProgress() (int64, error) {
+func (s *Syncer) getProgress(name string) (int64, error) {
 	var p mining.Progress
-	err := s.db.Model(mining.Progress{}).Scan(&p).Where("table_name=user_info").Error
+	err := s.db.Model(mining.Progress{}).First(&p).Where("table_name=?", name).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			s.logger.Warn("progress record not found, start from beginning")
-			return s.thisEpochStartTime, nil
+			return 0, nil
 		}
-		return 0, fmt.Errorf("fail to get progress: table=user_info %w", err)
-	}
-	if p.From == 0 {
-		s.logger.Warn("found 0 progress, start from beginning")
-		return s.thisEpochStartTime, nil
+		return 0, fmt.Errorf("fail to get progress: table=init_fee %w", err)
 	}
 	return p.From, nil
 }
 
-func (s *Syncer) setSyncProgress(ts int64) error {
-	s.logger.Info("save ts: timestamp=%v", ts)
-
-	p := &mining.Progress{TableName: "user_info", From: ts}
+func (s *Syncer) setProgress(name string, ts int64) error {
+	s.logger.Info("save progress for %v: timestamp=%v", name, ts)
+	p := &mining.Progress{TableName: types.TableName(name), From: ts}
 	if err := s.db.Save(p).Error; err != nil {
 		return fmt.Errorf("fail to save progress: table=user_info, timestamp=%v %w", ts, err)
 	}
@@ -270,42 +260,50 @@ func (s *Syncer) setSyncProgress(ts int64) error {
 func (s *Syncer) initUserStates() error {
 	s.logger.Debug("enter initUserStates")
 	defer s.logger.Debug("leave initUserStates")
-	p, err := s.getSyncProgress()
+	p, err := s.getProgress(PROGRESS_INIT_FEE)
 	if err != nil {
 		return fmt.Errorf("fail to get sync progress %w", err)
 	}
-	if p > s.thisEpochStartTime {
+	// already synced
+	if p != 0 && p == s.curEpochConfig.StartTime {
 		return nil
 	}
-
 	// query all total fee before this epoch start time, if not exist, return
-	thisEpochStartBlockNumber, err := s.TimestampToBlockNumber(s.thisEpochStartTime)
+	startBn, err := s.TimestampToBlockNumber(s.curEpochConfig.StartTime)
 	if err != nil {
 		return err
 	}
-
-	users, err := s.GetUsersBasedOnBlockNumber(thisEpochStartBlockNumber)
+	users, err := s.GetUsersBasedOnBlockNumber(startBn)
 	if err != nil {
 		return err
 	}
-
-	// start tx
-	for _, u := range users {
-		r := &mining.UserInfo{
-			Trader:    u.ID,
-			InitFee:   u.TotalFee,
-			Epoch:     s.thisEpoch,
-			Timestamp: p,
+	uis := make([]*mining.UserInfo, len(users))
+	for i, u := range users {
+		uis[i] = &mining.UserInfo{
+			Trader:  u.ID,
+			Epoch:   s.curEpochConfig.Epoch,
+			InitFee: u.TotalFee,
 		}
-		err := s.db.Model(mining.UserInfo{}).Create(r).Error
+	}
+	err = db.WithTransaction(s.db, func(tx *gorm.DB) error {
+		cp, err := s.getProgress(PROGRESS_INIT_FEE)
 		if err != nil {
-			return fmt.Errorf("fail to create user info: record=%+v %w", r, err)
+			return fmt.Errorf("fail to get sync progress %w", err)
 		}
+		if cp != p {
+			return fmt.Errorf("progress changed, somewhere may run another instance")
+		}
+		if err := s.db.Model(mining.UserInfo{}).Create(&uis).Error; err != nil {
+			return fmt.Errorf("fail to create init user info %w", err)
+		}
+		if err := s.setProgress(PROGRESS_INIT_FEE, s.curEpochConfig.StartTime); err != nil {
+			return fmt.Errorf("fail to save sync progress %w", err)
+		}
+		return nil
+	}, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
+	if err != nil {
+		return fmt.Errorf("fail to init fee of all users for new epoch: epoch=%v %w", s.curEpochConfig.Epoch, err)
 	}
-	if err := s.setSyncProgress(p); err != nil {
-		return fmt.Errorf("fail to save sync progress %w", err)
-	}
-	// end tx
 	return nil
 }
 
@@ -339,7 +337,7 @@ func (s *Syncer) syncState() (int64, error) {
 	s.logger.Info("enter sync state")
 	defer s.logger.Info("leave sync state")
 
-	p, err := s.getSyncProgress()
+	p, err := s.getProgress(PROGRESS_SYNC_STATE)
 	if err != nil {
 		return 0, fmt.Errorf("fail to get sync progress %w", err)
 	}
@@ -368,7 +366,7 @@ func (s *Syncer) syncState() (int64, error) {
 		ss := s.getStakeScore(np, u.UnlockMCBTime, u.StakedMCB)
 		ui := &mining.UserInfo{
 			Trader:        u.ID,
-			Epoch:         s.thisEpoch,
+			Epoch:         s.curEpochConfig.Epoch,
 			CurPosValue:   pv,
 			CurStakeScore: ss,
 			AccFee:        u.TotalFee,
@@ -377,7 +375,7 @@ func (s *Syncer) syncState() (int64, error) {
 	}
 	// begin tx
 	err = db.WithTransaction(s.db, func(tx *gorm.DB) error {
-		curP, err := s.getSyncProgress()
+		curP, err := s.getProgress(PROGRESS_SYNC_STATE)
 		if err != nil {
 			return fmt.Errorf("fail to get sync progress %w", err)
 		}
@@ -386,20 +384,20 @@ func (s *Syncer) syncState() (int64, error) {
 		}
 		// acc_pos_value <= cur_pos_value
 		err = s.db.Model(mining.UserInfo{}).
-			Where("epoch=? and cur_pos_value <> 0", s.thisEpoch).
+			Where("epoch=? and cur_pos_value <> 0", s.curEpochConfig.Epoch).
 			UpdateColumn("acc_pos_value", gorm.Expr("acc_pos_value + cur_pos_value")).Error
 		if err != nil {
 			return fmt.Errorf("failed to accumulate cur_post_value to acc_pos_value  %w", err)
 		}
 		// acc_stake_score <= cur_stake_score
 		err = s.db.Model(mining.UserInfo{}).
-			Where("epoch=? and cur_stake_score <> 0", s.thisEpoch).
+			Where("epoch=? and cur_stake_score <> 0", s.curEpochConfig.Epoch).
 			UpdateColumn("acc_stake_score", gorm.Expr("acc_stake_score + cur_stake_score")).Error
 		if err != nil {
 			return fmt.Errorf("failed to accumulate cur_stake_score to acc_stake_score %w", err)
 		}
 		// cur_stake_score <= 0
-		err = s.db.Model(mining.UserInfo{}).Where("epoch=?", s.thisEpoch).
+		err = s.db.Model(mining.UserInfo{}).Where("epoch=?", s.curEpochConfig.Epoch).
 			Updates(mining.UserInfo{CurPosValue: decimal.Zero, CurStakeScore: decimal.Zero, Timestamp: np}).Error
 		if err != nil {
 			return fmt.Errorf("failed to set cur_stake_score and cur_pos_value to 0 %w", err)
@@ -412,10 +410,10 @@ func (s *Syncer) syncState() (int64, error) {
 		}
 		// 3. update score
 		var (
-			elapsed = decimal.NewFromInt((p - s.thisEpochStartTime) / 60) // Minutes
+			elapsed = decimal.NewFromInt((p - s.curEpochConfig.StartTime) / 60) // Minutes
 		)
 		var all []*mining.UserInfo
-		if err := s.db.Model(mining.UserInfo{}).Where("epoch=?", s.thisEpoch).Find(&all).Error; err != nil {
+		if err := s.db.Model(mining.UserInfo{}).Where("epoch=?", s.curEpochConfig.Epoch).Find(&all).Error; err != nil {
 			return fmt.Errorf("fail to fetch all users in this epoch %w", err)
 		}
 		for _, ui := range all {
@@ -424,7 +422,7 @@ func (s *Syncer) syncState() (int64, error) {
 		if err := s.db.Save(&all).Error; err != nil {
 			return fmt.Errorf("failed to create user_info: size=%v %w", len(uis), err)
 		}
-		if err := s.setSyncProgress(np); err != nil {
+		if err := s.setProgress(PROGRESS_SYNC_STATE, np); err != nil {
 			return fmt.Errorf("fail to save sync progress %w", err)
 		}
 		return nil
@@ -460,9 +458,9 @@ func (s Syncer) getScore(ui *mining.UserInfo, elapsed decimal.Decimal) decimal.D
 	if posVal.IsZero() {
 		return decimal.Zero
 	}
-	return fee.Pow(s.thisEpochWeightFee).
-		Mul(stake.Pow(s.thisEpochWeightMCB)).
-		Mul(posVal.Pow(s.thisEpochWeightOI))
+	return fee.Pow(s.curEpochConfig.WeightFee).
+		Mul(stake.Pow(s.curEpochConfig.WeightMCB)).
+		Mul(posVal.Pow(s.curEpochConfig.WeightOI))
 }
 
 func (s Syncer) getPositionValue(accounts []*MarginAccount, bn int64, cache map[string]*decimal.Decimal) (decimal.Decimal, error) {
@@ -564,30 +562,21 @@ func (s *Syncer) GetMarkPrices(bn int64) (map[string]*decimal.Decimal, error) {
 	}
 }
 
-func (s *Syncer) getEpoch() error {
+func (s *Syncer) detectEpoch(p int64) (*mining.Schedule, error) {
 	// get epoch from schedule database.
-	now := time.Now().Unix()
-	var schedules []*mining.Schedule
-	err := s.db.Model(&mining.Schedule{}).Scan(&schedules).Error
-	if err != nil {
-		s.logger.Error("Failed to get schedule %s", err)
-		return err
+	// detect which epoch is time(p) in.
+	var ss []*mining.Schedule
+	if err := s.db.Model(&mining.Schedule{}).Where("start_time<=? and end_time>?", p, p).Find(&ss).Error; err != nil {
+		return nil, fmt.Errorf("fail to found epoch config %w", err)
 	}
-	if len(schedules) == 0 {
-		return EMPTY_SCHEDULE
+	if len(ss) > 1 {
+		// fatal, config error?
+		return nil, fmt.Errorf("found epoch config conflicted %+v", ss)
+	} else if len(ss) == 0 {
+		// not in any epoch
+		return nil, NOT_IN_EPOCH
 	}
-	for _, schedule := range schedules {
-		if now > schedule.StartTime && now < schedule.EndTime {
-			s.thisEpoch = schedule.Epoch
-			s.thisEpochStartTime = schedule.StartTime
-			s.thisEpochEndTime = schedule.EndTime
-			s.thisEpochWeightFee = schedule.WeightFee
-			s.thisEpochWeightOI = schedule.WeightOI
-			s.thisEpochWeightMCB = schedule.WeightMCB
-			return nil
-		}
-	}
-	return NOT_IN_EPOCH
+	return ss[0], nil
 }
 
 // TimestampToBlockNumber which is the closest but less than or equal to timestamp
