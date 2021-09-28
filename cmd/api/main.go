@@ -46,7 +46,7 @@ func main() {
 	)
 	syn.Init()
 
-	go WaitExitSignalWithServer(stop, logger, tmServer)
+	go WaitExitSignalWithServer(stop, logger, tmServer, internalServer)
 	group.Go(func() error {
 		return syn.Run()
 	})
@@ -56,7 +56,9 @@ func main() {
 	}
 }
 
-func WaitExitSignalWithServer(ctxStop context.CancelFunc, logger logging.Logger, server *api.TMServer) {
+func WaitExitSignalWithServer(
+	ctxStop context.CancelFunc, logger logging.Logger, server *api.TMServer,
+	inServer *api.InternalServer) {
 	var exitSignal = make(chan os.Signal, 1)
 	signal.Notify(exitSignal, syscall.SIGTERM)
 	signal.Notify(exitSignal, syscall.SIGINT)
@@ -64,6 +66,9 @@ func WaitExitSignalWithServer(ctxStop context.CancelFunc, logger logging.Logger,
 	sig := <-exitSignal
 	logger.Info("caught sig: %+v, Stopping...\n", sig)
 	if err := server.Shutdown(); err != nil {
+		logger.Error("Server shutdown failed:%+v", err)
+	}
+	if err := inServer.Shutdown(); err != nil {
 		logger.Error("Server shutdown failed:%+v", err)
 	}
 	ctxStop()

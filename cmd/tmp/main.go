@@ -7,9 +7,7 @@ import (
 	"syscall"
 
 	"github.com/mcdexio/mai3-trade-mining-watcher/api"
-	"github.com/mcdexio/mai3-trade-mining-watcher/common/config"
 	"github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
-	"github.com/mcdexio/mai3-trade-mining-watcher/syncer"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -28,38 +26,19 @@ func main() {
 		return tmServer.Run()
 	})
 
-	syncerBlockStartTime := config.GetString("SYNCER_BLOCK_START_TIME")
-	startTime, err := config.ParseTimeConfig(syncerBlockStartTime)
-	if err != nil {
-		logger.Error("Failed to parse block start time %s:%s", err)
-		os.Exit(-3)
-		return
-	}
-
-	syn := syncer.NewSyncer(
-		ctx,
-		logger,
-		config.GetString("MAI3_TRADE_MINING_GRAPH_URL"),
-		config.GetString("ARB_BLOCKS_GRAPH_URL"),
-	)
-	syn.Init()
-	if err != nil {
-		logger.Error("Failed to start syncer:%s", err)
-		os.Exit(-3)
-		return
-	}
-
-	go WaitExitSignalWithServer(stop, logger, tmServer)
+	inServer := api.NewInternalServer(ctx, logger)
 	group.Go(func() error {
-		return syn.Run()
+		return inServer.Run()
 	})
+
+	go WaitExitSignalWithServer(stop, logger, tmServer, inServer)
 
 	if err := group.Wait(); err != nil {
 		logger.Critical("service stopped: %s", err)
 	}
 }
 
-func WaitExitSignalWithServer(ctxStop context.CancelFunc, logger logging.Logger, server *api.TMServer) {
+func WaitExitSignalWithServer(ctxStop context.CancelFunc, logger logging.Logger, server *api.TMServer, inServer *api.InternalServer) {
 	var exitSignal = make(chan os.Signal, 1)
 	signal.Notify(exitSignal, syscall.SIGTERM)
 	signal.Notify(exitSignal, syscall.SIGINT)
@@ -67,6 +46,9 @@ func WaitExitSignalWithServer(ctxStop context.CancelFunc, logger logging.Logger,
 	sig := <-exitSignal
 	logger.Info("caught sig: %+v, Stopping...\n", sig)
 	if err := server.Shutdown(); err != nil {
+		logger.Error("Server shutdown failed:%+v", err)
+	}
+	if err := inServer.Shutdown(); err != nil {
 		logger.Error("Server shutdown failed:%+v", err)
 	}
 	ctxStop()
