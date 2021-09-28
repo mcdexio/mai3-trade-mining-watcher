@@ -2,6 +2,7 @@ package syncer
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mcdexio/mai3-trade-mining-watcher/database/db"
 	"github.com/mcdexio/mai3-trade-mining-watcher/database/models/mining"
 	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
@@ -154,12 +156,15 @@ func (s *Syncer) Run() error {
 			return nil
 		case <-t.C:
 			for {
-				next, err := s.syncState()
+				p, err := s.syncState()
 				if err != nil {
 					s.logger.Warn("fail to sync state, retry in 5 seconds %s", err)
 					t.Reset(5 * time.Second)
 					break
 				}
+				// p is the current aligned timestamp if success
+				// next is then coming timestamp of next run
+				next := p + 60
 				now := norm(time.Now().Unix())
 				if next > now {
 					t.Reset(time.Duration(next-now) * time.Second)
@@ -329,19 +334,10 @@ func (s *Syncer) queryGraph(graphUrl string, resp interface{}, query string, arg
 	return errors.New("failed to get queryGraph in three times")
 }
 
-func norm(ts int64) int64 {
-	return ts - ts%60
-}
-
-func normN(ts int64, inv int64) int64 {
-	return ts - ts%inv
-}
-
 func (s *Syncer) syncState() (int64, error) {
 	s.logger.Info("enter sync state")
 	defer s.logger.Info("leave sync state")
 
-	// begin tx
 	p, err := s.getSyncProgress()
 	if err != nil {
 		return 0, fmt.Errorf("fail to get sync progress %w", err)
@@ -356,29 +352,6 @@ func (s *Syncer) syncState() (int64, error) {
 		return 0, fmt.Errorf("failed to get users on block number: blocknumber=%v %w", bn, err)
 	}
 	s.logger.Info("found %v users @%v", len(users), bn)
-	// 1. preprocess
-	{
-		// acc_pos_value <= cur_pos_value
-		err = s.db.Model(mining.UserInfo{}).
-			Where("epoch=? and cur_pos_value <> 0", s.thisEpoch).
-			UpdateColumn("acc_pos_value", gorm.Expr("acc_pos_value + cur_pos_value")).Error
-		if err != nil {
-			return 0, fmt.Errorf("failed to accumulate cur_post_value to acc_pos_value  %w", err)
-		}
-		// acc_stake_score <= cur_stake_score
-		err = s.db.Model(mining.UserInfo{}).
-			Where("epoch=? and cur_stake_score <> 0", s.thisEpoch).
-			UpdateColumn("acc_stake_score", gorm.Expr("acc_stake_score + cur_stake_score")).Error
-		if err != nil {
-			return 0, fmt.Errorf("failed to accumulate cur_stake_score to acc_stake_score %w", err)
-		}
-		// cur_stake_score <= 0
-		err = s.db.Model(mining.UserInfo{}).Where("epoch=?", s.thisEpoch).
-			Updates(mining.UserInfo{CurPosValue: decimal.Zero, CurStakeScore: decimal.Zero, Timestamp: np}).Error
-		if err != nil {
-			return 0, fmt.Errorf("failed to set cur_stake_score and cur_pos_value to 0 %w", err)
-		}
-	}
 	// 2. update graph data
 	prices, err := s.GetMarkPrices(bn)
 	if err != nil {
@@ -401,55 +374,64 @@ func (s *Syncer) syncState() (int64, error) {
 		}
 		uis[i] = ui
 	}
-	if err := s.db.Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "trader"}, {Name: "epoch"}},
-		DoUpdates: clause.AssignmentColumns([]string{"cur_pos_value", "cur_stake_score", "acc_fee"}),
-	}).Create(&uis).Error; err != nil {
-		return 0, fmt.Errorf("failed to create user_info: size=%v %w", len(uis), err)
+	// begin tx
+	err = db.WithTransaction(s.db, func(tx *gorm.DB) error {
+		curP, err := s.getSyncProgress()
+		if err != nil {
+			return fmt.Errorf("fail to get sync progress %w", err)
+		}
+		if curP != p {
+			return fmt.Errorf("progress changed, somewhere may run another instance")
+		}
+		// acc_pos_value <= cur_pos_value
+		err = s.db.Model(mining.UserInfo{}).
+			Where("epoch=? and cur_pos_value <> 0", s.thisEpoch).
+			UpdateColumn("acc_pos_value", gorm.Expr("acc_pos_value + cur_pos_value")).Error
+		if err != nil {
+			return fmt.Errorf("failed to accumulate cur_post_value to acc_pos_value  %w", err)
+		}
+		// acc_stake_score <= cur_stake_score
+		err = s.db.Model(mining.UserInfo{}).
+			Where("epoch=? and cur_stake_score <> 0", s.thisEpoch).
+			UpdateColumn("acc_stake_score", gorm.Expr("acc_stake_score + cur_stake_score")).Error
+		if err != nil {
+			return fmt.Errorf("failed to accumulate cur_stake_score to acc_stake_score %w", err)
+		}
+		// cur_stake_score <= 0
+		err = s.db.Model(mining.UserInfo{}).Where("epoch=?", s.thisEpoch).
+			Updates(mining.UserInfo{CurPosValue: decimal.Zero, CurStakeScore: decimal.Zero, Timestamp: np}).Error
+		if err != nil {
+			return fmt.Errorf("failed to set cur_stake_score and cur_pos_value to 0 %w", err)
+		}
+		if err := s.db.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "trader"}, {Name: "epoch"}},
+			DoUpdates: clause.AssignmentColumns([]string{"cur_pos_value", "cur_stake_score", "acc_fee"}),
+		}).Create(&uis).Error; err != nil {
+			return fmt.Errorf("failed to create user_info: size=%v %w", len(uis), err)
+		}
+		// 3. update score
+		var (
+			elapsed = decimal.NewFromInt((p - s.thisEpochStartTime) / 60) // Minutes
+		)
+		var all []*mining.UserInfo
+		if err := s.db.Model(mining.UserInfo{}).Where("epoch=?", s.thisEpoch).Find(&all).Error; err != nil {
+			return fmt.Errorf("fail to fetch all users in this epoch %w", err)
+		}
+		for _, ui := range all {
+			ui.Score = s.getScore(ui, elapsed)
+		}
+		if err := s.db.Save(&all).Error; err != nil {
+			return fmt.Errorf("failed to create user_info: size=%v %w", len(uis), err)
+		}
+		if err := s.setSyncProgress(np); err != nil {
+			return fmt.Errorf("fail to save sync progress %w", err)
+		}
+		return nil
+	}, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
+	if err != nil {
+		return 0, fmt.Errorf("fail to update state to db %w", err)
 	}
-	// 3. update score
-	var (
-		elapsed   = decimal.NewFromInt((p - s.thisEpochStartTime) / 60)
-		remaining = decimal.NewFromInt((s.thisEpochEndTime - s.thisEpochStartTime) / 60).Sub(elapsed)
-	)
-	var all []*mining.UserInfo
-	if err := s.db.Model(mining.UserInfo{}).Where("epoch=?", s.thisEpoch).Find(&all).Error; err != nil {
-		return 0, fmt.Errorf("fail to fetch all users in this epoch %w", err)
-	}
-	for _, ui := range all {
-		ui.Score = s.getScore(ui, elapsed, remaining)
-	}
-	if err := s.db.Save(&all).Error; err != nil {
-		return 0, fmt.Errorf("failed to create user_info: size=%v %w", len(uis), err)
-	}
-	if err := s.setSyncProgress(np); err != nil {
-		return 0, fmt.Errorf("fail to save sync progress %w", err)
-	}
-	// end tx
-
 	return np, nil
-}
-
-func (s Syncer) getScore(ui *mining.UserInfo, elapsed decimal.Decimal, remain decimal.Decimal) decimal.Decimal {
-	if ui.AccFee.IsZero() {
-		return decimal.Zero
-	}
-	fee := ui.AccFee.Sub(ui.InitFee)
-	if fee.IsZero() {
-		return decimal.Zero
-	}
-	// end time - start time  == elapsed.Add(remain)
-	stake := ui.AccStakeScore.Add(ui.CurStakeScore.Mul(remain)).Div(elapsed.Add(remain))
-	if stake.IsZero() {
-		return decimal.Zero
-	}
-	posVal := ui.AccPosValue.Add(ui.CurPosValue.Mul(remain)).Div(elapsed.Add(remain))
-	if posVal.IsZero() {
-		return decimal.Zero
-	}
-	return fee.Pow(s.thisEpochWeightFee).
-		Mul(stake.Pow(s.thisEpochWeightMCB)).
-		Mul(posVal.Pow(s.thisEpochWeightOI))
 }
 
 func (s Syncer) getStakeScore(curTime int64, unlockTime int64, staked decimal.Decimal) decimal.Decimal {
@@ -458,6 +440,27 @@ func (s Syncer) getStakeScore(curTime int64, unlockTime int64, staked decimal.De
 	}
 	days := normN(unlockTime-curTime, 86400)
 	return decimal.NewFromInt(days).Mul(staked)
+}
+
+func (s Syncer) getScore(ui *mining.UserInfo, elapsed decimal.Decimal) decimal.Decimal {
+	if ui.AccFee.IsZero() {
+		return decimal.Zero
+	}
+	fee := ui.AccFee.Sub(ui.InitFee)
+	if fee.IsZero() {
+		return decimal.Zero
+	}
+	stake := ui.AccStakeScore.Add(ui.CurStakeScore).Div(elapsed)
+	if stake.IsZero() {
+		return decimal.Zero
+	}
+	posVal := ui.AccPosValue.Add(ui.CurPosValue).Div(elapsed)
+	if posVal.IsZero() {
+		return decimal.Zero
+	}
+	return fee.Pow(s.thisEpochWeightFee).
+		Mul(stake.Pow(s.thisEpochWeightMCB)).
+		Mul(posVal.Pow(s.thisEpochWeightOI))
 }
 
 func (s Syncer) getPositionValue(accounts []*MarginAccount, bn int64, cache map[string]*decimal.Decimal) (decimal.Decimal, error) {
