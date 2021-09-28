@@ -110,17 +110,17 @@ func (s *Syncer) setDefaultEpoch() {
 func (s *Syncer) Init() {
 	// get this epoch number, thisEpochStartTime, thisEpochEndTime
 	err := s.getEpoch()
-	if err == NOT_IN_EPOCH {
-		s.logger.Warn("warn %s", err)
-	} else if err == EMPTY_SCHEDULE {
-		s.logger.Warn("warn %s", err)
-		s.setDefaultEpoch()
-	} else if err != nil {
-		s.logger.Error("error %s", err)
-		panic(err)
+	if err != nil {
+		if err == NOT_IN_EPOCH {
+			s.logger.Warn("warn %s", err)
+		} else if err == EMPTY_SCHEDULE {
+			s.logger.Warn("warn %s", err)
+			s.setDefaultEpoch()
+		} else {
+			panic(err)
+		}
 	}
 	now := time.Now().Unix()
-
 	s.logger.Debug("check epoch started: eta=%v, now=%v", s.thisEpochStartTime, now)
 	if now > s.thisEpochStartTime {
 		s.logger.Warn("wait for epoch (%v, %v) starts", s.thisEpoch, s.thisEpochStartTime)
@@ -241,7 +241,7 @@ func (s *Syncer) getSyncProgress() (int64, error) {
 		return 0, fmt.Errorf("fail to get progress: table=user_info %w", err)
 	}
 	if p.From == 0 {
-		s.logger.Warn("found 0 progress, start from 1632798801")
+		s.logger.Warn("found 0 progress, start from beginning")
 		return s.thisEpochStartTime, nil
 	}
 	return p.From, nil
@@ -426,11 +426,11 @@ func (s Syncer) getScore(ui *mining.UserInfo, elapsed decimal.Decimal, remain de
 	if fee.IsZero() {
 		return decimal.Zero
 	}
-	stake := ui.AccStakeScore.Mul(elapsed).Add(ui.CurStakeScore.Mul(remain)).Div(elapsed.Add(remain))
+	stake := ui.AccStakeScore.Add(ui.CurStakeScore.Mul(remain)).Div(elapsed.Add(remain))
 	if stake.IsZero() {
 		return decimal.Zero
 	}
-	posVal := ui.AccPosValue.Mul(elapsed).Add(ui.CurPosValue.Mul(remain)).Div(elapsed.Add(remain))
+	posVal := ui.AccPosValue.Add(ui.CurPosValue.Mul(remain)).Div(elapsed.Add(remain))
 	if posVal.IsZero() {
 		return decimal.Zero
 	}
@@ -449,7 +449,6 @@ func (s Syncer) getStakeScore(curTime int64, unlockTime int64, staked decimal.De
 
 func (s Syncer) getPositionValue(accounts []*MarginAccount, bn int64, cache map[string]*decimal.Decimal) (decimal.Decimal, error) {
 	sum := decimal.Zero
-
 	for _, a := range accounts {
 		var price *decimal.Decimal
 		// 0xc32a2dfee97e2babc90a2b5e6aef41e789ef2e13-0-0x00233150044aec4cba478d0bf0ecda0baaf5ad19
@@ -475,7 +474,6 @@ func (s Syncer) getPositionValue(accounts []*MarginAccount, bn int64, cache map[
 
 func (s *Syncer) GetMarkPriceBasedOnBlockNumber(blockNumber int64, poolAddr string, perpetualIndex int) (*decimal.Decimal, error) {
 	s.logger.Debug("Get mark price based on block number %d, poolAddr %s, perpetualIndex %d", blockNumber, poolAddr, perpetualIndex)
-
 	query := `{
 		markPrices(first: 1, block: { number: %d }, where: {id: "%s"}) {
     		id
