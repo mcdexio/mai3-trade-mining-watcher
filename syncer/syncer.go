@@ -390,7 +390,7 @@ func (s *Syncer) syncState() (int64, error) {
 		if err != nil {
 			return 0, fmt.Errorf("failed to set cur_stake_score and cur_pos_value to 0 %w", err)
 		}
-		// ss is (unlock time - now) * u.StackedMCB
+		// ss is (unlock time - now) * u.StackedMCB <=> s = n * t
 		ss := s.getStakeScore(np, u.UnlockMCBTime, u.StakedMCB)
 		ui := &mining.UserInfo{
 			Trader:        u.ID,
@@ -438,6 +438,7 @@ func (s Syncer) getScore(ui *mining.UserInfo, elapsed decimal.Decimal, remain de
 	if fee.IsZero() {
 		return decimal.Zero
 	}
+	// end time - start time  == elapsed.Add(remain)
 	stake := ui.AccStakeScore.Add(ui.CurStakeScore.Mul(remain)).Div(elapsed.Add(remain))
 	if stake.IsZero() {
 		return decimal.Zero
