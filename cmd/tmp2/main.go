@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 )
 
 func main() {
@@ -31,29 +32,39 @@ func main() {
 		config.GetString("ARB_BLOCKS_GRAPH_URL"),
 	)
 
+	now := time.Now().Unix() - 60*3
+
+	blockNumber, err := syn.TimestampToBlockNumber(now)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	fmt.Println(blockNumber)
+
 	priceMap, err := syn.GetMarkPrices(4933593)
 	if err != nil {
 		fmt.Println(err)
 	}
 	fmt.Println(priceMap)
+	fmt.Println(len(priceMap))
 
-	blockNumber, err := syn.TimestampToBlockNumber(1632674652)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	user, err := syn.GetUsersBasedOnBlockNumber(blockNumber)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	fmt.Println(len(user))
+	// user, err := syn.GetUsersBasedOnBlockNumber(4993947)
+	// if err != nil {
+	// 	fmt.Println(err)
+	// 	return
+	// }
+	// fmt.Println(len(user))
+	// for _, u := range user {
+	// 	if u.ID == "0xd94dc5230696c4e74e7cb5c09444138c0cdf69cf" {
+	// 		fmt.Printf("user %+v\n", u)
+	// 	}
+	// }
 
-	price, err := syn.GetMarkPriceBasedOnBlockNumber(2771249, "0xc32a2dfee97e2babc90a2b5e6aef41e789ef2e13", 0)
-	if err != nil {
-		return
-	}
-	fmt.Println(price.String())
+	// price, err := syn.GetMarkPriceBasedOnBlockNumber(2771249, "0xc32a2dfee97e2babc90a2b5e6aef41e789ef2e13", 0)
+	// if err != nil {
+	// 	return
+	// }
+	// fmt.Println(price.String())
 
 	// poolAddr, userId, perpetualIndex, err := syn.GetPoolAddrIndexUserID("0xc32a2dfee97e2babc90a2b5e6aef41e789ef2e13-0-0x00233150044aec4cba478d0bf0ecda0baaf5ad19")
 	// if err != nil {
@@ -64,10 +75,10 @@ func main() {
 	// fmt.Println(perpetualIndex)
 
 	go WaitExitSignal(stop, logger)
-	syn.Init()
-	group.Go(func() error {
-		return syn.Run()
-	})
+	// syn.Init()
+	// group.Go(func() error {
+	// 	return syn.Run()
+	// })
 
 	if err := group.Wait(); err != nil {
 		logger.Critical("service stopped: %s", err)
