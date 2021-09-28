@@ -390,6 +390,8 @@ func (s *Syncer) syncState() (int64, error) {
 		if err != nil {
 			return 0, fmt.Errorf("failed to set cur_stake_score and cur_pos_value to 0 %w", err)
 		}
+		// TODO(champFu): check with @yangz is this p or np (p is last time from progress table), np is 60 seconds later p
+		// right now ss is (unlock time - last time which is p) * u.StackedMCB(which is from bn)
 		ss := s.getStakeScore(p, u.UnlockMCBTime, u.StakedMCB)
 		ui := &mining.UserInfo{
 			Trader:        u.ID,
