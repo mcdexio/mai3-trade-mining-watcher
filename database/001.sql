@@ -21,6 +21,7 @@ CREATE UNIQUE INDEX block_pkey ON block(id text_ops);
 
 CREATE TABLE progress (
                           table_name character varying(129) PRIMARY KEY,
+                          epoch bigint NOT NULL,
                           "from" bigint NOT NULL,
                           "to" bigint NOT NULL,
                           checkpoint bigint,

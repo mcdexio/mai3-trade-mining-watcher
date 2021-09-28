@@ -11,7 +11,6 @@ import (
 	"github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
 	database "github.com/mcdexio/mai3-trade-mining-watcher/database/db"
 	"github.com/mcdexio/mai3-trade-mining-watcher/syncer"
-	"github.com/mcdexio/mai3-trade-mining-watcher/types"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -22,9 +21,9 @@ func main() {
 	defer logging.Finalize()
 	logger := logging.NewLoggerTag(name)
 
-	db := database.GetDB()
+	// db := database.GetDB()
 	database.Initialize()
-	database.Reset(db, types.Watcher, true)
+	// database.Reset(db, types.Watcher, true)
 
 	backgroundCtx, stop := context.WithCancel(context.Background())
 	group, ctx := errgroup.WithContext(backgroundCtx)
