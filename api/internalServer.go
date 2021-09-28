@@ -55,7 +55,7 @@ func (s *InternalServer) Shutdown() error {
 }
 
 func (s *InternalServer) Run() error {
-	s.logger.Info("Starting trading mining httpserver")
+	s.logger.Info("Starting trading mining internal httpserver")
 	go func() {
 		err := s.server.ListenAndServe()
 		if err != nil {

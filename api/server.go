@@ -53,7 +53,7 @@ func (s *TMServer) Shutdown() error {
 }
 
 func (s *TMServer) Run() error {
-	s.logger.Info("Starting trading mining httpserver")
+	s.logger.Info("Starting trading mining api httpserver")
 	s.getEpoch()
 	go func() {
 		err := s.server.ListenAndServe()
