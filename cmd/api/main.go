@@ -43,6 +43,7 @@ func main() {
 		logger,
 		config.GetString("MAI3_TRADE_MINING_GRAPH_URL"),
 		config.GetString("ARB_BLOCKS_GRAPH_URL"),
+		config.GetInt64("DEFAULT_EPOCH_0_START_TIME"),
 	)
 	go WaitExitSignalWithServer(stop, logger, tmServer, internalServer)
 	group.Go(func() error {

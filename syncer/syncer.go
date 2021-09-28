@@ -55,6 +55,9 @@ type Syncer struct {
 
 	// weight
 	curEpochConfig *mining.Schedule
+
+	// default if you don't set epoch in schedule database
+	defaultEpochStartTime int64
 }
 
 type MarginAccount struct {
@@ -83,26 +86,27 @@ type MarkPrice struct {
 
 func NewSyncer(
 	ctx context.Context, logger logging.Logger, mai3GraphUrl string, blockGraphUrl string,
-) *Syncer {
+	defaultEpochStartTime int64) *Syncer {
 	return &Syncer{
-		ctx:           ctx,
-		httpClient:    utils.NewHttpClient(Transport, logger),
-		logger:        logger,
-		mai3GraphUrl:  mai3GraphUrl,
-		blockGraphUrl: blockGraphUrl,
-		db:            database.GetDB(),
+		ctx:                   ctx,
+		httpClient:            utils.NewHttpClient(Transport, logger),
+		logger:                logger,
+		mai3GraphUrl:          mai3GraphUrl,
+		blockGraphUrl:         blockGraphUrl,
+		db:                    database.GetDB(),
+		defaultEpochStartTime: defaultEpochStartTime,
 	}
 }
 
-func (s *Syncer) setDefaultEpoch() {
+func (s *Syncer) setDefaultEpoch() int64 {
 	// start := time.Now().Unix()
-	start := int64(1632828600) // TODO(champFu): temporarily hardcode
+	start := s.defaultEpochStartTime
 	err := s.db.Create(&mining.Schedule{
 		Epoch:     0,
 		StartTime: start,
-		EndTime:   start + 200,
-		WeightFee: decimal.NewFromFloat(0.3),
-		WeightMCB: decimal.NewFromFloat(0.7),
+		EndTime:   start + 60*60*24*14,
+		WeightFee: decimal.NewFromFloat(0.7),
+		WeightMCB: decimal.NewFromFloat(0.3),
 		WeightOI:  decimal.NewFromFloat(0.3),
 	}).Error
 	if err != nil {
@@ -110,19 +114,7 @@ func (s *Syncer) setDefaultEpoch() {
 		panic(err)
 	}
 
-	start = int64(1632828600 + 320)
-	err = s.db.Create(&mining.Schedule{
-		Epoch:     1,
-		StartTime: start,
-		EndTime:   start + 520,
-		WeightFee: decimal.NewFromFloat(0.3),
-		WeightMCB: decimal.NewFromFloat(0.7),
-		WeightOI:  decimal.NewFromFloat(0.3),
-	}).Error
-	if err != nil {
-		s.logger.Error("set default epoch error %s", err)
-		panic(err)
-	}
+	return start
 }
 
 func (s *Syncer) Run() error {
@@ -147,14 +139,10 @@ func (s *Syncer) run(ctx context.Context) error {
 	}
 	// brand new start, no last progress
 	if cp == 0 {
-		// TODO(yz): !!!
 		// on very init state, here the cp should be 0
 		// which means it is impossible to detect which epoch we are in
-		// for test purpose, use default now
-		s.setDefaultEpoch()
-		cp = 1632828600
-		// correct:
-		// set cp = startTime of someEpoch
+		// so set default epoch information from bin/config DEFAULT_EPOCH_0_START_TIME
+		cp = s.setDefaultEpoch()
 	}
 	e, err := s.detectEpoch(cp)
 	if err != nil {
@@ -423,21 +411,21 @@ func (s *Syncer) syncState() (int64, error) {
 		if curP != p {
 			return fmt.Errorf("progress changed, somewhere may run another instance")
 		}
-		// acc_pos_value <= cur_pos_value
+		// acc_pos_value += cur_pos_value if cur_pos_value != 0
 		err = s.db.Model(mining.UserInfo{}).
 			Where("epoch=? and cur_pos_value <> 0", s.curEpochConfig.Epoch).
 			UpdateColumn("acc_pos_value", gorm.Expr("acc_pos_value + cur_pos_value")).Error
 		if err != nil {
 			return fmt.Errorf("failed to accumulate cur_post_value to acc_pos_value  %w", err)
 		}
-		// acc_stake_score <= cur_stake_score
+		// acc_stake_score += cur_stake_score if cur_stake_score != 0
 		err = s.db.Model(mining.UserInfo{}).
 			Where("epoch=? and cur_stake_score <> 0", s.curEpochConfig.Epoch).
 			UpdateColumn("acc_stake_score", gorm.Expr("acc_stake_score + cur_stake_score")).Error
 		if err != nil {
 			return fmt.Errorf("failed to accumulate cur_stake_score to acc_stake_score %w", err)
 		}
-		// cur_stake_score <= 0
+		// cur_stake_score <= 0 and cur_pos_value <= 0
 		err = s.db.Model(mining.UserInfo{}).Where("epoch=?", s.curEpochConfig.Epoch).
 			Updates(mining.UserInfo{CurPosValue: decimal.Zero, CurStakeScore: decimal.Zero, Timestamp: np}).Error
 		if err != nil {
@@ -607,6 +595,7 @@ func (s *Syncer) detectEpoch(p int64) (*mining.Schedule, error) {
 	// get epoch from schedule database.
 	// detect which epoch is time(p) in.
 	var ss []*mining.Schedule
+	// TODO(champFu): check with @yz if there are two epoch 0 and 1, endTime of these two epochs are all bigger than p+60, we get 0, maybe check len(ss) == 1
 	if err := s.db.Model(&mining.Schedule{}).Where("end_time>?", p+60).Order("epoch asc").Find(&ss).Error; err != nil {
 		return nil, fmt.Errorf("fail to found epoch config %w", err)
 	}

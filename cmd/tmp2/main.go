@@ -30,6 +30,7 @@ func main() {
 		logger,
 		config.GetString("MAI3_TRADE_MINING_GRAPH_URL"),
 		config.GetString("ARB_BLOCKS_GRAPH_URL"),
+		config.GetInt64("DEFAULT_EPOCH_0_START_TIME"),
 	)
 
 	now := time.Now().Unix() - 60*3
@@ -48,37 +49,7 @@ func main() {
 	fmt.Println(priceMap)
 	fmt.Println(len(priceMap))
 
-	// user, err := syn.GetUsersBasedOnBlockNumber(4993947)
-	// if err != nil {
-	// 	fmt.Println(err)
-	// 	return
-	// }
-	// fmt.Println(len(user))
-	// for _, u := range user {
-	// 	if u.ID == "0xd94dc5230696c4e74e7cb5c09444138c0cdf69cf" {
-	// 		fmt.Printf("user %+v\n", u)
-	// 	}
-	// }
-
-	// price, err := syn.GetMarkPriceBasedOnBlockNumber(2771249, "0xc32a2dfee97e2babc90a2b5e6aef41e789ef2e13", 0)
-	// if err != nil {
-	// 	return
-	// }
-	// fmt.Println(price.String())
-
-	// poolAddr, userId, perpetualIndex, err := syn.GetPoolAddrIndexUserID("0xc32a2dfee97e2babc90a2b5e6aef41e789ef2e13-0-0x00233150044aec4cba478d0bf0ecda0baaf5ad19")
-	// if err != nil {
-	// 	return
-	// }
-	// fmt.Println(poolAddr)
-	// fmt.Println(userId)
-	// fmt.Println(perpetualIndex)
-
 	go WaitExitSignal(stop, logger)
-	// syn.Init()
-	// group.Go(func() error {
-	// 	return syn.Run()
-	// })
 
 	if err := group.Wait(); err != nil {
 		logger.Critical("service stopped: %s", err)
