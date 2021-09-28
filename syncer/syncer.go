@@ -97,10 +97,24 @@ func NewSyncer(
 func (s *Syncer) setDefaultEpoch() {
 	// start := time.Now().Unix()
 	start := int64(1632828600)
-	err := s.db.Where("epoch=0").Save(&mining.Schedule{
+	err := s.db.Create(&mining.Schedule{
 		Epoch:     0,
 		StartTime: start,
-		EndTime:   start + 60*60*24*14,
+		EndTime:   start + 200,
+		WeightFee: decimal.NewFromFloat(0.3),
+		WeightMCB: decimal.NewFromFloat(0.7),
+		WeightOI:  decimal.NewFromFloat(0.3),
+	}).Error
+	if err != nil {
+		s.logger.Error("set default epoch error %s", err)
+		panic(err)
+	}
+
+	start = int64(1632828600 + 320)
+	err = s.db.Create(&mining.Schedule{
+		Epoch:     1,
+		StartTime: start,
+		EndTime:   start + 520,
 		WeightFee: decimal.NewFromFloat(0.3),
 		WeightMCB: decimal.NewFromFloat(0.7),
 		WeightOI:  decimal.NewFromFloat(0.3),
@@ -114,36 +128,39 @@ func (s *Syncer) setDefaultEpoch() {
 func (s *Syncer) Run() error {
 	for {
 		if err := s.run(s.ctx); err != nil {
-			s.logger.Warn("error occurs while running: %w", err)
-			time.Sleep(5 * time.Second)
-			continue
+			if !errors.Is(err, NOT_IN_EPOCH) {
+				s.logger.Warn("error occurs while running: %w", err)
+				time.Sleep(5 * time.Second)
+				continue
+			}
 		}
-		// when not in epoch
+		s.logger.Warn("not in any epoch")
 		time.Sleep(1 * time.Minute)
 	}
 }
 
 func (s *Syncer) run(ctx context.Context) error {
-	cp, err := s.getProgress(PROGRESS_SYNC_STATE)
+	// try to find out last epoch
+	cp, err := s.lastProgress(PROGRESS_SYNC_STATE)
 	if err != nil {
 		return err
 	}
-
-	// TODO(yz): !!!
-	// on very init state, here the cp should be 0
-	// which means it is impossible to detect which epoch we are in
-	// for test purpose, use default now
+	// brand new start, no last progress
 	if cp == 0 {
-		cp = time.Now().Unix()
+		// TODO(yz): !!!
+		// on very init state, here the cp should be 0
+		// which means it is impossible to detect which epoch we are in
+		// for test purpose, use default now
 		s.setDefaultEpoch()
+		cp = 1632828600
+		// correct:
+		// set cp = startTime of someEpoch
 	}
-
 	e, err := s.detectEpoch(cp)
-	if err == NOT_IN_EPOCH {
-		return err
-	} else if err != nil {
+	if err != nil {
 		return err
 	}
+	s.logger.Info("found in epoch %+v", e)
 	// set epoch
 	s.curEpochConfig = e
 	// set init fee
@@ -151,7 +168,8 @@ func (s *Syncer) run(ctx context.Context) error {
 		return fmt.Errorf("fail to init user states: %w", err)
 	}
 	// sync state
-	for cp < s.curEpochConfig.EndTime {
+	np := cp
+	for np < s.curEpochConfig.EndTime {
 		select {
 		case <-ctx.Done():
 			return nil
@@ -162,14 +180,15 @@ func (s *Syncer) run(ctx context.Context) error {
 				time.Sleep(5 * time.Second)
 				continue
 			}
-			np := p + 60
+			np = p + 60
 			now := norm(time.Now().Unix())
-			if np > now {
+			if np > now && np < s.curEpochConfig.EndTime {
 				// sleep until next tick
 				time.Sleep(time.Duration(np-now) * time.Second)
 			}
 		}
 	}
+	s.logger.Info("epoch done: epoch=%+v", s.curEpochConfig)
 	return nil
 }
 
@@ -236,23 +255,35 @@ func (s *Syncer) GetPoolAddrIndexUserID(marginAccountID string) (poolAddr, userI
 	return
 }
 
-func (s *Syncer) getProgress(name string) (int64, error) {
+func (s *Syncer) lastProgress(name string) (int64, error) {
 	var p mining.Progress
-	err := s.db.Model(mining.Progress{}).First(&p).Where("table_name=?", name).Error
+	err := s.db.Model(mining.Progress{}).Where("table_name=?", name).Order("epoch desc").First(&p).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return 0, nil
 		}
-		return 0, fmt.Errorf("fail to get progress: table=init_fee %w", err)
+		return 0, fmt.Errorf("fail to get last progress: table=%s %w", name, err)
 	}
 	return p.From, nil
 }
 
-func (s *Syncer) setProgress(name string, ts int64) error {
+func (s *Syncer) getProgress(name string, epoch int64) (int64, error) {
+	var p mining.Progress
+	err := s.db.Model(mining.Progress{}).Where("table_name=? and epoch=?", name, epoch).First(&p).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return 0, nil
+		}
+		return 0, fmt.Errorf("fail to get progress: table=%s %w", name, err)
+	}
+	return p.From, nil
+}
+
+func (s *Syncer) setProgress(name string, ts int64, epoch int64) error {
 	s.logger.Info("save progress for %v: timestamp=%v", name, ts)
-	p := &mining.Progress{TableName: types.TableName(name), From: ts}
+	p := &mining.Progress{TableName: types.TableName(name), From: ts, Epoch: epoch}
 	if err := s.db.Save(p).Error; err != nil {
-		return fmt.Errorf("fail to save progress: table=user_info, timestamp=%v %w", ts, err)
+		return fmt.Errorf("fail to save progress: table=%v, timestamp=%v %w", name, ts, err)
 	}
 	return nil
 }
@@ -260,12 +291,13 @@ func (s *Syncer) setProgress(name string, ts int64) error {
 func (s *Syncer) initUserStates() error {
 	s.logger.Debug("enter initUserStates")
 	defer s.logger.Debug("leave initUserStates")
-	p, err := s.getProgress(PROGRESS_INIT_FEE)
+	p, err := s.getProgress(PROGRESS_INIT_FEE, s.curEpochConfig.Epoch)
 	if err != nil {
 		return fmt.Errorf("fail to get sync progress %w", err)
 	}
 	// already synced
 	if p != 0 && p == s.curEpochConfig.StartTime {
+		s.logger.Info("fee already initialied")
 		return nil
 	}
 	// query all total fee before this epoch start time, if not exist, return
@@ -286,17 +318,18 @@ func (s *Syncer) initUserStates() error {
 		}
 	}
 	err = db.WithTransaction(s.db, func(tx *gorm.DB) error {
-		cp, err := s.getProgress(PROGRESS_INIT_FEE)
+		cp, err := s.getProgress(PROGRESS_INIT_FEE, s.curEpochConfig.Epoch)
 		if err != nil {
 			return fmt.Errorf("fail to get sync progress %w", err)
 		}
+		// safe guard
 		if cp != p {
 			return fmt.Errorf("progress changed, somewhere may run another instance")
 		}
 		if err := s.db.Model(mining.UserInfo{}).Create(&uis).Error; err != nil {
 			return fmt.Errorf("fail to create init user info %w", err)
 		}
-		if err := s.setProgress(PROGRESS_INIT_FEE, s.curEpochConfig.StartTime); err != nil {
+		if err := s.setProgress(PROGRESS_INIT_FEE, s.curEpochConfig.StartTime, s.curEpochConfig.Epoch); err != nil {
 			return fmt.Errorf("fail to save sync progress %w", err)
 		}
 		return nil
@@ -336,12 +369,20 @@ func (s *Syncer) queryGraph(graphUrl string, resp interface{}, query string, arg
 func (s *Syncer) syncState() (int64, error) {
 	s.logger.Info("enter sync state")
 	defer s.logger.Info("leave sync state")
-
-	p, err := s.getProgress(PROGRESS_SYNC_STATE)
+	p, err := s.getProgress(PROGRESS_SYNC_STATE, s.curEpochConfig.Epoch)
 	if err != nil {
 		return 0, fmt.Errorf("fail to get sync progress %w", err)
 	}
-	np := norm(p + 60)
+	var (
+		lp int64
+		np int64
+	)
+	if p == 0 {
+		lp = s.curEpochConfig.StartTime
+	} else {
+		lp = p
+	}
+	np = norm(lp + 60)
 	bn, err := s.TimestampToBlockNumber(np)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get block number from timestamp: timestamp=%v %w", np, err)
@@ -375,7 +416,7 @@ func (s *Syncer) syncState() (int64, error) {
 	}
 	// begin tx
 	err = db.WithTransaction(s.db, func(tx *gorm.DB) error {
-		curP, err := s.getProgress(PROGRESS_SYNC_STATE)
+		curP, err := s.getProgress(PROGRESS_SYNC_STATE, s.curEpochConfig.Epoch)
 		if err != nil {
 			return fmt.Errorf("fail to get sync progress %w", err)
 		}
@@ -422,7 +463,7 @@ func (s *Syncer) syncState() (int64, error) {
 		if err := s.db.Save(&all).Error; err != nil {
 			return fmt.Errorf("failed to create user_info: size=%v %w", len(uis), err)
 		}
-		if err := s.setProgress(PROGRESS_SYNC_STATE, np); err != nil {
+		if err := s.setProgress(PROGRESS_SYNC_STATE, np, s.curEpochConfig.Epoch); err != nil {
 			return fmt.Errorf("fail to save sync progress %w", err)
 		}
 		return nil
@@ -566,13 +607,10 @@ func (s *Syncer) detectEpoch(p int64) (*mining.Schedule, error) {
 	// get epoch from schedule database.
 	// detect which epoch is time(p) in.
 	var ss []*mining.Schedule
-	if err := s.db.Model(&mining.Schedule{}).Where("start_time<=? and end_time>?", p, p).Find(&ss).Error; err != nil {
+	if err := s.db.Model(&mining.Schedule{}).Where("end_time>?", p+60).Order("epoch asc").Find(&ss).Error; err != nil {
 		return nil, fmt.Errorf("fail to found epoch config %w", err)
 	}
-	if len(ss) > 1 {
-		// fatal, config error?
-		return nil, fmt.Errorf("found epoch config conflicted %+v", ss)
-	} else if len(ss) == 0 {
+	if len(ss) == 0 {
 		// not in any epoch
 		return nil, NOT_IN_EPOCH
 	}

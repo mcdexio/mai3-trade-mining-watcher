@@ -7,6 +7,7 @@ import (
 
 type Progress struct {
 	TableName  types.TableName `gorm:"column:table_name;type:varchar(129);not null;primary_key" json:"table_name"`
+	Epoch      int64           `gorm:"column:epoch;type:bigint;not null" json:"epoch"`
 	From       int64           `gorm:"column:from;type:bigint;not null" json:"from"`
 	To         int64           `gorm:"column:to;type:bigint;not null" json:"to"`
 	Checkpoint int64           `gorm:"column:checkpoint;type:bigint;" json:"checkpoint"`
