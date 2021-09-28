@@ -267,9 +267,17 @@ func (s *Syncer) initUserStates() error {
 	if p > s.thisEpochStartTime {
 		return nil
 	}
-	// init fee
-	var users []User
-	// TODO: query all total fee before p, if not exist, return
+
+	// query all total fee before this epoch start time, if not exist, return
+	thisEpochStartBlockNumber, err := s.TimestampToBlockNumber(s.thisEpochStartTime)
+	if err != nil {
+		return err
+	}
+
+	users, err := s.GetUsersBasedOnBlockNumber(thisEpochStartBlockNumber)
+	if err != nil {
+		return err
+	}
 
 	// start tx
 	for _, u := range users {
