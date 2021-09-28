@@ -23,27 +23,19 @@ func main() {
 
 	db := database.GetDB()
 	database.Initialize()
-	database.Reset(db, types.Watcher, false)
+	database.Reset(db, types.Watcher, true)
 
 	backgroundCtx, stop := context.WithCancel(context.Background())
 	group, ctx := errgroup.WithContext(backgroundCtx)
 
-	syncerBlockStartTime := config.GetString("SYNCER_BLOCK_START_TIME")
-	startTime, err := config.ParseTimeConfig(syncerBlockStartTime)
-	if err != nil {
-		logger.Error("Failed to parse block start time %s:%s", err)
-		os.Exit(-3)
-		return
-	}
+	tmServer := api.NewTMServer(ctx, logger)
+	group.Go(func() error {
+		return tmServer.Run()
+	})
 
 	internalServer := api.NewInternalServer(ctx, logger)
 	group.Go(func() error {
 		return internalServer.Run()
-	})
-
-	tmServer := api.NewTMServer(ctx, logger)
-	group.Go(func() error {
-		return tmServer.Run()
 	})
 
 	syn := syncer.NewSyncer(
@@ -51,15 +43,13 @@ func main() {
 		logger,
 		config.GetString("MAI3_TRADE_MINING_GRAPH_URL"),
 		config.GetString("ARB_BLOCKS_GRAPH_URL"),
-		&startTime,
 	)
 	syn.Init()
 
+	go WaitExitSignalWithServer(stop, logger, tmServer)
 	group.Go(func() error {
 		return syn.Run()
 	})
-
-	go WaitExitSignalWithServer(stop, logger, tmServer)
 
 	if err := group.Wait(); err != nil {
 		logger.Critical("service stopped: %s", err)

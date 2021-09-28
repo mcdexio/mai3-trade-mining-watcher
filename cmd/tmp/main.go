@@ -41,7 +41,6 @@ func main() {
 		logger,
 		config.GetString("MAI3_TRADE_MINING_GRAPH_URL"),
 		config.GetString("ARB_BLOCKS_GRAPH_URL"),
-		&startTime,
 	)
 	syn.Init()
 	if err != nil {
