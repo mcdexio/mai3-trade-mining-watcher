@@ -72,6 +72,11 @@ type Block struct {
 	Timestamp string `json:"timestamp"`
 }
 
+type MarkPrice struct {
+	ID    string           `json:"id"`
+	Price *decimal.Decimal `json:"price"`
+}
+
 func NewSyncer(
 	ctx context.Context, logger logging.Logger, mai3GraphUrl string, blockGraphUrl string,
 ) *Syncer {
@@ -247,7 +252,6 @@ func (s *Syncer) getSyncProgress() (int64, error) {
 }
 
 func (s *Syncer) setSyncProgress(ts int64) error {
-
 	s.logger.Info("save ts: timestamp=%v", ts)
 
 	p := &mining.Progress{TableName: "user_info", From: ts}
@@ -506,11 +510,13 @@ func (s *Syncer) GetMarkPriceBasedOnBlockNumber(blockNumber int64, poolAddr stri
 	return &resp.Data.MarkPrices[0].Price, nil
 }
 
-func (s *Syncer) GetMarkPrices(bn int64) (map[string]*decimal.Decimal, error) {
-	s.logger.Debug("Get mark price based on block number %d", bn)
-	// TODO: 1000 may be not enough for all markets, need paging
+// getMarkPricesWithBlockNumberID try three times to get markPrices depend on ID with order and filter
+func (s *Syncer) getMarkPricesWithBlockNumberID(blockNumber int64, id string) ([]MarkPrice, error) {
+	s.logger.Debug("Get mark price based on block number %d and order and filter by ID %s", blockNumber, id)
 	query := `{
-		markPrices(first: 1000, block: { number: %v }) {
+		markPrices(first: 1000, block: { number: %v }, orderBy: id, orderDirection: asc,
+			where: { id_gt: "%s" }
+		) {
 			id
 			price
 			timestamp
@@ -518,20 +524,37 @@ func (s *Syncer) GetMarkPrices(bn int64) (map[string]*decimal.Decimal, error) {
 	}`
 	var resp struct {
 		Data struct {
-			MarkPrices []struct {
-				ID    string           `json:"id"`
-				Price *decimal.Decimal `json:"price"`
-			}
+			MarkPrices []MarkPrice
 		}
 	}
-	if err := s.queryGraph(s.mai3GraphUrl, &resp, query, bn); err != nil {
+	if err := s.queryGraph(s.mai3GraphUrl, &resp, query, blockNumber, id); err != nil {
 		return nil, fmt.Errorf("fail to get mark price %w", err)
 	}
+	return resp.Data.MarkPrices, nil
+}
+
+func (s *Syncer) GetMarkPrices(bn int64) (map[string]*decimal.Decimal, error) {
+	s.logger.Debug("Get mark price based on block number %d", bn)
 	prices := make(map[string]*decimal.Decimal)
-	for _, p := range resp.Data.MarkPrices {
-		prices[p.ID] = p.Price
+	idFilter := "0x0"
+	for {
+		markPrices, err := s.getMarkPricesWithBlockNumberID(bn, idFilter)
+		if err != nil {
+			return prices, nil
+		}
+		// success get mark prices on block number and idFilter
+		for _, p := range markPrices {
+			prices[p.ID] = p.Price
+		}
+		length := len(markPrices)
+		if length == 1000 {
+			// means there are more markPrices, update idFilter
+			idFilter = markPrices[length-1].ID
+		} else {
+			// means got all markPrices
+			return prices, nil
+		}
 	}
-	return prices, nil
 }
 
 func (s *Syncer) getEpoch() error {
