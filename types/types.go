@@ -18,7 +18,3 @@ const (
 
 // TableName specifies table name.
 type TableName string
-
-const (
-	Block TableName = "Block"
-)
