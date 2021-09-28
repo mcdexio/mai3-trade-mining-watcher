@@ -2,6 +2,10 @@ package main
 
 import (
 	"context"
+	"os"
+	"os/signal"
+	"syscall"
+
 	"github.com/mcdexio/mai3-trade-mining-watcher/api"
 	"github.com/mcdexio/mai3-trade-mining-watcher/common/config"
 	"github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
@@ -9,9 +13,6 @@ import (
 	"github.com/mcdexio/mai3-trade-mining-watcher/syncer"
 	"github.com/mcdexio/mai3-trade-mining-watcher/types"
 	"golang.org/x/sync/errgroup"
-	"os"
-	"os/signal"
-	"syscall"
 )
 
 func main() {
@@ -44,8 +45,6 @@ func main() {
 		config.GetString("MAI3_TRADE_MINING_GRAPH_URL"),
 		config.GetString("ARB_BLOCKS_GRAPH_URL"),
 	)
-	syn.Init()
-
 	go WaitExitSignalWithServer(stop, logger, tmServer, internalServer)
 	group.Go(func() error {
 		return syn.Run()
