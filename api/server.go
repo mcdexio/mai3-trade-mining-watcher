@@ -186,7 +186,7 @@ func (s *TMServer) OnQueryTradingMining(w http.ResponseWriter, r *http.Request) 
 	for i := 0; i <= s.nowEpoch; i++ {
 		rsp := mining.UserInfo{}
 		err := s.db.Model(&mining.UserInfo{}).Limit(1).Select(
-			"acc_fee, init_fee, acc_pos_value, acc_stake_score, timestamp").Where("trader = ? and epoch = ?", trader[0], i).Scan(&rsp).Error
+			"acc_fee, init_fee, acc_pos_value, cur_pos_value, acc_stake_score, cur_stake_score, score").Where("trader = ? and epoch = ?", trader[0], i).Scan(&rsp).Error
 		if err != nil {
 			s.logger.Error("failed to get value from user info table err=%w", err)
 			s.jsonError(w, "internal error", 400)
