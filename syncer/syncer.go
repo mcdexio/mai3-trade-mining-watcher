@@ -96,7 +96,7 @@ func NewSyncer(
 
 func (s *Syncer) setDefaultEpoch() {
 	// start := time.Now().Unix()
-	start := int64(1632828600)
+	start := int64(1632828600) // TODO(champFu): temporarily hardcode
 	err := s.db.Create(&mining.Schedule{
 		Epoch:     0,
 		StartTime: start,
@@ -312,7 +312,7 @@ func (s *Syncer) initUserStates() error {
 	uis := make([]*mining.UserInfo, len(users))
 	for i, u := range users {
 		uis[i] = &mining.UserInfo{
-			Trader:  u.ID,
+			Trader:  strings.ToLower(u.ID),
 			Epoch:   s.curEpochConfig.Epoch,
 			InitFee: u.TotalFee,
 		}
@@ -406,7 +406,7 @@ func (s *Syncer) syncState() (int64, error) {
 		// ss is (unlock time - now) * u.StackedMCB <=> s = n * t
 		ss := s.getStakeScore(np, u.UnlockMCBTime, u.StakedMCB)
 		ui := &mining.UserInfo{
-			Trader:        u.ID,
+			Trader:        strings.ToLower(u.ID),
 			Epoch:         s.curEpochConfig.Epoch,
 			CurPosValue:   pv,
 			CurStakeScore: ss,

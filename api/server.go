@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
@@ -182,11 +183,13 @@ func (s *TMServer) OnQueryTradingMining(w http.ResponseWriter, r *http.Request) 
 		s.jsonError(w, "empty parameter", 400)
 		return
 	}
+	traderID := strings.ToLower(trader[0])
 	queryTradingMiningResp := make(map[int]*EpochTradingMiningResp)
 	for i := 0; i <= s.nowEpoch; i++ {
 		rsp := mining.UserInfo{}
 		err := s.db.Model(&mining.UserInfo{}).Limit(1).Select(
-			"acc_fee, init_fee, acc_pos_value, cur_pos_value, acc_stake_score, cur_stake_score, score").Where("trader = ? and epoch = ?", trader[0], i).Scan(&rsp).Error
+			"acc_fee, init_fee, acc_pos_value, cur_pos_value, acc_stake_score, cur_stake_score, score").Where(
+			"trader = ? and epoch = ?", traderID, i).Scan(&rsp).Error
 		if err != nil {
 			s.logger.Error("failed to get value from user info table err=%w", err)
 			s.jsonError(w, "internal error", 400)
