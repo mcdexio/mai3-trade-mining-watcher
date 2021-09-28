@@ -74,7 +74,7 @@ type Block struct {
 
 func NewSyncer(
 	ctx context.Context, logger logging.Logger, mai3GraphUrl string, blockGraphUrl string,
-	) *Syncer {
+) *Syncer {
 	return &Syncer{
 		ctx:           ctx,
 		httpClient:    utils.NewHttpClient(Transport, logger),
@@ -217,7 +217,6 @@ func (s *Syncer) GetUsersBasedOnBlockNumber(blockNumber int64) ([]User, error) {
 		}
 	}
 }
-
 
 func (s *Syncer) GetPoolAddrIndexUserID(marginAccountID string) (poolAddr, userId string, perpetualIndex int, err error) {
 	rest := strings.Split(marginAccountID, "-")
