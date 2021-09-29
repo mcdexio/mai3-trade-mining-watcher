@@ -439,7 +439,8 @@ func (s *Syncer) syncState() (int64, error) {
 		}
 		// 3. update score
 		var (
-			elapsed = decimal.NewFromInt((p - s.curEpochConfig.StartTime) / 60) // Minutes
+			minuteCeil = int64(math.Ceil((float64(p) - float64(s.curEpochConfig.StartTime)) / 60.0))
+			elapsed    = decimal.NewFromInt(minuteCeil) // Minutes
 		)
 		var all []*mining.UserInfo
 		if err := s.db.Model(mining.UserInfo{}).Where("epoch=?", s.curEpochConfig.Epoch).Find(&all).Error; err != nil {
@@ -479,17 +480,25 @@ func (s Syncer) getScore(ui *mining.UserInfo, elapsed decimal.Decimal) decimal.D
 	if fee.IsZero() {
 		return decimal.Zero
 	}
-	stake := ui.AccStakeScore.Add(ui.CurStakeScore).Div(elapsed)
+	stake := ui.AccStakeScore.Add(ui.CurStakeScore)
 	if stake.IsZero() {
 		return decimal.Zero
 	}
-	posVal := ui.AccPosValue.Add(ui.CurPosValue).Div(elapsed)
+	posVal := ui.AccPosValue.Add(ui.CurPosValue)
 	if posVal.IsZero() {
 		return decimal.Zero
 	}
-	return fee.Pow(s.curEpochConfig.WeightFee).
-		Mul(stake.Pow(s.curEpochConfig.WeightMCB)).
-		Mul(posVal.Pow(s.curEpochConfig.WeightOI))
+
+	// decimal package has issue on pow function
+	elapsedFloat, _ := elapsed.Float64()
+	wFee, _ := s.curEpochConfig.WeightFee.Float64()
+	wStake, _ := s.curEpochConfig.WeightMCB.Float64()
+	wPos, _ := s.curEpochConfig.WeightOI.Float64()
+	feeFloat, _ := fee.Float64()
+	stakeFloat, _ := stake.Float64()
+	posValFloat, _ := posVal.Float64()
+	score := math.Pow(feeFloat, wFee) * math.Pow(stakeFloat/elapsedFloat, wStake) * math.Pow(posValFloat/elapsedFloat, wPos)
+	return decimal.NewFromFloat(score)
 }
 
 func (s Syncer) getPositionValue(accounts []*MarginAccount, bn int64, cache map[string]*decimal.Decimal) (decimal.Decimal, error) {
