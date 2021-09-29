@@ -1,14 +1,13 @@
 package syncer
 
 import (
-	"github.com/mcdexio/mai3-trade-mining-watcher/database/models/mining"
-	"math"
-	"testing"
-
 	"context"
 	"github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
+	"github.com/mcdexio/mai3-trade-mining-watcher/database/models/mining"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/suite"
+	"math"
+	"testing"
 )
 
 type SyncerTestSuite struct {
