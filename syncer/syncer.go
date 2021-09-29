@@ -3,12 +3,10 @@ package syncer
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/mcdexio/mai3-trade-mining-watcher/graph"
 	"math"
-	"net"
-	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -34,15 +32,6 @@ var (
 	PROGRESS_INIT_FEE   = "user_info.init_fee"
 )
 
-var Transport = &http.Transport{
-	DialContext: (&net.Dialer{
-		Timeout: 500 * time.Millisecond,
-	}).DialContext,
-	TLSHandshakeTimeout: 1000 * time.Millisecond,
-	MaxIdleConns:        100,
-	IdleConnTimeout:     30 * time.Second,
-}
-
 type Syncer struct {
 	ctx        context.Context
 	httpClient *utils.Client
@@ -50,8 +39,8 @@ type Syncer struct {
 	db         *gorm.DB
 
 	// block syncer
-	mai3GraphUrl  string
-	blockGraphUrl string
+	mai3GraphClient  *graph.MAI3Client
+	blockGraphClient *graph.BlockClient
 
 	// weight
 	curEpochConfig *mining.Schedule
@@ -60,39 +49,14 @@ type Syncer struct {
 	defaultEpochStartTime int64
 }
 
-type MarginAccount struct {
-	ID       string          `json:"id"`
-	Position decimal.Decimal `json:"position"`
-}
-
-type User struct {
-	ID             string          `json:"id"`
-	StakedMCB      decimal.Decimal `json:"stakedMCB"`
-	TotalFee       decimal.Decimal `json:"totalFee"`
-	UnlockMCBTime  int64           `json:"unlockMCBTime"`
-	MarginAccounts []*MarginAccount
-}
-
-type Block struct {
-	ID        string `json:"id"`
-	Number    string `json:"number"`
-	Timestamp string `json:"timestamp"`
-}
-
-type MarkPrice struct {
-	ID    string           `json:"id"`
-	Price *decimal.Decimal `json:"price"`
-}
-
 func NewSyncer(
 	ctx context.Context, logger logging.Logger, mai3GraphUrl string, blockGraphUrl string,
 	defaultEpochStartTime int64) *Syncer {
 	return &Syncer{
 		ctx:                   ctx,
-		httpClient:            utils.NewHttpClient(Transport, logger),
 		logger:                logger,
-		mai3GraphUrl:          mai3GraphUrl,
-		blockGraphUrl:         blockGraphUrl,
+		mai3GraphClient:       graph.NewMAI3Client(logger, mai3GraphUrl),
+		blockGraphClient:      graph.NewBlockClient(logger, blockGraphUrl),
 		db:                    database.GetDB(),
 		defaultEpochStartTime: defaultEpochStartTime,
 	}
@@ -180,58 +144,6 @@ func (s *Syncer) run(ctx context.Context) error {
 	return nil
 }
 
-// getUserWithBlockNumberID try three times to get users depend on ID with order and filter
-func (s *Syncer) getUserWithBlockNumberID(blockNumber int64, id string) ([]User, error) {
-	// s.logger.Debug("Get users based on block number %d and order and filter by ID %s", blockNumber, id)
-	query := `{
-		users(first: 1000, block: {number: %d}, orderBy: id, orderDirection: asc,
-			where: { id_gt: "%s" totalFee_gt: 0}
-		) {
-			id
-			stakedMCB
-			unlockMCBTime
-			totalFee
-			marginAccounts(where: { position_gt: 0}) {
-				id
-				position
-			}
-		}
-	}`
-	var response struct {
-		Data struct {
-			Users []User
-		}
-	}
-	// try three times for each pagination.
-	if err := s.queryGraph(s.mai3GraphUrl, &response, query, blockNumber, id); err != nil {
-		return []User{}, errors.New("failed to get users in three times")
-	}
-	return response.Data.Users, nil
-}
-
-func (s *Syncer) GetUsersBasedOnBlockNumber(blockNumber int64) ([]User, error) {
-	s.logger.Debug("Get users based on block number %d", blockNumber)
-	var retUser []User
-
-	idFilter := "0x0"
-	for {
-		users, err := s.getUserWithBlockNumberID(blockNumber, idFilter)
-		if err != nil {
-			return retUser, err
-		}
-		// success get user based on block number and idFilter
-		retUser = append(retUser, users...)
-		length := len(users)
-		if length == 1000 {
-			// means there are more users, update idFilter
-			idFilter = users[length-1].ID
-		} else {
-			// means got all users
-			return retUser, nil
-		}
-	}
-}
-
 func (s *Syncer) GetPoolAddrIndexUserID(marginAccountID string) (poolAddr, userId string, perpetualIndex int, err error) {
 	rest := strings.Split(marginAccountID, "-")
 	perpetualIndex, err = strconv.Atoi(rest[1])
@@ -289,11 +201,11 @@ func (s *Syncer) initUserStates() error {
 		return nil
 	}
 	// query all total fee before this epoch start time, if not exist, return
-	startBn, err := s.TimestampToBlockNumber(s.curEpochConfig.StartTime)
+	startBn, err := s.blockGraphClient.GetTimestampToBlockNumber(s.curEpochConfig.StartTime)
 	if err != nil {
 		return err
 	}
-	users, err := s.GetUsersBasedOnBlockNumber(startBn)
+	users, err := s.mai3GraphClient.GetUsersBasedOnBlockNumber(startBn)
 	if err != nil {
 		return err
 	}
@@ -328,32 +240,6 @@ func (s *Syncer) initUserStates() error {
 	return nil
 }
 
-// queryGraph return err if failed to get response from graph in three times
-func (s *Syncer) queryGraph(graphUrl string, resp interface{}, query string, args ...interface{}) error {
-	var params struct {
-		Query string `json:"query"`
-	}
-	params.Query = fmt.Sprintf(query, args...)
-	for i := 0; i < 3; i++ {
-		err, code, res := s.httpClient.Post(graphUrl, nil, params, nil)
-		if err != nil {
-			s.logger.Error("fail to post http request %w", err)
-			continue
-		} else if code/100 != 2 {
-			s.logger.Error("unexpected http response: %v", code)
-			continue
-		}
-		err = json.Unmarshal(res, &resp)
-		if err != nil {
-			s.logger.Error("failed to unmarshal %w", err)
-			continue
-		}
-		// success
-		return nil
-	}
-	return errors.New("failed to get queryGraph in three times")
-}
-
 func (s *Syncer) syncState() (int64, error) {
 	s.logger.Info("enter sync state")
 	defer s.logger.Info("leave sync state")
@@ -371,17 +257,17 @@ func (s *Syncer) syncState() (int64, error) {
 		lp = p
 	}
 	np = norm(lp + 60)
-	bn, err := s.TimestampToBlockNumber(np)
+	bn, err := s.blockGraphClient.GetTimestampToBlockNumber(np)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get block number from timestamp: timestamp=%v %w", np, err)
 	}
-	users, err := s.GetUsersBasedOnBlockNumber(bn)
+	users, err := s.mai3GraphClient.GetUsersBasedOnBlockNumber(bn)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get users on block number: blocknumber=%v %w", bn, err)
 	}
 	s.logger.Info("found %v users @%v", len(users), bn)
 	// 2. update graph data
-	prices, err := s.GetMarkPrices(bn)
+	prices, err := s.mai3GraphClient.GetMarkPrices(bn)
 	if err != nil {
 		return 0, fmt.Errorf("fail to get mark prices %w", err)
 	}
@@ -501,10 +387,10 @@ func (s Syncer) getScore(ui *mining.UserInfo, elapsed decimal.Decimal) decimal.D
 	return decimal.NewFromFloat(score)
 }
 
-func (s Syncer) getPositionValue(accounts []*MarginAccount, bn int64, cache map[string]*decimal.Decimal) (decimal.Decimal, error) {
+func (s Syncer) getPositionValue(accounts []*graph.MarginAccount, bn int64, cache map[string]decimal.Decimal) (decimal.Decimal, error) {
 	sum := decimal.Zero
 	for _, a := range accounts {
-		var price *decimal.Decimal
+		var price decimal.Decimal
 		// 0xc32a2dfee97e2babc90a2b5e6aef41e789ef2e13-0-0x00233150044aec4cba478d0bf0ecda0baaf5ad19
 		perpId := strings.Join(strings.Split(a.ID, "-")[:2], "-")
 		if v, ok := cache[perpId]; ok {
@@ -514,7 +400,7 @@ func (s Syncer) getPositionValue(accounts []*MarginAccount, bn int64, cache map[
 			if err != nil {
 				return sum, fmt.Errorf("fail to get pool address and index from id %w", err)
 			}
-			p, err := s.GetMarkPriceBasedOnBlockNumber(bn, addr, index)
+			p, err := s.mai3GraphClient.GetMarkPriceBasedOnBlockNumber(bn, addr, index)
 			if err != nil {
 				return sum, fmt.Errorf("fail to get mark price %w", err)
 			}
@@ -524,80 +410,6 @@ func (s Syncer) getPositionValue(accounts []*MarginAccount, bn int64, cache map[
 		sum = price.Mul(a.Position).Abs()
 	}
 	return sum, nil
-}
-
-func (s *Syncer) GetMarkPriceBasedOnBlockNumber(blockNumber int64, poolAddr string, perpetualIndex int) (*decimal.Decimal, error) {
-	s.logger.Debug("Get mark price based on block number %d, poolAddr %s, perpetualIndex %d", blockNumber, poolAddr, perpetualIndex)
-	query := `{
-		markPrices(first: 1, block: { number: %d }, where: {id: "%s"}) {
-    		id
-    		price
-    		timestamp
-		}
-	}`
-	var resp struct {
-		Data struct {
-			MarkPrices []struct {
-				ID    string          `json:"id"`
-				Price decimal.Decimal `json:"price"`
-			}
-		}
-	}
-	id := fmt.Sprintf("%s-%d", poolAddr, perpetualIndex)
-	if err := s.queryGraph(s.mai3GraphUrl, &resp, query, blockNumber, id); err != nil {
-		return nil, fmt.Errorf("fail to get mark price %w", err)
-	}
-	if len(resp.Data.MarkPrices) == 0 {
-		return nil, errors.New("empty mark price")
-	}
-	return &resp.Data.MarkPrices[0].Price, nil
-}
-
-// getMarkPricesWithBlockNumberID try three times to get markPrices depend on ID with order and filter
-func (s *Syncer) getMarkPricesWithBlockNumberID(blockNumber int64, id string) ([]MarkPrice, error) {
-	s.logger.Debug("Get mark price based on block number %d and order and filter by ID %s", blockNumber, id)
-	query := `{
-		markPrices(first: 1000, block: { number: %v }, orderBy: id, orderDirection: asc,
-			where: { id_gt: "%s" }
-		) {
-			id
-			price
-			timestamp
-		}
-	}`
-	var resp struct {
-		Data struct {
-			MarkPrices []MarkPrice
-		}
-	}
-	if err := s.queryGraph(s.mai3GraphUrl, &resp, query, blockNumber, id); err != nil {
-		return nil, fmt.Errorf("fail to get mark price %w", err)
-	}
-	return resp.Data.MarkPrices, nil
-}
-
-func (s *Syncer) GetMarkPrices(bn int64) (map[string]*decimal.Decimal, error) {
-	s.logger.Debug("Get mark price based on block number %d", bn)
-	prices := make(map[string]*decimal.Decimal)
-	idFilter := "0x0"
-	for {
-		markPrices, err := s.getMarkPricesWithBlockNumberID(bn, idFilter)
-		if err != nil {
-			return prices, nil
-		}
-		// success get mark prices on block number and idFilter
-		for _, p := range markPrices {
-			prices[p.ID] = p.Price
-		}
-		length := len(markPrices)
-		if length == 1000 {
-			// means there are more markPrices, update idFilter
-			idFilter = markPrices[length-1].ID
-		} else {
-			// means got all markPrices
-			return prices, nil
-		}
-	}
 }
 
 func (s *Syncer) detectEpoch(p int64) (*mining.Schedule, error) {
@@ -613,37 +425,4 @@ func (s *Syncer) detectEpoch(p int64) (*mining.Schedule, error) {
 		return nil, NOT_IN_EPOCH
 	}
 	return ss[0], nil
-}
-
-// TimestampToBlockNumber which is the closest but less than or equal to timestamp
-func (s *Syncer) TimestampToBlockNumber(timestamp int64) (int64, error) {
-	s.logger.Debug("get block number which is the closest but less than or equal to timestamp %d", timestamp)
-	query := `{
-		blocks(
-			first:1, orderBy: number, orderDirection: asc, 
-			where: {timestamp_gt: %d}
-		) {
-			id
-			number
-			timestamp
-		}
-	}`
-	var response struct {
-		Data struct {
-			Blocks []*Block
-		}
-	}
-	// return err when can't get block number in three times
-	if err := s.queryGraph(s.blockGraphUrl, &response, query, timestamp); err != nil {
-		return -1, fmt.Errorf("fail to transform timestamp to block number in three times %w", err)
-	}
-
-	if len(response.Data.Blocks) != 1 {
-		return -1, fmt.Errorf("length of block of response is not equal to 1: expect=1, actual=%v, timestamp=%v", len(response.Data.Blocks), timestamp)
-	}
-	number, err := strconv.Atoi(response.Data.Blocks[0].Number)
-	if err != nil {
-		return -1, fmt.Errorf("failed to convert block number from string to int err:%s", err)
-	}
-	return int64(number - 1), nil
 }

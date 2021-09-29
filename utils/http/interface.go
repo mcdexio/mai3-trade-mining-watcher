@@ -1,9 +1,9 @@
 package http
 
 type IHttpClient interface {
-	Request(method, url string, params []KeyValue, body interface{}, header []KeyValue) (error, int, []byte)
-	Get(url string, params []KeyValue, body interface{}, header []KeyValue) (error, int, []byte)
-	Post(url string, params []KeyValue, body interface{}, header []KeyValue) (error, int, []byte)
-	Delete(url string, params []KeyValue, body interface{}, header []KeyValue) (error, int, []byte)
-	Put(url string, params []KeyValue, body interface{}, header []KeyValue) (error, int, []byte)
+	Request(method string, params []KeyValue, body interface{}, header []KeyValue) (error, int, []byte)
+	Get(params []KeyValue, body interface{}, header []KeyValue) (error, int, []byte)
+	Post(params []KeyValue, body interface{}, header []KeyValue) (error, int, []byte)
+	Delete(params []KeyValue, body interface{}, header []KeyValue) (error, int, []byte)
+	Put(params []KeyValue, body interface{}, header []KeyValue) (error, int, []byte)
 }
