@@ -103,39 +103,43 @@ func (s *InternalServer) OnQuerySetEpoch(w http.ResponseWriter, r *http.Request)
 	weightFee := query["weightFee"]
 	weightOI := query["weightOI"]
 	weightMCB := query["weightMCB"]
-	if (len(epoch) == 0 || epoch[0] == "") ||
-		(len(startTime) == 0 || startTime[0] == "") ||
-		(len(endTime) == 0 || endTime[0] == "") ||
-		(len(weightOI) == 0 || weightOI[0] == "") ||
-		(len(weightFee) == 0 || weightFee[0] == "") ||
-		(len(weightMCB) == 0 || weightMCB[0] == "") {
-		s.logger.Info("empty parameter:%#v", query)
-		s.jsonError(w, "empty parameter", 400)
+	if (len(epoch) != 1 || epoch[0] == "") ||
+		(len(startTime) != 1 || startTime[0] == "") ||
+		(len(endTime) != 1 || endTime[0] == "") ||
+		(len(weightOI) != 1 || weightOI[0] == "") ||
+		(len(weightFee) != 1 || weightFee[0] == "") ||
+		(len(weightMCB) != 1 || weightMCB[0] == "") {
+		s.logger.Info("invalid or empty parameter:%#v", query)
+		s.jsonError(w, "invalid or empty parameter", 400)
 		return
 	}
-	s.logger.Debug(
+	s.logger.Info(
 		"epoch %s, startTime %s, endTime %s, weightFee %s, weightOI %s, weightMCB %s",
 		epoch, startTime, endTime, weightFee, weightOI, weightMCB,
 	)
 
+	// marshal parameter, return parameter invalid if failed
 	e, err := strconv.Atoi(epoch[0])
 	if err != nil {
 		s.logger.Info("parameter invalid:%#v", query)
 		s.jsonError(w, "parameter invalid", 400)
 		return
 	}
-	st, err := strconv.Atoi(startTime[0])
+	eInt64 := int64(e)
+	sTime, err := strconv.Atoi(startTime[0])
 	if err != nil {
 		s.logger.Info("parameter invalid:%#v", query)
 		s.jsonError(w, "parameter invalid", 400)
 		return
 	}
-	et, err := strconv.Atoi(endTime[0])
+	sTimeInt64 := int64(sTime)
+	eTime, err := strconv.Atoi(endTime[0])
 	if err != nil {
 		s.logger.Info("parameter invalid:%#v", query)
 		s.jsonError(w, "parameter invalid", 400)
 		return
 	}
+	eTimeInt64 := int64(eTime)
 	wo, err := decimal.NewFromString(weightOI[0])
 	if err != nil {
 		s.logger.Info("parameter invalid:%#v", query)
@@ -154,11 +158,66 @@ func (s *InternalServer) OnQuerySetEpoch(w http.ResponseWriter, r *http.Request)
 		s.jsonError(w, "parameter invalid", 400)
 		return
 	}
+	u := false
+	update := query.Get("update")
+	u = update == "true"
+
+	// check time
+	if eTime <= sTime {
+		s.logger.Info("parameter invalid:%#v", query)
+		s.jsonError(w, "parameter invalid", 400)
+		return
+	}
+
+	var schedules []mining.Schedule
+	err = s.db.Model(mining.Schedule{}).Scan(&schedules).Error
+	if err != nil {
+		s.logger.Error("failed to read from db, %s", err)
+		s.jsonError(w, "internal error", 400)
+		return
+	}
+	if len(schedules) == 0 {
+		// there is no schedule right now. write into db directly
+		s.logger.Info("There is no schedule right now. write into db directly")
+		err = s.upsertSchedule(&mining.Schedule{
+			Epoch:     int64(e),
+			StartTime: int64(sTime),
+			EndTime:   int64(eTime),
+			WeightFee: wf,
+			WeightMCB: wm,
+			WeightOI:  wo,
+		})
+		if err != nil {
+			s.logger.Error("failed to write into db, %s", err)
+			s.jsonError(w, "internal error", 400)
+			return
+		}
+	}
+
+	for _, sch := range schedules {
+		if sch.Epoch == eInt64 && !u {
+			s.logger.Info("parameter invalid:%#v", query)
+			s.jsonError(w, "parameter invalid: duplication epoch without update", 400)
+			return
+		} else if sch.Epoch == eInt64 && u {
+			continue // continue to check if there is overlapped
+		}
+		if eTimeInt64 > sch.StartTime && sch.StartTime >= sTimeInt64 {
+			s.logger.Info("parameter invalid:%#v", query)
+			s.jsonError(w, "parameter invalid: overlapped", 400)
+			return
+		}
+		if eTimeInt64 > sch.EndTime && sch.EndTime > sTimeInt64 {
+			s.logger.Info("parameter invalid:%#v", query)
+			s.jsonError(w, "parameter invalid: overlapped", 400)
+			return
+		}
+	}
 
 	schedule := &mining.Schedule{
-		Epoch:     int64(e),
-		StartTime: int64(st),
-		EndTime:   int64(et),
+		Epoch:     eInt64,
+		StartTime: sTimeInt64,
+		EndTime:   eTimeInt64,
 		WeightFee: wf,
 		WeightMCB: wm,
 		WeightOI:  wo,
