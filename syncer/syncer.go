@@ -39,8 +39,8 @@ type Syncer struct {
 	db         *gorm.DB
 
 	// block syncer
-	mai3GraphClient  *graph.MAI3Client
-	blockGraphClient *graph.BlockClient
+	blockGraphInterface graph.BlockInterface
+	mai3GraphInterface  graph.MAI3Interface
 
 	// weight
 	curEpochConfig *mining.Schedule
@@ -55,8 +55,8 @@ func NewSyncer(
 	return &Syncer{
 		ctx:                   ctx,
 		logger:                logger,
-		mai3GraphClient:       graph.NewMAI3Client(logger, mai3GraphUrl),
-		blockGraphClient:      graph.NewBlockClient(logger, blockGraphUrl),
+		mai3GraphInterface:    graph.NewMAI3Client(logger, mai3GraphUrl),
+		blockGraphInterface:   graph.NewBlockClient(logger, blockGraphUrl),
 		db:                    database.GetDB(),
 		defaultEpochStartTime: defaultEpochStartTime,
 	}
@@ -201,11 +201,11 @@ func (s *Syncer) initUserStates() error {
 		return nil
 	}
 	// query all total fee before this epoch start time, if not exist, return
-	startBn, err := s.blockGraphClient.GetTimestampToBlockNumber(s.curEpochConfig.StartTime)
+	startBn, err := s.getTimestampToBlockNumber(s.curEpochConfig.StartTime, s.blockGraphInterface)
 	if err != nil {
 		return err
 	}
-	users, err := s.mai3GraphClient.GetUsersBasedOnBlockNumber(startBn)
+	users, err := s.getUsersBasedOnBlockNumber(startBn, s.mai3GraphInterface)
 	if err != nil {
 		return err
 	}
@@ -257,17 +257,17 @@ func (s *Syncer) syncState() (int64, error) {
 		lp = p
 	}
 	np = norm(lp + 60)
-	bn, err := s.blockGraphClient.GetTimestampToBlockNumber(np)
+	bn, err := s.getTimestampToBlockNumber(np, s.blockGraphInterface)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get block number from timestamp: timestamp=%v %w", np, err)
 	}
-	users, err := s.mai3GraphClient.GetUsersBasedOnBlockNumber(bn)
+	users, err := s.getUsersBasedOnBlockNumber(bn, s.mai3GraphInterface)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get users on block number: blocknumber=%v %w", bn, err)
 	}
 	s.logger.Info("found %v users @%v", len(users), bn)
 	// 2. update graph data
-	prices, err := s.mai3GraphClient.GetMarkPrices(bn)
+	prices, err := s.getMarkPrice(bn, s.mai3GraphInterface)
 	if err != nil {
 		return 0, fmt.Errorf("fail to get mark prices %w", err)
 	}
@@ -400,7 +400,7 @@ func (s Syncer) getPositionValue(accounts []*graph.MarginAccount, bn int64, cach
 			if err != nil {
 				return sum, fmt.Errorf("fail to get pool address and index from id %w", err)
 			}
-			p, err := s.mai3GraphClient.GetMarkPriceBasedOnBlockNumber(bn, addr, index)
+			p, err := s.getMarkPriceWithBlockNumberAddrIndex(bn, addr, index, s.mai3GraphInterface)
 			if err != nil {
 				return sum, fmt.Errorf("fail to get mark price %w", err)
 			}
@@ -425,4 +425,21 @@ func (s *Syncer) detectEpoch(p int64) (*mining.Schedule, error) {
 		return nil, NOT_IN_EPOCH
 	}
 	return ss[0], nil
+}
+
+func (s *Syncer) getUsersBasedOnBlockNumber(blockNumber int64, mai3Interface graph.MAI3Interface) ([]graph.User, error) {
+	return mai3Interface.GetUsersBasedOnBlockNumber(blockNumber)
+}
+
+func (s *Syncer) getMarkPrice(blockNumber int64, mai3Interface graph.MAI3Interface) (map[string]decimal.Decimal, error) {
+	return mai3Interface.GetMarkPrices(blockNumber)
+}
+
+func (s *Syncer) getMarkPriceWithBlockNumberAddrIndex(
+	blockNumber int64, poolAddr string, perpetualIndex int, mai3Interface graph.MAI3Interface) (decimal.Decimal, error) {
+	return mai3Interface.GetMarkPriceWithBlockNumberAddrIndex(blockNumber, poolAddr, perpetualIndex)
+}
+
+func (s *Syncer) getTimestampToBlockNumber(timestamp int64, blockInterface graph.BlockInterface) (int64, error) {
+	return blockInterface.GetTimestampToBlockNumber(timestamp)
 }
