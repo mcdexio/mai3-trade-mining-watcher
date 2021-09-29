@@ -70,7 +70,7 @@ func (s *TMServer) Run() error {
 		if err := s.calculateTotalScore(); err == nil {
 			break
 		} else {
-			s.logger.Warn("error occurs while running: %w", err)
+			s.logger.Warn("error occurs while running: %s", err)
 			time.Sleep(5 * time.Second)
 		}
 	}
@@ -87,7 +87,7 @@ func (s *TMServer) Run() error {
 				if err := s.calculateTotalScore(); err == nil {
 					break
 				} else {
-					s.logger.Warn("error occurs while running: %w", err)
+					s.logger.Warn("error occurs while running: %s", err)
 				}
 			}
 		}
