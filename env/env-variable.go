@@ -7,3 +7,9 @@ func IsCI() bool {
 	ci := config.GetString("CI", "false")
 	return ci == "true"
 }
+
+// LogColor returns true is log color on
+func LogColor() bool {
+	color := config.GetString("LOG_COLOR")
+	return color == "true"
+}
