@@ -2,13 +2,120 @@ package syncer
 
 import (
 	"context"
+	"errors"
 	"github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
 	"github.com/mcdexio/mai3-trade-mining-watcher/database/models/mining"
+	"github.com/mcdexio/mai3-trade-mining-watcher/graph"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/suite"
 	"math"
 	"testing"
 )
+var TEST_ERROR = errors.New("test error")
+
+type MockBlockGraph struct {}
+
+func (mockBlock *MockBlockGraph) GetTimestampToBlockNumber(timestamp int64) (int64, error) {
+	// 15 second for 1 block:
+	// timestamp 0~14 return 1, timestamp 15~29 return 2
+	return (timestamp / 15) + 1, nil
+}
+
+func NewMockBlockGraph() *MockBlockGraph {
+	return &MockBlockGraph{}
+}
+
+type MockMAI3Graph struct {}
+
+func (mockMAI3 *MockMAI3Graph) GetUsersBasedOnBlockNumber(blockNumber int64) ([]graph.User, error) {
+	if blockNumber == 1 {
+		return []graph.User{
+			{
+				ID: "0xUser1",
+				StakedMCB: decimal.NewFromInt(3),
+				TotalFee: decimal.NewFromInt(0),
+				UnlockMCBTime: 60*60*24*100, // 100 days
+				MarginAccounts: []*graph.MarginAccount{
+					{
+						ID: "0xPool-0-0xUser1",
+						Position: decimal.NewFromFloat(2),
+					},
+				},
+			},
+		}, nil
+	}
+	return []graph.User{}, TEST_ERROR
+}
+
+var retMap0 = map[string]decimal.Decimal{
+	"0xPool-0": decimal.NewFromInt(0),
+	"0xPool-1": decimal.NewFromInt(0),
+}
+
+var retMap1 = map[string]decimal.Decimal{
+	"0xPool-0": decimal.NewFromInt(100),
+	"0xPool-1": decimal.NewFromInt(1000),
+}
+
+var retMap2 = map[string]decimal.Decimal {
+	"0xPool-0":  decimal.NewFromInt(110),
+	"0xPool-1": decimal.NewFromInt(1100),
+}
+var retMap3 = map[string]decimal.Decimal {
+	"0xPool-0": decimal.NewFromInt(90),
+	"0xPool-1": decimal.NewFromInt(900),
+}
+
+func (mockMAI3 *MockMAI3Graph) GetMarkPrices(blockNumber int64) (map[string]decimal.Decimal, error) {
+	if blockNumber == 0 {
+		return retMap0, nil
+	}
+	if blockNumber == 1 {
+		return retMap1, nil
+	}
+	if blockNumber == 2 {
+		return retMap2, nil
+	}
+	if blockNumber == 3 {
+		return retMap3, nil
+	}
+	return map[string]decimal.Decimal{}, TEST_ERROR
+}
+
+func (mockMAI3 *MockMAI3Graph) GetMarkPriceWithBlockNumberAddrIndex(blockNumber int64, poolAddr string, perpetualIndex int) (decimal.Decimal, error) {
+	if blockNumber == 0 {
+		return decimal.Zero, nil
+	}
+	if blockNumber == 1 {
+		if perpetualIndex == 0 {
+			return retMap1["0xPool-0"], nil
+		} else if perpetualIndex == 1 {
+			return retMap1["0xPool-1"], nil
+		}
+		return decimal.Zero, TEST_ERROR
+	}
+	if blockNumber == 2 {
+		if perpetualIndex == 0 {
+			return retMap2["0xPool-0"], nil
+		} else if perpetualIndex == 1 {
+			return retMap2["0xPool-1"], nil
+		}
+		return decimal.Zero, TEST_ERROR
+	}
+	if blockNumber == 3 {
+		if perpetualIndex == 0 {
+			return retMap3["0xPool-0"], nil
+		} else if perpetualIndex == 1 {
+			return retMap3["0xPool-1"], nil
+		}
+		return decimal.Zero, TEST_ERROR
+	}
+	return decimal.Zero, TEST_ERROR
+}
+
+func NewMockMAI3Graph() *MockMAI3Graph {
+	return &MockMAI3Graph{}
+}
 
 type SyncerTestSuite struct {
 	suite.Suite
@@ -20,22 +127,30 @@ type SyncerTestSuite struct {
 func (t *SyncerTestSuite) SetupSuite() {
 	logger := logging.NewLoggerTag("test suite syncer")
 	ctx, cancel := context.WithCancel(context.Background())
-	t.syncer = NewSyncer(ctx, logger, "", "", 0)
-	t.syncer.curEpochConfig = &mining.Schedule{
-		Epoch:     0,
-		StartTime: 100,
-		EndTime:   500,
-		WeightFee: decimal.NewFromFloat(0.7),
-		WeightMCB: decimal.NewFromFloat(0.3),
-		WeightOI:  decimal.NewFromFloat(0.3),
+	t.syncer = &Syncer{
+		logger: logger,
+		ctx: ctx,
+		curEpochConfig: &mining.Schedule{
+			Epoch:     0,
+			StartTime: 100,
+			EndTime:   500,
+			WeightFee: decimal.NewFromFloat(0.7),
+			WeightMCB: decimal.NewFromFloat(0.3),
+			WeightOI:  decimal.NewFromFloat(0.3),
+		},
+		blockGraphInterface: NewMockBlockGraph(),
+		mai3GraphInterface: NewMockMAI3Graph(),
 	}
 	t.cancel = cancel
+
+	// TODO(ChampFu): setup database
 }
 
 func (t *SyncerTestSuite) TearDownSuite() {
 	t.cancel()
 }
 
+// TODO(ChampFu): calculate state main logic
 // func (t *SyncerTestSuite) TestState() {
 // 	np := int64(0)
 // 	for np < t.syncer.curEpochConfig.EndTime {
