@@ -5,6 +5,7 @@ import (
 	"github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
 	"github.com/mcdexio/mai3-trade-mining-watcher/database/models/mining"
 	"github.com/shopspring/decimal"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/suite"
 	"math"
 	"testing"
@@ -13,14 +14,39 @@ import (
 type SyncerTestSuite struct {
 	suite.Suite
 
-	s      *Syncer
+	s      *MockSyncer
 	cancel context.CancelFunc
+}
+
+func NewMockSyncer(syncer *Syncer) *MockSyncer {
+	return &MockSyncer{
+		syncer: syncer,
+	}
+}
+
+type MockSyncer struct {
+	mock.Mock
+	syncer *Syncer
+}
+
+func (mock *MockSyncer) getProgress(name string, epoch int64) (int64, error) {
+	args := mock.Called(name, epoch)
+	return int64(args.Int(0)), args.Error(0)
+}
+
+func (mock *MockSyncer) getStakeScore(curTime int64, unlockTime int64, staked decimal.Decimal) decimal.Decimal {
+	return mock.syncer.getStakeScore(curTime, unlockTime, staked)
+}
+
+func (mock *MockSyncer) getScore(ui *mining.UserInfo, elapsed decimal.Decimal) decimal.Decimal {
+	return mock.syncer.getScore(ui, elapsed)
 }
 
 func (t *SyncerTestSuite) SetupSuite() {
 	logger := logging.NewLoggerTag("test suite syncer")
 	ctx, cancel := context.WithCancel(context.Background())
-	t.s = NewSyncer(ctx, logger, "", "", 0)
+	syncer := NewSyncer(ctx, logger, "", "", 0)
+	t.s = NewMockSyncer(syncer)
 	t.cancel = cancel
 }
 
@@ -50,7 +76,7 @@ func (t *SyncerTestSuite) TestStakeGetScore() {
 }
 
 func (t *SyncerTestSuite) TestGetScore() {
-	t.s.curEpochConfig = &mining.Schedule{
+	t.s.syncer.curEpochConfig = &mining.Schedule{
 		WeightMCB: decimal.NewFromFloat(0.3),
 		WeightFee: decimal.NewFromFloat(0.7),
 		WeightOI:  decimal.NewFromFloat(0.3),
