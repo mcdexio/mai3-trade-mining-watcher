@@ -4,14 +4,11 @@ import (
 	"context"
 	"fmt"
 	"github.com/mcdexio/mai3-trade-mining-watcher/api"
-	"github.com/mcdexio/mai3-trade-mining-watcher/common/config"
 	"github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
-	"github.com/mcdexio/mai3-trade-mining-watcher/syncer"
 	"golang.org/x/sync/errgroup"
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 )
 
 func main() {
@@ -25,29 +22,7 @@ func main() {
 	backgroundCtx, stop := context.WithCancel(context.Background())
 	group, ctx := errgroup.WithContext(backgroundCtx)
 
-	syn := syncer.NewSyncer(
-		ctx,
-		logger,
-		config.GetString("MAI3_TRADE_MINING_GRAPH_URL"),
-		config.GetString("ARB_BLOCKS_GRAPH_URL"),
-		config.GetInt64("DEFAULT_EPOCH_0_START_TIME"),
-	)
-
-	now := time.Now().Unix() - 60*3
-
-	blockNumber, err := syn.TimestampToBlockNumber(now)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	fmt.Println(blockNumber)
-
-	priceMap, err := syn.GetMarkPrices(4933593)
-	if err != nil {
-		fmt.Println(err)
-	}
-	fmt.Println(priceMap)
-	fmt.Println(len(priceMap))
+	fmt.Println(ctx)
 
 	go WaitExitSignal(stop, logger)
 
