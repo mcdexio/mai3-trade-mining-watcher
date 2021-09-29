@@ -32,6 +32,13 @@ type MarkPrice struct {
 	Price decimal.Decimal `json:"price"`
 }
 
+type MAI3Interface interface {
+	GetUsersBasedOnBlockNumber(blockNumber int64) ([]User, error)
+	GetMarkPrices(blockNumber int64) (map[string]decimal.Decimal, error)
+	GetMarkPriceWithBlockNumberAddrIndex(
+		blockNumber int64, poolAddr string, perpetualIndex int) (decimal.Decimal, error)
+}
+
 func NewMAI3Client(logger logging.Logger, url string) *MAI3Client {
 	logger.Info("New MAI3 client with url %s", url)
 	return &MAI3Client{
@@ -167,8 +174,11 @@ func (m *MAI3Client) getUserWithBlockNumberID(blockNumber int64, id string) ([]U
 	return response.Data.Users, nil
 }
 
-func (m *MAI3Client) GetMarkPriceBasedOnBlockNumber(blockNumber int64, poolAddr string, perpetualIndex int) (decimal.Decimal, error) {
-	m.logger.Debug("Get mark price based on block number %d, poolAddr %s, perpetualIndex %d", blockNumber, poolAddr, perpetualIndex)
+// GetMarkPriceWithBlockNumberAddrIndex get mark price based on block number, pool address, perpetual index.
+func (m *MAI3Client) GetMarkPriceWithBlockNumberAddrIndex(
+	blockNumber int64, poolAddr string, perpetualIndex int) (decimal.Decimal, error) {
+	m.logger.Debug("Get mark price based on block number %d, poolAddr %s, perpetualIndex %d",
+		blockNumber, poolAddr, perpetualIndex)
 	query := `{
 		markPrices(first: 1, block: { number: %d }, where: {id: "%s"}) {
     		id

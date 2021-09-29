@@ -9,6 +9,10 @@ import (
 	"strconv"
 )
 
+type BlockInterface interface {
+	GetTimestampToBlockNumber(timestamp int64) (int64, error)
+}
+
 type BlockClient struct {
 	logger logging.Logger
 	client *utils.Client
