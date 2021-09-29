@@ -69,6 +69,9 @@ func (s *TMServer) Run() error {
 	for {
 		if err := s.calculateTotalScore(); err == nil {
 			break
+		} else {
+			s.logger.Warn("error occurs while running: %w", err)
+			time.Sleep(5 * time.Second)
 		}
 	}
 
@@ -83,6 +86,8 @@ func (s *TMServer) Run() error {
 			for {
 				if err := s.calculateTotalScore(); err == nil {
 					break
+				} else {
+					s.logger.Warn("error occurs while running: %w", err)
 				}
 			}
 		}
@@ -94,7 +99,7 @@ func (s *TMServer) getEpoch() error {
 		Epoch int
 	}
 	// get the epoch
-	err := s.db.Model(&mining.UserInfo{}).Limit(1).Order("epoch desc").Select("epoch").Scan(&epochs).Error
+	err := s.db.Model(&mining.UserInfo{}).Limit(1).Order("epoch desc").Select("epoch").First(&epochs).Error
 	if err != nil {
 		return fmt.Errorf("failed to get user info %s", err)
 	}
@@ -113,6 +118,9 @@ func (s *TMServer) calculateTotalScore() error {
 		if err := s.getEpoch(); err == nil {
 			// success
 			break
+		} else {
+			s.logger.Warn("error occurs while running: %w", err)
+			time.Sleep(5 * time.Second)
 		}
 	}
 
@@ -178,9 +186,9 @@ func (s *TMServer) OnQueryTradingMining(w http.ResponseWriter, r *http.Request) 
 	// request
 	query := r.URL.Query()
 	trader := query["trader"]
-	if len(trader) == 0 || trader[0] == "" {
-		s.logger.Info("empty parameter:%#v", query)
-		s.jsonError(w, "empty parameter", 400)
+	if len(trader) != 1 || trader[0] == "" {
+		s.logger.Info("invalid or empty parameter:%#v", query)
+		s.jsonError(w, "invalid or empty parameter", 400)
 		return
 	}
 	traderID := strings.ToLower(trader[0])
