@@ -595,7 +595,7 @@ func (s *Syncer) detectEpoch(p int64) (*mining.Schedule, error) {
 	// get epoch from schedule database.
 	// detect which epoch is time(p) in.
 	var ss []*mining.Schedule
-	// TODO(champFu): check with @yz if there are two epoch 0 and 1, endTime of these two epochs are all bigger than p+60, we get 0, maybe check len(ss) == 1
+	// handle overlap in setEpoch of internalServer
 	if err := s.db.Model(&mining.Schedule{}).Where("end_time>?", p+60).Order("epoch asc").Find(&ss).Error; err != nil {
 		return nil, fmt.Errorf("fail to found epoch config %w", err)
 	}
