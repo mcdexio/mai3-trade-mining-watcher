@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"github.com/mcdexio/mai3-trade-mining-watcher/types"
 	"os"
 	"os/signal"
 	"syscall"
@@ -21,9 +22,8 @@ func main() {
 	defer logging.Finalize()
 	logger := logging.NewLoggerTag(name)
 
-	// db := database.GetDB()
 	database.Initialize()
-	// database.Reset(db, types.Watcher, true)
+	database.Reset(database.GetDB(), types.Watcher, true)
 
 	backgroundCtx, stop := context.WithCancel(context.Background())
 	group, ctx := errgroup.WithContext(backgroundCtx)

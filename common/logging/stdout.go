@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/mcdexio/mai3-trade-mining-watcher/cache/cacher"
 	"github.com/mcdexio/mai3-trade-mining-watcher/common/utils"
+	"github.com/mcdexio/mai3-trade-mining-watcher/env"
 	"github.com/ttacon/chalk"
 	"io"
 	"os"
@@ -67,11 +68,8 @@ func _() {
 
 func newStdOutput() *stdOutput {
 	opt := stdoutOpt()
-	// if !env.IsCI() {
-	// 	opt = opt.setWithColor(true)
-	// }
+	opt = opt.setWithColor(env.LogColor())
 
-	opt = opt.setWithColor(false)
 	o := &stdOutput{
 		writer:     os.Stdout,
 		defaultOpt: opt,

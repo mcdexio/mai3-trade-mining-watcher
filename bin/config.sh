@@ -4,6 +4,7 @@
 # env
 export CI=false
 
+export LOG_COLOR=true
 export SERVER_LOG_TO_STACKDRIVER=false
 export SERVER_LOG_TO_STDOUT=true
 export SERVER_PROJECT_ID=mai3-trade-mining-watcher
