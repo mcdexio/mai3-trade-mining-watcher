@@ -88,7 +88,7 @@ func (s *Syncer) Run() error {
 	for {
 		if err := s.run(s.ctx); err != nil {
 			if !errors.Is(err, NOT_IN_EPOCH) {
-				s.logger.Warn("error occurs while running: %w", err)
+				s.logger.Warn("error occurs while running: %s", err)
 				time.Sleep(5 * time.Second)
 				continue
 			}
