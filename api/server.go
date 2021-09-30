@@ -40,6 +40,7 @@ func NewTMServer(ctx context.Context, logger logging.Logger) *TMServer {
 		ctx:    ctx,
 		score: make(map[int]decimal.Decimal),
 	}
+	tmServer.score[0] = decimal.Zero
 	mux := http.NewServeMux()
 	mux.HandleFunc("/score", tmServer.OnQueryTradingMining)
 	tmServer.server = &http.Server{
