@@ -34,6 +34,11 @@ var (
 	PROGRESS_SNAPSHOT   = "user_info.snapshot"
 )
 
+var INVERSE_CONTRACT_WHITELIST = map[string]bool{
+	"0x3d3744dc7a17d757a2568ddb171d162a7e12f80-0":  true, // 10689
+	"0x727e5a9a04080741cbc8a2dc891e28ca8af6537e-0": true, // 10690
+}
+
 type Syncer struct {
 	ctx        context.Context
 	httpClient *utils.Client
@@ -429,8 +434,17 @@ func (s Syncer) getPositionValue(accounts []*graph.MarginAccount, bn int64, cach
 	sum := decimal.Zero
 	for _, a := range accounts {
 		var price decimal.Decimal
+
 		// 0xc32a2dfee97e2babc90a2b5e6aef41e789ef2e13-0-0x00233150044aec4cba478d0bf0ecda0baaf5ad19
-		perpId := strings.Join(strings.Split(a.ID, "-")[:2], "-")
+		perpId := strings.Join(strings.Split(a.ID, "-")[:2], "-") // 0xc32a2dfee97e2babc90a2b5e6aef41e789ef2e13-0
+
+		// inverse contract
+		if INVERSE_CONTRACT_WHITELIST[perpId] {
+			sum = sum.Add(a.Position.Abs())
+			continue
+		}
+
+		// normal contract
 		if v, ok := cache[perpId]; ok {
 			price = v
 		} else {
