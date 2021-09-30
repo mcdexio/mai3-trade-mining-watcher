@@ -3,7 +3,6 @@ package syncer
 import (
 	"context"
 	"errors"
-	"fmt"
 	"github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
 	database "github.com/mcdexio/mai3-trade-mining-watcher/database/db"
 	"github.com/mcdexio/mai3-trade-mining-watcher/database/models/mining"
@@ -220,7 +219,7 @@ func (t *SyncerTestSuite) SetupSuite() {
 		curEpochConfig: &mining.Schedule{
 			Epoch:     0,
 			StartTime: 0,
-			EndTime:   3,
+			EndTime:   250,
 			WeightFee: decimal.NewFromFloat(0.7),
 			WeightMCB: decimal.NewFromFloat(0.3),
 			WeightOI:  decimal.NewFromFloat(0.3),
@@ -234,6 +233,8 @@ func (t *SyncerTestSuite) SetupSuite() {
 
 func (t *SyncerTestSuite) TearDownSuite() {
 	t.cancel()
+	database.DeleteAllData(types.Watcher)
+	database.Finalize()
 }
 
 func (t *SyncerTestSuite) TestState() {
@@ -244,10 +245,9 @@ func (t *SyncerTestSuite) TestState() {
 	err := t.syncer.initUserStates()
 	t.Require().Equal(err, nil)
 	t.Require().Equal(progress.From, np)
-	for np < 300 {
+	for np < t.syncer.curEpochConfig.EndTime {
 		p, err := t.syncer.syncState()
 		t.Require().Equal(err, nil)
-		fmt.Println(p)
 
 		// check progress
 		err = t.syncer.db.Model(&mining.Progress{}).Where("table_name = 'user_info' and epoch = 0").First(&progress).Error
@@ -289,7 +289,6 @@ func (t *SyncerTestSuite) TestState() {
 			actualScore, _ := users[0].Score.Float64()
 			t.Require().Equal(actualScore, score)
 		}
-
 		if p == 240 {
 			// p == 240 -> block == 4
 			// stackedMCB 10 * unlockTime 100 == 1000
