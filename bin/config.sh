@@ -22,4 +22,4 @@ export MAI3_TRADE_MINING_GRAPH_URL=https://api.thegraph.com/subgraphs/name/champ
 export ARB_BLOCKS_GRAPH_URL=https://api.thegraph.com/subgraphs/name/renpu-mcarlo/arbitrum-rinkeby-blocks
 
 # setting
-export DEFAULT_EPOCH_0_START_TIME=1632828600
+export DEFAULT_EPOCH=0

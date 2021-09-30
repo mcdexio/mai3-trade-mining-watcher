@@ -3,15 +3,16 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
 	"github.com/mcdexio/mai3-trade-mining-watcher/api"
 	"github.com/mcdexio/mai3-trade-mining-watcher/common/config"
 	"github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
 	"github.com/mcdexio/mai3-trade-mining-watcher/syncer"
 	"golang.org/x/sync/errgroup"
-	"os"
-	"os/signal"
-	"syscall"
-	"time"
 )
 
 func main() {
@@ -30,7 +31,7 @@ func main() {
 		logger,
 		config.GetString("MAI3_TRADE_MINING_GRAPH_URL"),
 		config.GetString("ARB_BLOCKS_GRAPH_URL"),
-		config.GetInt64("DEFAULT_EPOCH_0_START_TIME"),
+		config.GetInt64("DEFAULT_EPOCH"),
 	)
 
 	now := time.Now().Unix() - 60*3
