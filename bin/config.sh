@@ -16,8 +16,7 @@ export DB_ARGS=postgres://mcdex@localhost:5432/mcdex?sslmode=disable # Disable s
 
 # Graph URL
 export MAI3_TRADE_MINING_GRAPH_URL=https://api.thegraph.com/subgraphs/name/champfu-mcdex/mai3-trading-mining2
-# export ARB_BLOCKS_GRAPH_URL=https://api.thegraph.com/subgraphs/name/ianlapham/arbitrum-one-blocks
-export ARB_BLOCKS_GRAPH_URL=https://api.thegraph.com/subgraphs/name/renpu-mcarlo/arbitrum-rinkeby-blocks
+export BLOCKS_GRAPH_URL=https://api.thegraph.com/subgraphs/name/renpu-mcarlo/arbitrum-rinkeby-blocks
 
 # setting
 export DEFAULT_EPOCH_0_START_TIME=1632972600
