@@ -410,7 +410,7 @@ func (s Syncer) getPositionValue(accounts []*graph.MarginAccount, bn int64, cach
 			price = p
 			cache[perpId] = p
 		}
-		sum = price.Mul(a.Position).Abs()
+		sum = sum.Add(price.Mul(a.Position).Abs())
 	}
 	return sum, nil
 }

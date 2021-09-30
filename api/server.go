@@ -38,7 +38,7 @@ func NewTMServer(ctx context.Context, logger logging.Logger) *TMServer {
 		logger: logger,
 		db:     database.GetDB(),
 		ctx:    ctx,
-		score: make(map[int]decimal.Decimal),
+		score:  make(map[int]decimal.Decimal),
 	}
 	tmServer.score[0] = decimal.Zero
 	mux := http.NewServeMux()
@@ -73,7 +73,7 @@ func (s *TMServer) Run() error {
 			break
 		} else {
 			s.logger.Warn("server error occurs while running: %s", err)
-			time.Sleep(5 * time.Second)
+			time.Sleep(30 * time.Second)
 		}
 	}
 
@@ -122,7 +122,7 @@ func (s *TMServer) calculateTotalScore() error {
 			break
 		} else {
 			s.logger.Warn("server error occurs while running: %s", err)
-			time.Sleep(5 * time.Second)
+			time.Sleep(10 * time.Second)
 		}
 	}
 
