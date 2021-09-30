@@ -65,7 +65,10 @@ func NewSyncer(
 func (s *Syncer) setDefaultEpoch() int64 {
 	// start := time.Now().Unix()
 	start := s.defaultEpochStartTime
-	err := s.db.Create(&mining.Schedule{
+	err := s.db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "epoch"}},
+		UpdateAll: true,
+	}).Create(&mining.Schedule{
 		Epoch:     0,
 		StartTime: start,
 		EndTime:   start + 60*60*24*14,
