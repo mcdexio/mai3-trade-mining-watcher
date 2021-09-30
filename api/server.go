@@ -126,20 +126,8 @@ func (s *TMServer) calculateTotalScore() error {
 		}
 	}
 
-	var startEpoch int
-	if len(s.score) == 0 {
-		// first time start this server
-		s.score[0] = decimal.Zero
-		// sync from epoch 0
-		startEpoch = 0
-	} else {
-		// only sync from this epoch, because previous has been processed.
-		startEpoch = s.nowEpoch
-		s.score[s.nowEpoch] = decimal.Zero
-	}
-
-	s.logger.Info("calculate total status")
-	for i := startEpoch; i <= s.nowEpoch; i++ {
+	s.logger.Info("calculate total status from epoch 0 to this epoch %d", s.nowEpoch)
+	for i := 0; i <= s.nowEpoch; i++ {
 		var traders []struct {
 			Trader string
 			Score  decimal.Decimal
@@ -156,7 +144,7 @@ func (s *TMServer) calculateTotalScore() error {
 			s.score[i] = decimal.Zero
 			continue
 		}
-
+		s.score[i] = decimal.Zero
 		for _, t := range traders {
 			s.score[i] = s.score[i].Add(t.Score)
 		}
