@@ -3,42 +3,84 @@ package syncer
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
+	database "github.com/mcdexio/mai3-trade-mining-watcher/database/db"
 	"github.com/mcdexio/mai3-trade-mining-watcher/database/models/mining"
 	"github.com/mcdexio/mai3-trade-mining-watcher/graph"
+	"github.com/mcdexio/mai3-trade-mining-watcher/types"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/suite"
 	"math"
 	"testing"
 )
+
 var TEST_ERROR = errors.New("test error")
 
-type MockBlockGraph struct {}
+type MockBlockGraph struct{}
 
 func (mockBlock *MockBlockGraph) GetTimestampToBlockNumber(timestamp int64) (int64, error) {
-	// 15 second for 1 block:
-	// timestamp 0~14 return 1, timestamp 15~29 return 2
-	return (timestamp / 15) + 1, nil
+	// 60 second for 1 block:
+	// timestamp 0~59 return 0, timestamp 60~119 return 1
+	return timestamp / 60, nil
 }
 
 func NewMockBlockGraph() *MockBlockGraph {
 	return &MockBlockGraph{}
 }
 
-type MockMAI3Graph struct {}
+type MockMAI3Graph struct{}
 
 func (mockMAI3 *MockMAI3Graph) GetUsersBasedOnBlockNumber(blockNumber int64) ([]graph.User, error) {
+	if blockNumber == 0 {
+		return []graph.User{}, nil
+	}
 	if blockNumber == 1 {
 		return []graph.User{
 			{
-				ID: "0xUser1",
-				StakedMCB: decimal.NewFromInt(3),
-				TotalFee: decimal.NewFromInt(0),
-				UnlockMCBTime: 60*60*24*100, // 100 days
+				ID:             "0xUser1",
+				StakedMCB:      decimal.NewFromInt(3),
+				TotalFee:       decimal.NewFromInt(0),
+				UnlockMCBTime:  60 * 60 * 24 * 100, // 100 days
+				MarginAccounts: []*graph.MarginAccount{},
+			},
+		}, nil
+	}
+	if blockNumber == 2 {
+		return []graph.User{
+			{
+				ID:            "0xUser1",
+				StakedMCB:     decimal.NewFromInt(3),
+				TotalFee:      decimal.NewFromInt(0),
+				UnlockMCBTime: 60 * 60 * 24 * 100, // 100 days
 				MarginAccounts: []*graph.MarginAccount{
 					{
-						ID: "0xPool-0-0xUser1",
+						ID:       "0xPool-0-0xUser1",
 						Position: decimal.NewFromFloat(2),
+					},
+					{
+						ID:       "0xPool-0-0xUser2",
+						Position: decimal.NewFromFloat(4),
+					},
+				},
+			},
+		}, nil
+	}
+	if blockNumber == 3 {
+		return []graph.User{
+			{
+				ID:            "0xUser1",
+				StakedMCB:     decimal.NewFromInt(3),
+				TotalFee:      decimal.NewFromInt(10),
+				UnlockMCBTime: 60 * 60 * 24 * 100, // 100 days
+				MarginAccounts: []*graph.MarginAccount{
+					{
+						ID:       "0xPool-0-0xUser1",
+						Position: decimal.NewFromFloat(2),
+					},
+					{
+						ID:       "0xPool-0-0xUser2",
+						Position: decimal.NewFromFloat(4),
 					},
 				},
 			},
@@ -57,11 +99,11 @@ var retMap1 = map[string]decimal.Decimal{
 	"0xPool-1": decimal.NewFromInt(1000),
 }
 
-var retMap2 = map[string]decimal.Decimal {
-	"0xPool-0":  decimal.NewFromInt(110),
+var retMap2 = map[string]decimal.Decimal{
+	"0xPool-0": decimal.NewFromInt(110),
 	"0xPool-1": decimal.NewFromInt(1100),
 }
-var retMap3 = map[string]decimal.Decimal {
+var retMap3 = map[string]decimal.Decimal{
 	"0xPool-0": decimal.NewFromInt(90),
 	"0xPool-1": decimal.NewFromInt(900),
 }
@@ -125,21 +167,24 @@ type SyncerTestSuite struct {
 }
 
 func (t *SyncerTestSuite) SetupSuite() {
+	database.Initialize()
+	database.Reset(database.GetDB(), types.Watcher, true)
 	logger := logging.NewLoggerTag("test suite syncer")
 	ctx, cancel := context.WithCancel(context.Background())
 	t.syncer = &Syncer{
 		logger: logger,
-		ctx: ctx,
+		ctx:    ctx,
 		curEpochConfig: &mining.Schedule{
 			Epoch:     0,
-			StartTime: 100,
-			EndTime:   500,
+			StartTime: 0,
+			EndTime:   3,
 			WeightFee: decimal.NewFromFloat(0.7),
 			WeightMCB: decimal.NewFromFloat(0.3),
 			WeightOI:  decimal.NewFromFloat(0.3),
 		},
 		blockGraphInterface: NewMockBlockGraph(),
-		mai3GraphInterface: NewMockMAI3Graph(),
+		mai3GraphInterface:  NewMockMAI3Graph(),
+		db:                  database.GetDB(),
 	}
 	t.cancel = cancel
 
@@ -150,14 +195,16 @@ func (t *SyncerTestSuite) TearDownSuite() {
 	t.cancel()
 }
 
-// TODO(ChampFu): calculate state main logic
-// func (t *SyncerTestSuite) TestState() {
-// 	np := int64(0)
-// 	for np < t.syncer.curEpochConfig.EndTime {
-// 		p, _ := t.syncer.syncState()
-// 		np = p + 60
-// 	}
-// }
+// TODO(ChampFu): run state main logic
+func (t *SyncerTestSuite) TestState() {
+	np := int64(0)
+	for np < 240 {
+		p, err := t.syncer.syncState()
+		fmt.Println(err)
+		fmt.Println(p)
+		np = p + 60
+	}
+}
 
 func (t *SyncerTestSuite) TestStakeGetScore() {
 	// one day
