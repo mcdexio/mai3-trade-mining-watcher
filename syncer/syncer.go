@@ -5,22 +5,21 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/shopspring/decimal"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 	"math"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/mcdexio/mai3-trade-mining-watcher/graph"
-
-	"github.com/mcdexio/mai3-trade-mining-watcher/database/db"
-	"github.com/mcdexio/mai3-trade-mining-watcher/database/models/mining"
-	"github.com/mcdexio/mai3-trade-mining-watcher/types"
-	"github.com/shopspring/decimal"
-	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
-
 	"github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
+	"github.com/mcdexio/mai3-trade-mining-watcher/database/db"
 	database "github.com/mcdexio/mai3-trade-mining-watcher/database/db"
+	"github.com/mcdexio/mai3-trade-mining-watcher/database/models/mining"
+	"github.com/mcdexio/mai3-trade-mining-watcher/env"
+	"github.com/mcdexio/mai3-trade-mining-watcher/graph"
+	"github.com/mcdexio/mai3-trade-mining-watcher/types"
 	utils "github.com/mcdexio/mai3-trade-mining-watcher/utils/http"
 )
 
@@ -439,7 +438,7 @@ func (s Syncer) getPositionValue(accounts []*graph.MarginAccount, bn int64, cach
 		perpId := strings.Join(strings.Split(a.ID, "-")[:2], "-") // 0xc32a2dfee97e2babc90a2b5e6aef41e789ef2e13-0
 
 		// inverse contract
-		if INVERSE_CONTRACT_WHITELIST[perpId] {
+		if env.InInverseContractWhiteList(perpId) {
 			sum = sum.Add(a.Position.Abs())
 			continue
 		}

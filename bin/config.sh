@@ -20,7 +20,11 @@ export MAI3_TRADE_MINING_GRAPH_URL=https://api.thegraph.com/subgraphs/name/champ
 export ARB_BLOCKS_GRAPH_URL=https://api.thegraph.com/subgraphs/name/renpu-mcarlo/arbitrum-rinkeby-blocks
 
 # setting
-# export DEFAULT_EPOCH_0_START_TIME=1632970800 
-export DEFAULT_EPOCH_0_START_TIME=1633004015
-export RESET_DATABASE=false
+export DEFAULT_EPOCH_0_START_TIME=1632972600
+export RESET_DATABASE=true
 export SYNC_DELAY=400
+
+# inverse white list
+export COUNT_INVERSE_CONTRACT_WHITELIST=2
+export INVERSE_CONTRACT_WHITELIST0='0x3d3744dc7a17d757a2568ddb171d162a7e12f80-0'
+export INVERSE_CONTRACT_WHITELIST1='0x727e5a9a04080741cbc8a2dc891e28ca8af6537e-0'
