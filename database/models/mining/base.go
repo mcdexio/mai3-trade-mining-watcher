@@ -9,4 +9,5 @@ var AllModels = []interface{}{
 	&Progress{},
 	&Schedule{},
 	&UserInfo{},
+	&Snapshot{},
 }
