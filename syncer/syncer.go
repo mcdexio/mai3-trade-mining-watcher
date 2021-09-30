@@ -122,12 +122,16 @@ func (s *Syncer) run(ctx context.Context) error {
 	s.logger.Info("found in epoch %+v", e)
 	// set epoch
 	s.curEpochConfig = e
+	// next sync state
+	np := cp + 60
+	if np > s.nowWithDelay() {
+		s.logger.Info("sync delayed or not started")
+		return nil
+	}
 	// set init fee
 	if err := s.initUserStates(); err != nil {
 		return fmt.Errorf("fail to init user states: %w", err)
 	}
-	// sync state
-	np := cp
 	for np < s.curEpochConfig.EndTime {
 		select {
 		case <-ctx.Done():
@@ -140,7 +144,7 @@ func (s *Syncer) run(ctx context.Context) error {
 				continue
 			}
 			np = p + 60
-			now := norm(time.Now().Unix())
+			now := s.nowWithDelay()
 			if np > now && np < s.curEpochConfig.EndTime {
 				// sleep until next tick
 				time.Sleep(time.Duration(np-now) * time.Second)
@@ -149,6 +153,14 @@ func (s *Syncer) run(ctx context.Context) error {
 	}
 	s.logger.Info("epoch done: epoch=%+v", s.curEpochConfig)
 	return nil
+}
+
+func (s *Syncer) nowWithDelay() int64 {
+	now := time.Now().Unix()
+	if s.syncDelaySeconds != 0 {
+		now = now - s.syncDelaySeconds
+	}
+	return norm(now)
 }
 
 func (s *Syncer) GetPoolAddrIndexUserID(marginAccountID string) (poolAddr, userId string, perpetualIndex int, err error) {
@@ -350,7 +362,18 @@ func (s *Syncer) syncState() (int64, error) {
 			s.logger.Info("making snapshot for %v", h)
 			snapshot := make([]*mining.Snapshot, len(all))
 			for i, u := range all {
-				snapshot[i] = &mining.Snapshot{UserInfo: u}
+				snapshot[i] = &mining.Snapshot{
+					Trader:        u.Trader,
+					Epoch:         u.Epoch,
+					Timestamp:     h,
+					InitFee:       u.InitFee,
+					AccFee:        u.AccFee,
+					AccPosValue:   u.AccPosValue,
+					CurPosValue:   u.CurPosValue,
+					AccStakeScore: u.AccStakeScore,
+					CurStakeScore: u.CurStakeScore,
+					Score:         u.Score,
+				}
 			}
 			if err := tx.Save(&snapshot).Error; err != nil {
 				return fmt.Errorf("failed to create snapshot: size=%v %w", len(uis), err)

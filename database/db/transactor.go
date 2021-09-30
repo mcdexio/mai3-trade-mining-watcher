@@ -16,7 +16,8 @@ func WithTransaction(db *gorm.DB, p TransactionFunc, opts ...*sql.TxOptions) err
 		}
 	}()
 	if err := p(tx); err != nil {
-		return tx.Rollback().Error
+		tx.Rollback()
+		return err
 	}
 	return tx.Commit().Error
 }

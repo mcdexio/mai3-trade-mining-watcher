@@ -75,6 +75,8 @@ CREATE TABLE user_info (
 CREATE TABLE snapshot (
                            trader character varying(128) NOT NULL,
                            epoch bigint NOT NULL,
+                           timestamp bigint NOT NULL,
+
                            init_fee numeric(38,18) NOT NULL,
                            acc_fee numeric(38,18) NOT NULL,
                            acc_pos_value numeric(38,18) NOT NULL,
@@ -83,10 +85,9 @@ CREATE TABLE snapshot (
                            cur_stake_score numeric(38,18) NOT NULL,
                            score numeric(38,18) NOT NULL,
 
-                           timestamp bigint NOT NULL,
                            updated_at timestamp with time zone,
                            created_at timestamp with time zone,
-                           PRIMARY KEY (trader, epoch)
+                           PRIMARY KEY (trader, epoch, timestamp)
 
 );
 
