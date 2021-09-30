@@ -8,8 +8,14 @@ func IsCI() bool {
 	return ci == "true"
 }
 
-// LogColor returns true is log color on
+// LogColor returns true if log color on
 func LogColor() bool {
 	color := config.GetString("LOG_COLOR")
 	return color == "true"
+}
+
+// ResetDatabase returns true if want reset database.
+func ResetDatabase() bool {
+	reset := config.GetString("RESET_DATABASE")
+	return reset == "true"
 }

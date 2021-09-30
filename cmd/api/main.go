@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"github.com/mcdexio/mai3-trade-mining-watcher/env"
+	"github.com/mcdexio/mai3-trade-mining-watcher/types"
 	"os"
 	"os/signal"
 	"syscall"
@@ -22,7 +24,9 @@ func main() {
 	logger := logging.NewLoggerTag(name)
 
 	database.Initialize()
-	// database.Reset(database.GetDB(), types.Watcher, true)
+	if env.ResetDatabase() {
+		database.Reset(database.GetDB(), types.Watcher, true)
+	}
 
 	backgroundCtx, stop := context.WithCancel(context.Background())
 	group, ctx := errgroup.WithContext(backgroundCtx)
