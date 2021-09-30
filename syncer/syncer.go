@@ -33,11 +33,6 @@ var (
 	PROGRESS_SNAPSHOT   = "user_info.snapshot"
 )
 
-var INVERSE_CONTRACT_WHITELIST = map[string]bool{
-	"0x3d3744dc7a17d757a2568ddb171d162a7e12f80-0":  true, // 10689
-	"0x727e5a9a04080741cbc8a2dc891e28ca8af6537e-0": true, // 10690
-}
-
 type Syncer struct {
 	ctx        context.Context
 	httpClient *utils.Client
