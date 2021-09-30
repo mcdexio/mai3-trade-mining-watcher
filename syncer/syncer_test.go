@@ -277,7 +277,7 @@ func (t *SyncerTestSuite) TestState() {
 			// stackedMCB 3 * unlockTime 98 == 98*3
 			// position 2*90 + 4*900 = 3780
 			// fee 10
-			// elapsed (previous time 120 - 0) / 60 == 2
+			// elapsed (time 180 - 0) / 60 == 3
 			// score math.pow(10, 0.7), stake math.pow((300+99*3+98*3)/elapsed, 0.3), oi math.pow((4620+3780)/elapsed, 0.3)
 			t.Require().Equal(len(users), 1)
 			t.Require().Equal(users[0].AccStakeScore.String(), decimal.NewFromInt(300+99*3).String())
@@ -285,7 +285,7 @@ func (t *SyncerTestSuite) TestState() {
 			t.Require().Equal(users[0].AccPosValue.String(), decimal.NewFromInt(4620).String())
 			t.Require().Equal(users[0].CurPosValue.String(), decimal.NewFromInt(3780).String())
 			t.Require().Equal(users[0].AccFee.String(), decimal.NewFromInt(10).String())
-			score := math.Pow(10.0, 0.7) * math.Pow((300.0+99.0*3.0+98.0*3.0)/2.0, 0.3) * math.Pow((4620.0+3780.0)/2.0, 0.3)
+			score := math.Pow(10.0, 0.7) * math.Pow((300.0+99.0*3.0+98.0*3.0)/3.0, 0.3) * math.Pow((4620.0+3780.0)/3.0, 0.3)
 			actualScore, _ := users[0].Score.Float64()
 			t.Require().Equal(actualScore, score)
 		}
@@ -294,7 +294,7 @@ func (t *SyncerTestSuite) TestState() {
 			// stackedMCB 10 * unlockTime 100 == 1000
 			// position 7*100 + 9*1000 = 9700
 			// fee 10
-			// elapsed (previous time 180 - 0) / 60 == 3
+			// elapsed (240 - 0) / 60 == 3
 			t.Require().Equal(len(users), 1)
 			t.Require().Equal(users[0].AccStakeScore.String(), decimal.NewFromInt(300+99*3+98*3).String())
 			t.Require().Equal(users[0].CurStakeScore.String(), decimal.NewFromInt(1000).String())
@@ -302,8 +302,8 @@ func (t *SyncerTestSuite) TestState() {
 			t.Require().Equal(users[0].CurPosValue.String(), decimal.NewFromInt(9700).String())
 			t.Require().Equal(users[0].AccFee.String(), decimal.NewFromInt(15).String())
 			score := math.Pow(15.0, 0.7) * math.Pow(
-				(300.0+99.0*3.0+98.0*3.0+1000)/3.0, 0.3) * math.Pow(
-				(4620.0+3780.0+9700.0)/3.0, 0.3)
+				(300.0+99.0*3.0+98.0*3.0+1000)/4.0, 0.3) * math.Pow(
+				(4620.0+3780.0+9700.0)/4.0, 0.3)
 			actualScore, _ := users[0].Score.Float64()
 			t.Require().Equal(actualScore, score)
 		}

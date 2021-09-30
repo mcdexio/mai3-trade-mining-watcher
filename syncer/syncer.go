@@ -328,7 +328,7 @@ func (s *Syncer) syncState() (int64, error) {
 		}
 		// 3. update score
 		var (
-			minuteCeil = int64(math.Ceil((float64(p) - float64(s.curEpochConfig.StartTime)) / 60.0))
+			minuteCeil = int64(math.Ceil((float64(np) - float64(s.curEpochConfig.StartTime)) / 60.0))
 			elapsed    = decimal.NewFromInt(minuteCeil) // Minutes
 		)
 		var all []*mining.UserInfo
