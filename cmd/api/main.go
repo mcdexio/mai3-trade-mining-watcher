@@ -46,7 +46,7 @@ func main() {
 		ctx,
 		logger,
 		config.GetString("MAI3_TRADE_MINING_GRAPH_URL"),
-		config.GetString("ARB_BLOCKS_GRAPH_URL"),
+		config.GetString("BLOCKS_GRAPH_URL"),
 		config.GetInt64("DEFAULT_EPOCH_0_START_TIME"),
 		config.GetInt64("SYNC_DELAY", 0),
 	)
