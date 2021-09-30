@@ -38,6 +38,7 @@ func NewTMServer(ctx context.Context, logger logging.Logger) *TMServer {
 		logger: logger,
 		db:     database.GetDB(),
 		ctx:    ctx,
+		score: make(map[int]decimal.Decimal),
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/score", tmServer.OnQueryTradingMining)
@@ -70,7 +71,7 @@ func (s *TMServer) Run() error {
 		if err := s.calculateTotalScore(); err == nil {
 			break
 		} else {
-			s.logger.Warn("error occurs while running: %s", err)
+			s.logger.Warn("server error occurs while running: %s", err)
 			time.Sleep(5 * time.Second)
 		}
 	}
@@ -87,7 +88,7 @@ func (s *TMServer) Run() error {
 				if err := s.calculateTotalScore(); err == nil {
 					break
 				} else {
-					s.logger.Warn("error occurs while running: %s", err)
+					s.logger.Warn("server error occurs while running: %s", err)
 				}
 			}
 		}
@@ -119,7 +120,7 @@ func (s *TMServer) calculateTotalScore() error {
 			// success
 			break
 		} else {
-			s.logger.Warn("error occurs while running: %w", err)
+			s.logger.Warn("server error occurs while running: %s", err)
 			time.Sleep(5 * time.Second)
 		}
 	}
@@ -127,7 +128,7 @@ func (s *TMServer) calculateTotalScore() error {
 	var startEpoch int
 	if len(s.score) == 0 {
 		// first time start this server
-		s.score = make(map[int]decimal.Decimal)
+		s.score[0] = decimal.Zero
 		// sync from epoch 0
 		startEpoch = 0
 	} else {
