@@ -33,7 +33,15 @@ type MockMAI3Graph struct{}
 
 func (mockMAI3 *MockMAI3Graph) GetUsersBasedOnBlockNumber(blockNumber int64) ([]graph.User, error) {
 	if blockNumber == 0 {
-		return []graph.User{}, nil
+		return []graph.User{
+			{
+				ID:             "0xUser1",
+				StakedMCB:      decimal.NewFromInt(0),
+				TotalFee:       decimal.NewFromInt(0),
+				UnlockMCBTime:  0,
+				MarginAccounts: []*graph.MarginAccount{},
+			},
+		}, nil
 	}
 	if blockNumber == 1 {
 		return []graph.User{
@@ -52,14 +60,14 @@ func (mockMAI3 *MockMAI3Graph) GetUsersBasedOnBlockNumber(blockNumber int64) ([]
 				ID:            "0xUser1",
 				StakedMCB:     decimal.NewFromInt(3),
 				TotalFee:      decimal.NewFromInt(0),
-				UnlockMCBTime: 60 * 60 * 24 * 100, // 100 days
+				UnlockMCBTime: 60 * 60 * 24 * 99, // 99 days
 				MarginAccounts: []*graph.MarginAccount{
 					{
 						ID:       "0xPool-0-0xUser1",
 						Position: decimal.NewFromFloat(2),
 					},
 					{
-						ID:       "0xPool-0-0xUser2",
+						ID:       "0xPool-1-0xUser1",
 						Position: decimal.NewFromFloat(4),
 					},
 				},
@@ -72,15 +80,35 @@ func (mockMAI3 *MockMAI3Graph) GetUsersBasedOnBlockNumber(blockNumber int64) ([]
 				ID:            "0xUser1",
 				StakedMCB:     decimal.NewFromInt(3),
 				TotalFee:      decimal.NewFromInt(10),
-				UnlockMCBTime: 60 * 60 * 24 * 100, // 100 days
+				UnlockMCBTime: 60 * 60 * 24 * 98, // 98 days
 				MarginAccounts: []*graph.MarginAccount{
 					{
 						ID:       "0xPool-0-0xUser1",
 						Position: decimal.NewFromFloat(2),
 					},
 					{
-						ID:       "0xPool-0-0xUser2",
+						ID:       "0xPool-1-0xUser1",
 						Position: decimal.NewFromFloat(4),
+					},
+				},
+			},
+		}, nil
+	}
+	if blockNumber == 4 {
+		return []graph.User{
+			{
+				ID:            "0xUser1",
+				StakedMCB:     decimal.NewFromInt(10),
+				TotalFee:      decimal.NewFromInt(15),
+				UnlockMCBTime: 60 * 60 * 24 * 100, // 100 days
+				MarginAccounts: []*graph.MarginAccount{
+					{
+						ID:       "0xPool-0-0xUser1",
+						Position: decimal.NewFromFloat(7),
+					},
+					{
+						ID:       "0xPool-1-0xUser1",
+						Position: decimal.NewFromFloat(9),
 					},
 				},
 			},
@@ -107,6 +135,10 @@ var retMap3 = map[string]decimal.Decimal{
 	"0xPool-0": decimal.NewFromInt(90),
 	"0xPool-1": decimal.NewFromInt(900),
 }
+var retMap4 = map[string]decimal.Decimal{
+	"0xPool-0": decimal.NewFromInt(100),
+	"0xPool-1": decimal.NewFromInt(1000),
+}
 
 func (mockMAI3 *MockMAI3Graph) GetMarkPrices(blockNumber int64) (map[string]decimal.Decimal, error) {
 	if blockNumber == 0 {
@@ -120,6 +152,9 @@ func (mockMAI3 *MockMAI3Graph) GetMarkPrices(blockNumber int64) (map[string]deci
 	}
 	if blockNumber == 3 {
 		return retMap3, nil
+	}
+	if blockNumber == 4 {
+		return retMap4, nil
 	}
 	return map[string]decimal.Decimal{}, TEST_ERROR
 }
@@ -149,6 +184,14 @@ func (mockMAI3 *MockMAI3Graph) GetMarkPriceWithBlockNumberAddrIndex(blockNumber 
 			return retMap3["0xPool-0"], nil
 		} else if perpetualIndex == 1 {
 			return retMap3["0xPool-1"], nil
+		}
+		return decimal.Zero, TEST_ERROR
+	}
+	if blockNumber == 4 {
+		if perpetualIndex == 0 {
+			return retMap4["0xPool-0"], nil
+		} else if perpetualIndex == 1 {
+			return retMap4["0xPool-1"], nil
 		}
 		return decimal.Zero, TEST_ERROR
 	}
@@ -187,21 +230,84 @@ func (t *SyncerTestSuite) SetupSuite() {
 		db:                  database.GetDB(),
 	}
 	t.cancel = cancel
-
-	// TODO(ChampFu): setup database
 }
 
 func (t *SyncerTestSuite) TearDownSuite() {
 	t.cancel()
 }
 
-// TODO(ChampFu): run state main logic
 func (t *SyncerTestSuite) TestState() {
+	var progress mining.Progress
+	var users []mining.UserInfo
 	np := int64(0)
-	for np < 240 {
+
+	err := t.syncer.initUserStates()
+	t.Require().Equal(err, nil)
+	t.Require().Equal(progress.From, np)
+	for np < 300 {
 		p, err := t.syncer.syncState()
-		fmt.Println(err)
+		t.Require().Equal(err, nil)
 		fmt.Println(p)
+
+		// check progress
+		err = t.syncer.db.Model(&mining.Progress{}).Where("table_name = 'user_info' and epoch = 0").First(&progress).Error
+		t.Require().Equal(err, nil)
+		t.Require().Equal(progress.From, p)
+
+		// check calculation result
+		err = t.syncer.db.Model(&mining.UserInfo{}).Where("epoch = 0").Scan(&users).Error
+		t.Require().Equal(err, nil)
+		if p == 60 {
+			// p == 60 -> block == 1
+			// stakedMCB 3 * unlockTime 100 == 300
+			t.Require().Equal(len(users), 1)
+			t.Require().Equal(users[0].CurStakeScore.String(), decimal.NewFromInt(300).String())
+		}
+		if p == 120 {
+			// p == 120 -> block == 2
+			// stakedMCB 3 * unlockTime 99 == 99*3
+			// position 2*110 + 4*1100 = 4620
+			t.Require().Equal(len(users), 1)
+			t.Require().Equal(users[0].AccStakeScore.String(), decimal.NewFromInt(300).String())
+			t.Require().Equal(users[0].CurStakeScore.String(), decimal.NewFromInt(99*3).String())
+			t.Require().Equal(users[0].CurPosValue.String(), decimal.NewFromInt(4620).String())
+		}
+		if p == 180 {
+			// p == 180 -> block == 3
+			// stackedMCB 3 * unlockTime 98 == 98*3
+			// position 2*90 + 4*900 = 3780
+			// fee 10
+			// elapsed (previous time 120 - 0) / 60 == 2
+			// score math.pow(10, 0.7), stake math.pow((300+99*3+98*3)/elapsed, 0.3), oi math.pow((4620+3780)/elapsed, 0.3)
+			t.Require().Equal(len(users), 1)
+			t.Require().Equal(users[0].AccStakeScore.String(), decimal.NewFromInt(300+99*3).String())
+			t.Require().Equal(users[0].CurStakeScore.String(), decimal.NewFromInt(98*3).String())
+			t.Require().Equal(users[0].AccPosValue.String(), decimal.NewFromInt(4620).String())
+			t.Require().Equal(users[0].CurPosValue.String(), decimal.NewFromInt(3780).String())
+			t.Require().Equal(users[0].AccFee.String(), decimal.NewFromInt(10).String())
+			score := math.Pow(10.0, 0.7) * math.Pow((300.0+99.0*3.0+98.0*3.0)/2.0, 0.3) * math.Pow((4620.0+3780.0)/2.0, 0.3)
+			actualScore, _ := users[0].Score.Float64()
+			t.Require().Equal(actualScore, score)
+		}
+
+		if p == 240 {
+			// p == 240 -> block == 4
+			// stackedMCB 10 * unlockTime 100 == 1000
+			// position 7*100 + 9*1000 = 9700
+			// fee 10
+			// elapsed (previous time 180 - 0) / 60 == 3
+			t.Require().Equal(len(users), 1)
+			t.Require().Equal(users[0].AccStakeScore.String(), decimal.NewFromInt(300+99*3+98*3).String())
+			t.Require().Equal(users[0].CurStakeScore.String(), decimal.NewFromInt(1000).String())
+			t.Require().Equal(users[0].AccPosValue.String(), decimal.NewFromInt(4620+3780).String())
+			t.Require().Equal(users[0].CurPosValue.String(), decimal.NewFromInt(9700).String())
+			t.Require().Equal(users[0].AccFee.String(), decimal.NewFromInt(15).String())
+			score := math.Pow(15.0, 0.7) * math.Pow(
+				(300.0+99.0*3.0+98.0*3.0+1000)/3.0, 0.3) * math.Pow(
+				(4620.0+3780.0+9700.0)/3.0, 0.3)
+			actualScore, _ := users[0].Score.Float64()
+			t.Require().Equal(actualScore, score)
+		}
 		np = p + 60
 	}
 }
