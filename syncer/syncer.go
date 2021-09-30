@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/mcdexio/mai3-trade-mining-watcher/env"
 	"github.com/mcdexio/mai3-trade-mining-watcher/graph"
 	"math"
 	"strconv"
@@ -404,7 +405,7 @@ func (s Syncer) getPositionValue(accounts []*graph.MarginAccount, bn int64, cach
 		perpId := strings.Join(strings.Split(a.ID, "-")[:2], "-") // 0xc32a2dfee97e2babc90a2b5e6aef41e789ef2e13-0
 
 		// inverse contract
-		if INVERSE_CONTRACT_WHITELIST[perpId] {
+		if env.InInverseContractWhiteList(perpId) {
 			sum = sum.Add(a.Position.Abs())
 			continue
 		}

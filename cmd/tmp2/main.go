@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/mcdexio/mai3-trade-mining-watcher/api"
 	"github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
+	"github.com/mcdexio/mai3-trade-mining-watcher/env"
 	"golang.org/x/sync/errgroup"
 	"os"
 	"os/signal"
@@ -18,6 +19,18 @@ func main() {
 	defer logging.Finalize()
 	logger := logging.NewLoggerTag(name)
 	// db := database.GetDB()
+
+	b, err := env.InInverseContractWhiteList("0x3d3744dc7a17d757a2568ddb171d162a7e12f80-0")
+	fmt.Println(err)
+	fmt.Println(b)
+
+	b, err = env.InInverseContractWhiteList("0x727e5a9a04080741cbc8a2dc891e28ca8af6537e-0")
+	fmt.Println(err)
+	fmt.Println(b)
+
+	b, err = env.InInverseContractWhiteList("0x727e5a9a04080741cbc8a2dc891e28ca8af6537e-1")
+	fmt.Println(err)
+	fmt.Println(b)
 
 	backgroundCtx, stop := context.WithCancel(context.Background())
 	group, ctx := errgroup.WithContext(backgroundCtx)
