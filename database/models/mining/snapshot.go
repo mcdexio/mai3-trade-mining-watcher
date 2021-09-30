@@ -5,7 +5,7 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// UserInfo defines struct to contain information of a user info
+// Snapshot defines struct to contain information of a user info
 type Snapshot struct {
 	Trader    string `gorm:"column:trader;primary_key;type:varchar(128);not null" json:"trader"`
 	Epoch     int64  `gorm:"column:epoch;primary_key;type:bigint;not null" json:"epoch"`
