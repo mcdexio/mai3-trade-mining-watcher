@@ -196,7 +196,7 @@ func (s *TMServer) OnQueryTradingMining(w http.ResponseWriter, r *http.Request) 
 				s.logger.Info("user %s not found in db", traderID)
 			}
 			s.logger.Error("failed to get value from user info table err=%w", err)
-			s.jsonError(w, "internal error", 400)
+			s.jsonError(w, "user not in database", 200)
 			return
 		}
 		s.logger.Info("user info %+v of epoch %d", rsp, i)

@@ -21,3 +21,13 @@ type Snapshot struct {
 
 	models.Base
 }
+
+// ForeignKeyConstraints create foreign key constraints.
+func (*Snapshot) ForeignKeyConstraints() []models.ForeignKeyConstraint {
+	return nil
+}
+
+// Indexes returns information to create index.
+func (*Snapshot) Indexes() []models.CustomIndex {
+	return nil
+}
