@@ -185,9 +185,9 @@ func (s *Syncer) lastProgress(name string) (int64, error) {
 	return p.From, nil
 }
 
-func (s *Syncer) getProgress(db *gorm.DB, name string, epoch int64) (int64, error) {
+func (s *Syncer) getProgress(name string, epoch int64) (int64, error) {
 	var p mining.Progress
-	err := db.Model(mining.Progress{}).Where("table_name=? and epoch=?", name, epoch).First(&p).Error
+	err := s.db.Model(mining.Progress{}).Where("table_name=? and epoch=?", name, epoch).First(&p).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return 0, nil
@@ -197,10 +197,10 @@ func (s *Syncer) getProgress(db *gorm.DB, name string, epoch int64) (int64, erro
 	return p.From, nil
 }
 
-func (s *Syncer) setProgress(db *gorm.DB, name string, ts int64, epoch int64) error {
+func (s *Syncer) setProgress(name string, ts int64, epoch int64) error {
 	s.logger.Info("save progress for %v: timestamp=%v", name, ts)
 	p := &mining.Progress{TableName: types.TableName(name), From: ts, Epoch: epoch}
-	if err := db.Save(p).Error; err != nil {
+	if err := s.db.Save(p).Error; err != nil {
 		return fmt.Errorf("fail to save progress: table=%v, timestamp=%v %w", name, ts, err)
 	}
 	return nil
@@ -209,7 +209,7 @@ func (s *Syncer) setProgress(db *gorm.DB, name string, ts int64, epoch int64) er
 func (s *Syncer) initUserStates() error {
 	s.logger.Debug("enter initUserStates")
 	defer s.logger.Debug("leave initUserStates")
-	p, err := s.getProgress(s.db, PROGRESS_INIT_FEE, s.curEpochConfig.Epoch)
+	p, err := s.getProgress(PROGRESS_INIT_FEE, s.curEpochConfig.Epoch)
 	if err != nil {
 		return fmt.Errorf("fail to get sync progress %w", err)
 	}
@@ -236,7 +236,7 @@ func (s *Syncer) initUserStates() error {
 		}
 	}
 	err = db.WithTransaction(s.db, func(tx *gorm.DB) error {
-		cp, err := s.getProgress(tx, PROGRESS_INIT_FEE, s.curEpochConfig.Epoch)
+		cp, err := s.getProgress(PROGRESS_INIT_FEE, s.curEpochConfig.Epoch)
 		if err != nil {
 			return fmt.Errorf("fail to get sync progress %w", err)
 		}
@@ -244,10 +244,10 @@ func (s *Syncer) initUserStates() error {
 		if cp != p {
 			return fmt.Errorf("progress changed, somewhere may run another instance")
 		}
-		if err := tx.Model(mining.UserInfo{}).Create(&uis).Error; err != nil {
+		if err := s.db.Model(mining.UserInfo{}).Create(&uis).Error; err != nil {
 			return fmt.Errorf("fail to create init user info %w", err)
 		}
-		if err := s.setProgress(tx, PROGRESS_INIT_FEE, s.curEpochConfig.StartTime, s.curEpochConfig.Epoch); err != nil {
+		if err := s.setProgress(PROGRESS_INIT_FEE, s.curEpochConfig.StartTime, s.curEpochConfig.Epoch); err != nil {
 			return fmt.Errorf("fail to save sync progress %w", err)
 		}
 		return nil
@@ -261,7 +261,7 @@ func (s *Syncer) initUserStates() error {
 func (s *Syncer) syncState() (int64, error) {
 	s.logger.Info("enter sync state")
 	defer s.logger.Info("leave sync state")
-	p, err := s.getProgress(s.db, PROGRESS_SYNC_STATE, s.curEpochConfig.Epoch)
+	p, err := s.getProgress(PROGRESS_SYNC_STATE, s.curEpochConfig.Epoch)
 	if err != nil {
 		return 0, fmt.Errorf("fail to get sync progress %w", err)
 	}
@@ -305,7 +305,7 @@ func (s *Syncer) syncState() (int64, error) {
 	}
 	// begin tx
 	err = db.WithTransaction(s.db, func(tx *gorm.DB) error {
-		curP, err := s.getProgress(tx, PROGRESS_SYNC_STATE, s.curEpochConfig.Epoch)
+		curP, err := s.getProgress(PROGRESS_SYNC_STATE, s.curEpochConfig.Epoch)
 		if err != nil {
 			return fmt.Errorf("fail to get sync progress %w", err)
 		}
@@ -313,26 +313,26 @@ func (s *Syncer) syncState() (int64, error) {
 			return fmt.Errorf("progress changed, somewhere may run another instance")
 		}
 		// acc_pos_value += cur_pos_value if cur_pos_value != 0
-		err = tx.Model(mining.UserInfo{}).
+		err = s.db.Model(mining.UserInfo{}).
 			Where("epoch=? and cur_pos_value <> 0", s.curEpochConfig.Epoch).
 			UpdateColumn("acc_pos_value", gorm.Expr("acc_pos_value + cur_pos_value")).Error
 		if err != nil {
 			return fmt.Errorf("failed to accumulate cur_post_value to acc_pos_value  %w", err)
 		}
 		// acc_stake_score += cur_stake_score if cur_stake_score != 0
-		err = tx.Model(mining.UserInfo{}).
+		err = s.db.Model(mining.UserInfo{}).
 			Where("epoch=? and cur_stake_score <> 0", s.curEpochConfig.Epoch).
 			UpdateColumn("acc_stake_score", gorm.Expr("acc_stake_score + cur_stake_score")).Error
 		if err != nil {
 			return fmt.Errorf("failed to accumulate cur_stake_score to acc_stake_score %w", err)
 		}
 		// cur_stake_score <= 0 and cur_pos_value <= 0
-		err = tx.Model(mining.UserInfo{}).Where("epoch=?", s.curEpochConfig.Epoch).
+		err = s.db.Model(mining.UserInfo{}).Where("epoch=?", s.curEpochConfig.Epoch).
 			Updates(mining.UserInfo{CurPosValue: decimal.Zero, CurStakeScore: decimal.Zero, Timestamp: np}).Error
 		if err != nil {
 			return fmt.Errorf("failed to set cur_stake_score and cur_pos_value to 0 %w", err)
 		}
-		if err := tx.Clauses(clause.OnConflict{
+		if err := s.db.Clauses(clause.OnConflict{
 			Columns:   []clause.Column{{Name: "trader"}, {Name: "epoch"}},
 			DoUpdates: clause.AssignmentColumns([]string{"cur_pos_value", "cur_stake_score", "acc_fee"}),
 		}).Create(&uis).Error; err != nil {
@@ -344,16 +344,16 @@ func (s *Syncer) syncState() (int64, error) {
 			elapsed    = decimal.NewFromInt(minuteCeil) // Minutes
 		)
 		var all []*mining.UserInfo
-		if err := tx.Model(mining.UserInfo{}).Where("epoch=?", s.curEpochConfig.Epoch).Find(&all).Error; err != nil {
+		if err := s.db.Model(mining.UserInfo{}).Where("epoch=?", s.curEpochConfig.Epoch).Find(&all).Error; err != nil {
 			return fmt.Errorf("fail to fetch all users in this epoch %w", err)
 		}
 		for _, ui := range all {
 			ui.Score = s.getScore(ui, elapsed)
 		}
-		if err := tx.Save(&all).Error; err != nil {
+		if err := s.db.Save(&all).Error; err != nil {
 			return fmt.Errorf("failed to create user_info: size=%v %w", len(uis), err)
 		}
-		if err := s.setProgress(tx, PROGRESS_SYNC_STATE, np, s.curEpochConfig.Epoch); err != nil {
+		if err := s.setProgress(PROGRESS_SYNC_STATE, np, s.curEpochConfig.Epoch); err != nil {
 			return fmt.Errorf("fail to save sync progress %w", err)
 		}
 		h := normN(np, 3600)
@@ -374,7 +374,7 @@ func (s *Syncer) syncState() (int64, error) {
 					Score:         u.Score,
 				}
 			}
-			if err := tx.Save(&snapshot).Error; err != nil {
+			if err := s.db.Save(&snapshot).Error; err != nil {
 				return fmt.Errorf("failed to create snapshot: size=%v %w", len(uis), err)
 			}
 		}

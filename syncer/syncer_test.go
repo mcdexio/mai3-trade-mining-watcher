@@ -3,6 +3,7 @@ package syncer
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
 	database "github.com/mcdexio/mai3-trade-mining-watcher/database/db"
 	"github.com/mcdexio/mai3-trade-mining-watcher/database/models/mining"
@@ -247,6 +248,7 @@ func (t *SyncerTestSuite) TestState() {
 	t.Require().Equal(progress.From, np)
 	for np < t.syncer.curEpochConfig.EndTime {
 		p, err := t.syncer.syncState()
+		fmt.Println(p)
 		t.Require().Equal(err, nil)
 
 		// check progress
