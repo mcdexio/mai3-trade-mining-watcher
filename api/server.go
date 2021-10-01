@@ -188,10 +188,9 @@ func (s *TMServer) OnQueryTradingMining(w http.ResponseWriter, r *http.Request) 
 	s.logger.Info("OnQueryTradingMining user id %s", traderID)
 	queryTradingMiningResp := make(map[int]*EpochTradingMiningResp)
 	for i := 0; i <= s.nowEpoch; i++ {
-		rsp := mining.UserInfo{}
-		err := s.db.Model(&mining.UserInfo{}).Limit(1).Select(
-			"acc_fee, init_fee, acc_pos_value, cur_pos_value, acc_stake_score, cur_stake_score, score").Where(
-			"trader = ? and epoch = ?", traderID, i).Scan(&rsp).Error
+		var rsp mining.UserInfo
+		err := s.db.Model(mining.UserInfo{}).Where(
+			"trader = ? and epoch = ?", traderID, i).First(&rsp).Error
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				s.logger.Info("user %s not found in db", traderID)
