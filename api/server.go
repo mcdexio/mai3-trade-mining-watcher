@@ -181,6 +181,7 @@ func (s *TMServer) OnQueryTradingMining(w http.ResponseWriter, r *http.Request) 
 		s.jsonError(w, "invalid or empty parameter", 400)
 		return
 	}
+	s.logger.Info("OnQueryTradingMining user id %s", trader[0])
 	traderID := strings.ToLower(trader[0])
 	queryTradingMiningResp := make(map[int]*EpochTradingMiningResp)
 	for i := 0; i <= s.nowEpoch; i++ {
@@ -217,7 +218,7 @@ func (s *TMServer) OnQueryTradingMining(w http.ResponseWriter, r *http.Request) 
 		queryTradingMiningResp[i] = &resp
 	}
 
-	s.logger.Info("%+v", queryTradingMiningResp)
+	s.logger.Debug("resp %+v", queryTradingMiningResp)
 	json.NewEncoder(w).Encode(queryTradingMiningResp)
 }
 
