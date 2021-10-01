@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -97,6 +98,7 @@ func (s *TMServer) Run() error {
 }
 
 func (s *TMServer) getEpoch() error {
+	s.logger.Info("getEpoch.....")
 	var epochs []struct {
 		Epoch int
 	}
@@ -116,6 +118,7 @@ func (s *TMServer) getEpoch() error {
 }
 
 func (s *TMServer) calculateTotalScore() error {
+	s.logger.Info("calculateTotalScore.....")
 	for {
 		if err := s.getEpoch(); err == nil {
 			// success
@@ -181,8 +184,8 @@ func (s *TMServer) OnQueryTradingMining(w http.ResponseWriter, r *http.Request) 
 		s.jsonError(w, "invalid or empty parameter", 400)
 		return
 	}
-	s.logger.Info("OnQueryTradingMining user id %s", trader[0])
 	traderID := strings.ToLower(trader[0])
+	s.logger.Info("OnQueryTradingMining user id %s", traderID)
 	queryTradingMiningResp := make(map[int]*EpochTradingMiningResp)
 	for i := 0; i <= s.nowEpoch; i++ {
 		rsp := mining.UserInfo{}
@@ -190,6 +193,9 @@ func (s *TMServer) OnQueryTradingMining(w http.ResponseWriter, r *http.Request) 
 			"acc_fee, init_fee, acc_pos_value, cur_pos_value, acc_stake_score, cur_stake_score, score").Where(
 			"trader = ? and epoch = ?", traderID, i).Scan(&rsp).Error
 		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				s.logger.Info("user %s not found in db", traderID)
+			}
 			s.logger.Error("failed to get value from user info table err=%w", err)
 			s.jsonError(w, "internal error", 400)
 			return
