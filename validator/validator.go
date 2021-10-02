@@ -17,6 +17,9 @@ import (
 )
 
 type Validator struct {
+	OnOK       func(context.Context, int64) error
+	OnConflict func(context.Context, int64) error
+
 	config      *Config
 	replicas    []*gorm.DB
 	lastChecked int64
@@ -54,10 +57,10 @@ func (v *Validator) Run(ctx context.Context) error {
 			if err != nil {
 				v.logger.Warn("error occurs while check snapshots: timestamp=%v, error=%v", formatTime(hourly), err)
 			} else if ok {
-				v.OnOK(ctx, hourly)
+				v.onOK(ctx, hourly)
 				v.lastChecked = hourly
 			} else {
-				v.OnConflict(ctx, hourly)
+				v.onConflict(ctx, hourly)
 			}
 
 		}
@@ -93,12 +96,18 @@ func (v *Validator) run(ctx context.Context, timestamp int64) (bool, error) {
 	return v.compareDigest(ctx, timestamp)
 }
 
-func (v *Validator) OnOK(ctx context.Context, timestamp int64) error {
+func (v *Validator) onOK(ctx context.Context, timestamp int64) error {
+	if v.OnOK != nil {
+		v.OnOK(ctx, timestamp)
+	}
 	v.logger.Info("all snapshots verified. timestamp=%v", timestamp)
 	return nil
 }
 
-func (v *Validator) OnConflict(ctx context.Context, timestamp int64) error {
+func (v *Validator) onConflict(ctx context.Context, timestamp int64) error {
+	if v.OnConflict != nil {
+		v.onConflict(ctx, timestamp)
+	}
 	v.logger.Warn("found conflict snapshot score checksum. timestamp=%v", timestamp)
 	return nil
 }
@@ -113,7 +122,7 @@ func (v *Validator) ensureProgress(ctx context.Context, timestamp int64) (bool, 
 			return false, fmt.Errorf("progress not ready: replica_index=%v %w", i, err)
 		}
 		if p < timestamp {
-			return false, fmt.Errorf("replica not ready: replica=%v, progress=%v %w", i, timestamp, err)
+			return false, fmt.Errorf("replica not ready: replica=%v, progress=%v", i, timestamp)
 		}
 	}
 	return true, nil
@@ -121,12 +130,11 @@ func (v *Validator) ensureProgress(ctx context.Context, timestamp int64) (bool, 
 
 func (v *Validator) getLastProgress(db *gorm.DB) (int64, error) {
 	var p mining.Progress
-	err := db.Where("table_name=snapshot").Order("epoch desc").First(&p).Error
-	if err != nil {
+	if err := db.Model(mining.Progress{}).Where("table_name=?", "user_info").Order("epoch desc").First(&p).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return 0, nil
 		}
-		return 0, fmt.Errorf("fail to get last progress: table=user_info %w", err)
+		return 0, fmt.Errorf("fail to get last progress %w", err)
 	}
 	return p.From, nil
 }

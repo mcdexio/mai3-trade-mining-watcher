@@ -5,9 +5,11 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/mcdexio/mai3-trade-mining-watcher/env"
 	"github.com/mcdexio/mai3-trade-mining-watcher/types"
+	"github.com/mcdexio/mai3-trade-mining-watcher/validator"
 
 	"github.com/mcdexio/mai3-trade-mining-watcher/api"
 	"github.com/mcdexio/mai3-trade-mining-watcher/common/config"
@@ -51,6 +53,22 @@ func main() {
 		config.GetInt64("SYNC_DELAY", 0),
 	)
 	go WaitExitSignalWithServer(stop, logger, tmServer, internalServer)
+
+	vld, err := validator.NewValidator(
+		&validator.Config{
+			RoundInterval: mustParseDuration(config.GetString("VALIDATOR_ROUND_INTERVAL", "1m")),
+			DatabaseURLs:  optional("DB_ARGS", "BACKUP_DB_ARGS"),
+		},
+		logger,
+	)
+	if err != nil {
+		logger.Warn("fail to start validate service, ignored: %s", err)
+	} else {
+		group.Go(func() error {
+			return vld.Run(ctx)
+		})
+	}
+
 	group.Go(func() error {
 		return syn.Run()
 	})
@@ -76,4 +94,20 @@ func WaitExitSignalWithServer(
 		logger.Error("Server shutdown failed:%+v", err)
 	}
 	ctxStop()
+}
+
+func optional(names ...string) []string {
+	var res []string
+	for _, n := range names {
+		s := config.GetString(n, "__NO_VALUE__")
+		if s != "__NO_VALUE__" {
+			res = append(res, s)
+		}
+	}
+	return res
+}
+
+func mustParseDuration(s string) time.Duration {
+	d, _ := time.ParseDuration(s)
+	return d
 }

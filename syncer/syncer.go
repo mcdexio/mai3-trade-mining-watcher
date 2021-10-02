@@ -85,6 +85,7 @@ func (s *Syncer) SetDefaultEpoch() int64 {
 }
 
 func (s *Syncer) Run() error {
+	// s.SetDefaultEpoch()
 	for {
 		var err error
 		switch s.needRestore.Load() {
@@ -110,6 +111,7 @@ func (s *Syncer) Run() error {
 
 func (s *Syncer) runRestore(ctx context.Context, checkpoint int64) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
+		// restore from snapshot
 		if err := s.restoreFromSnapshot(tx, checkpoint); err != nil {
 			return err
 		}
@@ -290,7 +292,7 @@ func (s *Syncer) initUserStates(db *gorm.DB, epoch *mining.Schedule) error {
 			return fmt.Errorf("fail to save sync progress %w", err)
 		}
 		return nil
-	})
+	}, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 	if err != nil {
 		return fmt.Errorf("fail to init fee of all users for new epoch: epoch=%v %w", epoch.Epoch, err)
 	}
@@ -457,7 +459,7 @@ func (s *Syncer) syncState(db *gorm.DB, epoch *mining.Schedule) (int64, error) {
 			s.makeSnapshot(tx, np, allStates)
 		}
 		return nil
-	})
+	}, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 	if err != nil {
 		return 0, fmt.Errorf("fail to update user states: timestamp=%v %w", np, err)
 	}
