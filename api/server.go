@@ -219,7 +219,7 @@ func (s *TMServer) OnQueryTradingMining(w http.ResponseWriter, r *http.Request) 
 			s.jsonError(w, "internal error", 400)
 			return
 		}
-		minuteCeil := int64(math.Floor((float64(time.Now().Unix()) - float64(sch.StartTime)) / 60.0))
+		minuteCeil := int64(math.Floor((float64(rsp.Timestamp) - float64(sch.StartTime)) / 60.0))
 		elapsed := decimal.NewFromInt(minuteCeil) // Minutes
 
 		var proportion string
