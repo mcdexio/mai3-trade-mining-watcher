@@ -5,13 +5,13 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math"
+	"strings"
+	"time"
+
 	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
-	"math"
-	"strconv"
-	"strings"
-	"time"
 
 	"github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
 	"github.com/mcdexio/mai3-trade-mining-watcher/database/db"
@@ -162,21 +162,11 @@ func (s *Syncer) nowWithDelay() int64 {
 	return norm(now)
 }
 
-func (s *Syncer) GetPoolAddrIndexUserID(marginAccountID string) (poolAddr, userId string, perpetualIndex int, err error) {
-	rest := strings.Split(marginAccountID, "-")
-	perpetualIndex, err = strconv.Atoi(rest[1])
-	if err != nil {
-		return
-	}
-	poolAddr = rest[0]
-	userId = rest[2]
-	return
-}
-
 func (s *Syncer) lastProgress(name string) (int64, error) {
 	var p mining.Progress
 	err := s.db.Model(mining.Progress{}).Where("table_name=?", name).Order("epoch desc").First(&p).Error
 	if err != nil {
+		s.logger.Debug("not found", err, errors.Is(err, gorm.ErrRecordNotFound))
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return 0, nil
 		}
@@ -189,6 +179,7 @@ func (s *Syncer) getProgress(name string, epoch int64) (int64, error) {
 	var p mining.Progress
 	err := s.db.Model(mining.Progress{}).Where("table_name=? and epoch=?", name, epoch).First(&p).Error
 	if err != nil {
+		s.logger.Debug("not found", err, errors.Is(err, gorm.ErrRecordNotFound))
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return 0, nil
 		}
@@ -258,6 +249,41 @@ func (s *Syncer) initUserStates() error {
 	return nil
 }
 
+func (s *Syncer) getUserStateBasedOnBlockNumber(timestamp int64) ([]*mining.UserInfo, error) {
+	bn, err := s.getTimestampToBlockNumber(timestamp, s.blockGraphInterface)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get block number from timestamp: timestamp=%v %w", timestamp, err)
+	}
+	users, err := s.getUsersBasedOnBlockNumber(bn, s.mai3GraphInterface)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get users on block number: blocknumber=%v %w", bn, err)
+	}
+	s.logger.Debug("found %v users @%v", len(users), bn)
+	// 2. update graph data
+	prices, err := s.getMarkPrice(bn, s.mai3GraphInterface)
+	if err != nil {
+		return nil, fmt.Errorf("fail to get mark prices %w", err)
+	}
+	uis := make([]*mining.UserInfo, len(users))
+	for i, u := range users {
+		pv, err := s.getPositionValue(u.MarginAccounts, bn, prices)
+		if err != nil {
+			return nil, fmt.Errorf("failed to set cur_stake_score and cur_pos_value to 0 %w", err)
+		}
+		// ss is (unlock time - now) * u.StackedMCB <=> s = n * t
+		ss := s.getStakeScore(timestamp, u.UnlockMCBTime, u.StakedMCB)
+		ui := &mining.UserInfo{
+			Trader:        strings.ToLower(u.ID),
+			Epoch:         s.curEpochConfig.Epoch,
+			CurPosValue:   pv,
+			CurStakeScore: ss,
+			AccFee:        u.TotalFee,
+		}
+		uis[i] = ui
+	}
+	return uis, nil
+}
+
 func (s *Syncer) syncState() (int64, error) {
 	s.logger.Info("enter sync state")
 	defer s.logger.Info("leave sync state")
@@ -271,37 +297,9 @@ func (s *Syncer) syncState() (int64, error) {
 	} else {
 		np = norm(p + 60)
 	}
-
-	bn, err := s.getTimestampToBlockNumber(np, s.blockGraphInterface)
+	uis, err := s.getUserStateBasedOnBlockNumber(np)
 	if err != nil {
-		return 0, fmt.Errorf("failed to get block number from timestamp: timestamp=%v %w", np, err)
-	}
-	users, err := s.getUsersBasedOnBlockNumber(bn, s.mai3GraphInterface)
-	if err != nil {
-		return 0, fmt.Errorf("failed to get users on block number: blocknumber=%v %w", bn, err)
-	}
-	s.logger.Info("found %v users @%v", len(users), bn)
-	// 2. update graph data
-	prices, err := s.getMarkPrice(bn, s.mai3GraphInterface)
-	if err != nil {
-		return 0, fmt.Errorf("fail to get mark prices %w", err)
-	}
-	uis := make([]*mining.UserInfo, len(users))
-	for i, u := range users {
-		pv, err := s.getPositionValue(u.MarginAccounts, bn, prices)
-		if err != nil {
-			return 0, fmt.Errorf("failed to set cur_stake_score and cur_pos_value to 0 %w", err)
-		}
-		// ss is (unlock time - now) * u.StackedMCB <=> s = n * t
-		ss := s.getStakeScore(np, u.UnlockMCBTime, u.StakedMCB)
-		ui := &mining.UserInfo{
-			Trader:        strings.ToLower(u.ID),
-			Epoch:         s.curEpochConfig.Epoch,
-			CurPosValue:   pv,
-			CurStakeScore: ss,
-			AccFee:        u.TotalFee,
-		}
-		uis[i] = ui
+		return 0, fmt.Errorf("fail to get new user states: timestamp=%v %w", np, err)
 	}
 	// begin tx
 	err = db.WithTransaction(s.db, func(tx *gorm.DB) error {
@@ -340,7 +338,7 @@ func (s *Syncer) syncState() (int64, error) {
 		}
 		// 3. update score
 		var (
-			minuteCeil = int64(math.Ceil((float64(np) - float64(s.curEpochConfig.StartTime)) / 60.0))
+			minuteCeil = int64(math.Floor((float64(np) - float64(s.curEpochConfig.StartTime)) / 60.0))
 			elapsed    = decimal.NewFromInt(minuteCeil) // Minutes
 		)
 		var all []*mining.UserInfo
@@ -442,7 +440,7 @@ func (s Syncer) getPositionValue(accounts []*graph.MarginAccount, bn int64, cach
 		if v, ok := cache[perpId]; ok {
 			price = v
 		} else {
-			addr, _, index, err := s.GetPoolAddrIndexUserID(a.ID)
+			addr, _, index, err := splitMarginAccountID(a.ID)
 			if err != nil {
 				return sum, fmt.Errorf("fail to get pool address and index from id %w", err)
 			}
