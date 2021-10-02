@@ -14,18 +14,14 @@ import (
 	"gorm.io/gorm/clause"
 
 	"github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
-	"github.com/mcdexio/mai3-trade-mining-watcher/database/db"
 	database "github.com/mcdexio/mai3-trade-mining-watcher/database/db"
 	"github.com/mcdexio/mai3-trade-mining-watcher/database/models/mining"
 	"github.com/mcdexio/mai3-trade-mining-watcher/env"
 	"github.com/mcdexio/mai3-trade-mining-watcher/graph"
 	"github.com/mcdexio/mai3-trade-mining-watcher/types"
-	utils "github.com/mcdexio/mai3-trade-mining-watcher/utils/http"
 )
 
-var NOT_IN_EPOCH = errors.New("not in epoch period")
-var EMPTY_SCHEDULE = errors.New("empty schedule")
-var minuteDecimal = decimal.NewFromInt(60)
+var ErrNotInEpoch = errors.New("not in epoch period")
 
 var (
 	PROGRESS_SYNC_STATE = "user_info" // compatible
@@ -34,10 +30,9 @@ var (
 )
 
 type Syncer struct {
-	ctx        context.Context
-	httpClient *utils.Client
-	logger     logging.Logger
-	db         *gorm.DB
+	ctx    context.Context
+	logger logging.Logger
+	db     *gorm.DB
 
 	// block syncer
 	blockGraphInterface graph.BlockInterface
@@ -90,7 +85,7 @@ func (s *Syncer) setDefaultEpoch() int64 {
 func (s *Syncer) Run() error {
 	for {
 		if err := s.run(s.ctx); err != nil {
-			if !errors.Is(err, NOT_IN_EPOCH) {
+			if !errors.Is(err, ErrNotInEpoch) {
 				s.logger.Warn("error occurs while running: %s", err)
 				time.Sleep(5 * time.Second)
 				continue
@@ -226,7 +221,7 @@ func (s *Syncer) initUserStates() error {
 			InitFee: u.TotalFee,
 		}
 	}
-	err = db.WithTransaction(s.db, func(tx *gorm.DB) error {
+	err = database.WithTransaction(s.db, func(tx *gorm.DB) error {
 		cp, err := s.getProgress(PROGRESS_INIT_FEE, s.curEpochConfig.Epoch)
 		if err != nil {
 			return fmt.Errorf("fail to get sync progress %w", err)
@@ -302,7 +297,7 @@ func (s *Syncer) syncState() (int64, error) {
 		return 0, fmt.Errorf("fail to get new user states: timestamp=%v %w", np, err)
 	}
 	// begin tx
-	err = db.WithTransaction(s.db, func(tx *gorm.DB) error {
+	err = database.WithTransaction(s.db, func(tx *gorm.DB) error {
 		curP, err := s.getProgress(PROGRESS_SYNC_STATE, s.curEpochConfig.Epoch)
 		if err != nil {
 			return fmt.Errorf("fail to get sync progress %w", err)
@@ -466,7 +461,7 @@ func (s *Syncer) detectEpoch(p int64) (*mining.Schedule, error) {
 	}
 	if len(ss) == 0 {
 		// not in any epoch
-		return nil, NOT_IN_EPOCH
+		return nil, ErrNotInEpoch
 	}
 	return ss[0], nil
 }
