@@ -8,19 +8,30 @@ import (
 	"syscall"
 
 	"github.com/alexflint/go-arg"
+	"github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
 	"github.com/mcdexio/mai3-trade-mining-watcher/validator"
 )
 
 func main() {
+	name := "trading-mining-validator"
+	// Initialize logger.
+	logging.Initialize(name)
+	defer logging.Finalize()
+	logger := logging.NewLoggerTag(name)
+
 	// postgres://mcdex@localhost:5432/mcdex?sslmode=disable
 	args := new(validator.Config)
 	arg.Parse(args)
-	_, err := validator.NewValidator(args)
+	logger.Info("using config %+v", args)
+
+	v, err := validator.NewValidator(args, logger)
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Println("connected")
-	_, cancelFunc := context.WithCancel(context.Background())
+	ctx, cancelFunc := context.WithCancel(context.Background())
+	go func() {
+		v.Run(ctx)
+	}()
 	wait(cancelFunc)
 }
 
