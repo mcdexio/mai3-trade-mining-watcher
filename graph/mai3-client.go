@@ -17,14 +17,15 @@ type MAI3Client struct {
 type User struct {
 	ID             string          `json:"id"`
 	StakedMCB      decimal.Decimal `json:"stakedMCB"`
-	TotalFee       decimal.Decimal `json:"totalFee"`
 	UnlockMCBTime  int64           `json:"unlockMCBTime"`
 	MarginAccounts []*MarginAccount
 }
 
 type MarginAccount struct {
-	ID       string          `json:"id"`
-	Position decimal.Decimal `json:"position"`
+	ID                  string          `json:"id"`
+	Position            decimal.Decimal `json:"position"`
+	TotalFee            decimal.Decimal `json:"totalFee"`
+	InversePoolTotalFee decimal.Decimal `json:"inversePoolTotalFee"`
 }
 
 type MarkPrice struct {
@@ -150,15 +151,16 @@ func (m *MAI3Client) getUserWithBlockNumberID(blockNumber int64, id string) ([]U
 	// s.logger.Debug("Get users based on block number %d and order and filter by ID %s", blockNumber, id)
 	query := `{
 		users(first: 1000, block: {number: %d}, orderBy: id, orderDirection: asc,
-			where: { id_gt: "%s" totalFee_gt: 0}
+			where: { id_gt: "%s" }
 		) {
 			id
 			stakedMCB
 			unlockMCBTime
-			totalFee
-			marginAccounts(where: { position_gt: 0}) {
+			marginAccounts(where: { position_gt: 0,  totalFee_gt: 0}) {
 				id
 				position
+				totalFee
+				inversePoolTotalFee
 			}
 		}
 	}`

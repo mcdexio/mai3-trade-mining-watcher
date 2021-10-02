@@ -38,7 +38,6 @@ func (mockMAI3 *MockMAI3Graph) GetUsersBasedOnBlockNumber(blockNumber int64) ([]
 			{
 				ID:             "0xUser1",
 				StakedMCB:      decimal.NewFromInt(0),
-				TotalFee:       decimal.NewFromInt(0),
 				UnlockMCBTime:  0,
 				MarginAccounts: []*graph.MarginAccount{},
 			},
@@ -49,7 +48,6 @@ func (mockMAI3 *MockMAI3Graph) GetUsersBasedOnBlockNumber(blockNumber int64) ([]
 			{
 				ID:             "0xUser1",
 				StakedMCB:      decimal.NewFromInt(3),
-				TotalFee:       decimal.NewFromInt(0),
 				UnlockMCBTime:  60 * 60 * 24 * 100, // 100 days
 				MarginAccounts: []*graph.MarginAccount{},
 			},
@@ -60,7 +58,6 @@ func (mockMAI3 *MockMAI3Graph) GetUsersBasedOnBlockNumber(blockNumber int64) ([]
 			{
 				ID:            "0xUser1",
 				StakedMCB:     decimal.NewFromInt(3),
-				TotalFee:      decimal.NewFromInt(0),
 				UnlockMCBTime: 60 * 60 * 24 * 99, // 99 days
 				MarginAccounts: []*graph.MarginAccount{
 					{
@@ -80,7 +77,6 @@ func (mockMAI3 *MockMAI3Graph) GetUsersBasedOnBlockNumber(blockNumber int64) ([]
 			{
 				ID:            "0xUser1",
 				StakedMCB:     decimal.NewFromInt(3),
-				TotalFee:      decimal.NewFromInt(10),
 				UnlockMCBTime: 60 * 60 * 24 * 98, // 98 days
 				MarginAccounts: []*graph.MarginAccount{
 					{
@@ -100,7 +96,6 @@ func (mockMAI3 *MockMAI3Graph) GetUsersBasedOnBlockNumber(blockNumber int64) ([]
 			{
 				ID:            "0xUser1",
 				StakedMCB:     decimal.NewFromInt(10),
-				TotalFee:      decimal.NewFromInt(15),
 				UnlockMCBTime: 60 * 60 * 24 * 100, // 100 days
 				MarginAccounts: []*graph.MarginAccount{
 					{
@@ -227,7 +222,7 @@ func (t *SyncerTestSuite) SetupSuite() {
 
 func (t *SyncerTestSuite) TearDownSuite() {
 	t.cancel()
-	database.DeleteAllData(types.Watcher)
+	// database.DeleteAllData(types.Watcher)
 	database.Finalize()
 }
 

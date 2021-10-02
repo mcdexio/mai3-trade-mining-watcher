@@ -79,7 +79,6 @@ func (s *Syncer) SetDefaultEpoch() int64 {
 		s.logger.Error("set default epoch error %s", err)
 		panic(err)
 	}
-
 	return start
 }
 
@@ -249,7 +248,7 @@ func (s *Syncer) initUserStates(db *gorm.DB, epoch *mining.Schedule) error {
 	}
 	// already synced
 	if p != 0 && p == epoch.StartTime {
-		s.logger.Info("fee already initialied")
+		s.logger.Info("fee already initialized")
 		return nil
 	}
 	startBn, err := s.getTimestampToBlockNumber(epoch.StartTime, s.blockGraphInterface)
@@ -260,12 +259,20 @@ func (s *Syncer) initUserStates(db *gorm.DB, epoch *mining.Schedule) error {
 	if err != nil {
 		return err
 	}
+	prices, err := s.getMarkPrice(startBn, s.mai3GraphInterface)
+	if err != nil {
+		return fmt.Errorf("fail to get mark prices %s", err)
+	}
 	uis := make([]*mining.UserInfo, len(users))
 	for i, u := range users {
+		_, initFee, err := s.getOIFeeValue(u.MarginAccounts, startBn, prices)
+		if err != nil {
+			return fmt.Errorf("fail to get initial fee %s", err)
+		}
 		uis[i] = &mining.UserInfo{
 			Trader:  strings.ToLower(u.ID),
 			Epoch:   epoch.Epoch,
-			InitFee: u.TotalFee, // TODO: inverse contract
+			InitFee: initFee,
 		}
 	}
 	err = database.WithTransaction(db, func(tx *gorm.DB) error {
@@ -302,7 +309,7 @@ func (s *Syncer) getUserStateBasedOnBlockNumber(epoch *mining.Schedule, timestam
 	}
 	uis := make([]*mining.UserInfo, len(users))
 	for i, u := range users {
-		pv, err := s.getPositionValue(u.MarginAccounts, bn, prices)
+		pv, fee, err := s.getOIFeeValue(u.MarginAccounts, bn, prices)
 		if err != nil {
 			return nil, fmt.Errorf("failed to set cur_stake_score and cur_pos_value to 0 %w", err)
 		}
@@ -313,7 +320,7 @@ func (s *Syncer) getUserStateBasedOnBlockNumber(epoch *mining.Schedule, timestam
 			Epoch:         epoch.Epoch,
 			CurPosValue:   pv,
 			CurStakeScore: ss,
-			AccFee:        u.TotalFee,
+			AccFee:        fee,
 		}
 		uis[i] = ui
 	}
@@ -455,7 +462,7 @@ func (s *Syncer) syncState(db *gorm.DB, epoch *mining.Schedule) (int64, error) {
 	return np, nil
 }
 
-func (s Syncer) getStakeScore(curTime int64, unlockTime int64, staked decimal.Decimal) decimal.Decimal {
+func (s *Syncer) getStakeScore(curTime int64, unlockTime int64, staked decimal.Decimal) decimal.Decimal {
 	if unlockTime < curTime {
 		return decimal.Zero
 	}
@@ -493,8 +500,9 @@ func (s Syncer) getScore(epoch *mining.Schedule, ui *mining.UserInfo, elapsed de
 	return decimal.NewFromFloat(score)
 }
 
-func (s Syncer) getPositionValue(accounts []*graph.MarginAccount, bn int64, cache map[string]decimal.Decimal) (decimal.Decimal, error) {
-	sum := decimal.Zero
+func (s *Syncer) getOIFeeValue(accounts []*graph.MarginAccount, bn int64, cache map[string]decimal.Decimal) (oi, fee decimal.Decimal, err error) {
+	oi = decimal.Zero
+	fee = decimal.Zero
 	for _, a := range accounts {
 		var price decimal.Decimal
 
@@ -503,7 +511,8 @@ func (s Syncer) getPositionValue(accounts []*graph.MarginAccount, bn int64, cach
 
 		// inverse contract
 		if env.InInverseContractWhiteList(perpId) {
-			sum = sum.Add(a.Position.Abs())
+			oi = oi.Add(a.Position.Abs())
+			fee = fee.Add(a.InversePoolTotalFee)
 			continue
 		}
 
@@ -513,18 +522,22 @@ func (s Syncer) getPositionValue(accounts []*graph.MarginAccount, bn int64, cach
 		} else {
 			addr, _, index, err := splitMarginAccountID(a.ID)
 			if err != nil {
-				return sum, fmt.Errorf("fail to get pool address and index from id %w", err)
+				err = fmt.Errorf("fail to get pool address and index from id %s", err)
+				return
 			}
 			p, err := s.getMarkPriceWithBlockNumberAddrIndex(bn, addr, index, s.mai3GraphInterface)
 			if err != nil {
-				return sum, fmt.Errorf("fail to get mark price %w", err)
+				err = fmt.Errorf("fail to get mark price %w", err)
+				return
 			}
 			price = p
 			cache[perpId] = p
 		}
-		sum = sum.Add(price.Mul(a.Position).Abs())
+		oi = oi.Add(price.Mul(a.Position).Abs())
+		fee = fee.Add(a.TotalFee)
 	}
-	return sum, nil
+	err = nil
+	return
 }
 
 func (s *Syncer) detectEpoch(db *gorm.DB, lastTimestamp int64) (*mining.Schedule, error) {
