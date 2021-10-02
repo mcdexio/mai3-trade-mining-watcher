@@ -213,9 +213,9 @@ func (s *TMServer) OnQueryTradingMining(w http.ResponseWriter, r *http.Request) 
 		err = s.db.Model(mining.Schedule{}).Where("epoch = ?", i).First(&sch).Error
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				s.logger.Error("failed to get epoch from schedule table err=%s", err)
+				s.logger.Error("failed to get epoch %d from schedule table err=%s", i, err)
 			}
-			s.logger.Error("failed to get epoch from schedule table err=%s", err)
+			s.logger.Error("failed to get epoch %d from schedule table err=%s", i, err)
 			s.jsonError(w, "internal error", 400)
 			return
 		}
