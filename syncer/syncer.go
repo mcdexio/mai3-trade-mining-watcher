@@ -61,7 +61,7 @@ func NewSyncer(
 	}
 }
 
-func (s *Syncer) setDefaultEpoch() int64 {
+func (s *Syncer) SetDefaultEpoch() int64 {
 	// start := time.Now().Unix()
 	start := s.defaultEpochStartTime
 	err := s.db.Clauses(clause.OnConflict{
