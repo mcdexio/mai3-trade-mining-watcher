@@ -227,6 +227,9 @@ func (t *SyncerTestSuite) TearDownSuite() {
 }
 
 func (t *SyncerTestSuite) TestState() {
+
+	fmt.Println("enter testState")
+
 	var progress mining.Progress
 	var users []mining.UserInfo
 	np := int64(0)
@@ -245,7 +248,6 @@ func (t *SyncerTestSuite) TestState() {
 	t.Require().Equal(progress.From, np)
 	for np < epoch.EndTime {
 		p, err := t.syncer.syncState(t.syncer.db, epoch)
-		fmt.Println(p)
 		t.Require().Equal(err, nil)
 
 		// check progress
@@ -390,6 +392,111 @@ func (t *SyncerTestSuite) TestGetScore() {
 	// pow((4.5+4)/2, 0.3) = 1.543535701445671
 	// 1.8991444823309347 * 1.4241804121672974 * 1.543535701445671 = 4.174838630152279
 	t.Require().Equal(actual.String(), decimal.NewFromFloat(4.174838630152278).String())
+}
+
+func (t *SyncerTestSuite) TestDetectEpoch() {
+	epoch := &mining.Schedule{
+		Epoch:     0,
+		StartTime: 100,
+		EndTime:   250,
+		WeightFee: decimal.NewFromFloat(0.7),
+		WeightMCB: decimal.NewFromFloat(0.3),
+		WeightOI:  decimal.NewFromFloat(0.3),
+	}
+	db := t.syncer.db
+	t.Require().Equal(nil, db.Model(&mining.Schedule{}).Create(&epoch).Error)
+	defer database.DeleteAllData(types.Watcher)
+	// before
+	{
+		e, err := t.syncer.detectEpoch(db, 9)
+		t.Require().Equal(nil, err)
+		t.Require().Equal(epoch.Epoch, e.Epoch)
+		t.Require().Equal(epoch.StartTime, e.StartTime)
+		t.Require().Equal(epoch.EndTime, e.EndTime)
+	}
+	// in
+	{
+		e, err := t.syncer.detectEpoch(db, 110)
+		t.Require().Equal(nil, err)
+		t.Require().Equal(epoch.Epoch, e.Epoch)
+		t.Require().Equal(epoch.StartTime, e.StartTime)
+		t.Require().Equal(epoch.EndTime, e.EndTime)
+	}
+	// edge case
+	{
+		e, err := t.syncer.detectEpoch(db, 100)
+		t.Require().Equal(nil, err)
+		t.Require().Equal(epoch.Epoch, e.Epoch)
+		t.Require().Equal(epoch.StartTime, e.StartTime)
+		t.Require().Equal(epoch.EndTime, e.EndTime)
+	}
+	// edge case
+	{
+		_, err := t.syncer.detectEpoch(db, 190) // + 60 == end
+		t.Require().Equal("not in epoch period", err.Error())
+	}
+}
+
+func (t *SyncerTestSuite) TestRestoreFromSnapshot() {
+	epoch := &mining.Schedule{
+		Epoch:     0,
+		StartTime: 0,
+		EndTime:   250,
+		WeightFee: decimal.NewFromFloat(0.7),
+		WeightMCB: decimal.NewFromFloat(0.3),
+		WeightOI:  decimal.NewFromFloat(0.3),
+	}
+	db := t.syncer.db
+	db.Model(&mining.Schedule{}).Delete("epoch=0")
+	t.Require().Equal(nil, db.Model(&mining.Schedule{}).Create(&epoch).Error)
+	defer database.DeleteAllData(types.Watcher)
+
+	t.syncer.snapshotInterval = 120
+	defer func() {
+		t.syncer.snapshotInterval = 3600
+	}()
+	// before
+	{
+		t.syncer.syncState(t.syncer.db, epoch)         // 60, 100
+		t.syncer.syncState(t.syncer.db, epoch)         // 120, 99
+		p, _ := t.syncer.syncState(t.syncer.db, epoch) // 180, 98
+		t.Require().Equal(int64(180), p)
+	}
+	// block == 3
+	var user mining.UserInfo
+	var progress mining.Progress
+	t.syncer.db.Model(&mining.UserInfo{}).Where("epoch = 0").First(&user)
+	t.Require().Equal(decimal.NewFromInt(294).String(), user.CurStakeScore.String())
+	t.Require().Equal(decimal.NewFromInt(300+297).String(), user.AccStakeScore.String())
+	t.syncer.db.Model(&mining.Progress{}).Where("table_name = 'user_info' and epoch = 0").First(&progress)
+	t.Require().Equal(int64(180), progress.From)
+
+	var snapshots []*mining.Snapshot
+	db.Where("epoch=? and timestamp=?", epoch.Epoch, 120).Find(&snapshots)
+	t.Require().Equal(1, len(snapshots))
+	t.Require().Equal(decimal.NewFromInt(297).String(), snapshots[0].CurStakeScore.String())
+	t.Require().Equal(decimal.NewFromInt(300).String(), snapshots[0].AccStakeScore.String())
+
+	t.syncer.restoreFromSnapshot(db, 120)
+	t.syncer.db.Model(&mining.UserInfo{}).Where("epoch = 0").First(&user)
+	t.Require().Equal(decimal.NewFromInt(297).String(), user.CurStakeScore.String())
+	t.Require().Equal(decimal.NewFromInt(300).String(), user.AccStakeScore.String())
+	t.syncer.db.Model(&mining.Progress{}).Where("table_name = 'user_info' and epoch = 0").First(&progress)
+	t.Require().Equal(int64(120), progress.From)
+	{
+		p, err := t.syncer.syncState(t.syncer.db, epoch) // 180, 98
+		t.Require().Equal(nil, err)
+		t.Require().Equal(int64(180), p)
+	}
+	// again
+	t.syncer.db.Model(&mining.Progress{}).Where("table_name = 'user_info' and epoch = 0").First(&progress)
+	t.Require().Equal(int64(180), progress.From)
+
+	err := t.syncer.runRestore(context.Background(), 120)
+	t.Require().Equal(nil, err)
+
+	t.syncer.db.Model(&mining.Progress{}).Where("table_name = 'user_info' and epoch = 0").First(&progress)
+	t.Require().Equal(int64(240), progress.From)
 }
 
 func TestSyncer(t *testing.T) {

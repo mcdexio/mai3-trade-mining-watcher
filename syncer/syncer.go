@@ -45,6 +45,7 @@ type Syncer struct {
 
 	needRestore      atomic.Bool
 	restoreTimestamp int64
+	snapshotInterval int64
 }
 
 func NewSyncer(
@@ -58,6 +59,7 @@ func NewSyncer(
 		db:                    database.GetDB(),
 		defaultEpochStartTime: defaultEpochStartTime,
 		syncDelaySeconds:      syncDelaySeconds,
+		snapshotInterval:      3600,
 	}
 }
 
@@ -107,13 +109,13 @@ func (s *Syncer) Run() error {
 }
 
 func (s *Syncer) runRestore(ctx context.Context, checkpoint int64) error {
-	return database.WithTransaction(s.db, func(tx *gorm.DB) error {
+	return s.db.Transaction(func(tx *gorm.DB) error {
 		if err := s.restoreFromSnapshot(tx, checkpoint); err != nil {
 			return err
 		}
 		// sync until end
 		return s.runSync(ctx, tx)
-	})
+	}, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 }
 
 func (s *Syncer) restoreFromSnapshot(db *gorm.DB, checkpoint int64) error {
@@ -275,17 +277,20 @@ func (s *Syncer) initUserStates(db *gorm.DB, epoch *mining.Schedule) error {
 			InitFee: initFee,
 		}
 	}
-	err = database.WithTransaction(db, func(tx *gorm.DB) error {
+	err = db.Transaction(func(tx *gorm.DB) error {
 		if len(uis) > 0 {
-			if err := tx.Create(&uis).Error; err != nil {
+			if err := db.Clauses(clause.OnConflict{
+				Columns:   []clause.Column{{Name: "trader"}, {Name: "epoch"}},
+				DoUpdates: clause.AssignmentColumns([]string{"epoch", "init_fee"}),
+			}).Create(&uis).Error; err != nil {
 				return fmt.Errorf("fail to create init user info %w", err)
 			}
 		}
-		if err := s.setProgress(tx, PROGRESS_INIT_FEE, epoch.StartTime, epoch.Epoch); err != nil {
+		if err := s.setProgress(db, PROGRESS_INIT_FEE, epoch.StartTime, epoch.Epoch); err != nil {
 			return fmt.Errorf("fail to save sync progress %w", err)
 		}
 		return nil
-	}, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
+	})
 	if err != nil {
 		return fmt.Errorf("fail to init fee of all users for new epoch: epoch=%v %w", epoch.Epoch, err)
 	}
@@ -368,7 +373,7 @@ func (s *Syncer) updateUserStates(db *gorm.DB, epoch *mining.Schedule, timestamp
 	if err := db.Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "trader"}, {Name: "epoch"}},
 		DoUpdates: clause.AssignmentColumns([]string{"cur_pos_value", "cur_stake_score", "acc_fee"}),
-	}).Create(&timestamp).Error; err != nil {
+	}).Create(&users).Error; err != nil {
 		return fmt.Errorf("failed to create user_info: size=%v %w", len(users), err)
 	}
 	return nil
@@ -385,7 +390,7 @@ func (s *Syncer) updateUserScores(db *gorm.DB, epoch *mining.Schedule, timestamp
 	for _, ui := range users {
 		ui.Score = s.getScore(epoch, ui, elapsed)
 	}
-	if err := db.Save(&users).Error; err != nil {
+	if err := db.Model(&mining.UserInfo{}).Save(&users).Error; err != nil {
 		return fmt.Errorf("failed to create user_info: size=%v %w", len(users), err)
 	}
 	return nil
@@ -408,11 +413,8 @@ func (s *Syncer) makeSnapshot(db *gorm.DB, timestamp int64, users []*mining.User
 			Score:         u.Score,
 		}
 	}
-	if err := db.Save(&snapshot).Error; err != nil {
+	if err := db.Model(&mining.Snapshot{}).Save(&snapshot).Error; err != nil {
 		return fmt.Errorf("failed to create snapshot: timestamp=%v, size=%v %w", timestamp, len(users), err)
-	}
-	if err := db.Save(&snapshot).Error; err != nil {
-		return fmt.Errorf("failed to create snapshot: size=%v %w", len(users), err)
 	}
 	return nil
 }
@@ -427,7 +429,7 @@ func (s *Syncer) syncState(db *gorm.DB, epoch *mining.Schedule) (int64, error) {
 	}
 	var np int64
 	if p == 0 {
-		np = norm(epoch.StartTime)
+		np = norm(epoch.StartTime + 60)
 	} else {
 		np = norm(p + 60)
 	}
@@ -435,7 +437,7 @@ func (s *Syncer) syncState(db *gorm.DB, epoch *mining.Schedule) (int64, error) {
 	if err != nil {
 		return 0, fmt.Errorf("fail to get new user states: timestamp=%v %w", np, err)
 	}
-	err = database.WithTransaction(db, func(tx *gorm.DB) error {
+	err = db.Transaction(func(tx *gorm.DB) error {
 		if err := s.updateUserStates(tx, epoch, np, newStates); err != nil {
 			return fmt.Errorf("fail to update current user states: timestamp=%v %w", np, err)
 		}
@@ -449,7 +451,7 @@ func (s *Syncer) syncState(db *gorm.DB, epoch *mining.Schedule) (int64, error) {
 		if err := s.setProgress(tx, PROGRESS_SYNC_STATE, np, epoch.Epoch); err != nil {
 			return fmt.Errorf("fail to save sync progress %w", err)
 		}
-		h := normN(np, 3600)
+		h := normN(np, s.snapshotInterval)
 		if np-60 < h && np >= h && len(allStates) > 0 {
 			s.logger.Info("making snapshot for %v", h)
 			s.makeSnapshot(tx, np, allStates)
