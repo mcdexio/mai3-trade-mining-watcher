@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
+	"testing"
+
 	"github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
 	database "github.com/mcdexio/mai3-trade-mining-watcher/database/db"
 	"github.com/mcdexio/mai3-trade-mining-watcher/database/models/mining"
@@ -11,8 +14,6 @@ import (
 	"github.com/mcdexio/mai3-trade-mining-watcher/types"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/suite"
-	"math"
-	"testing"
 )
 
 var TEST_ERROR = errors.New("test error")
@@ -215,16 +216,8 @@ func (t *SyncerTestSuite) SetupSuite() {
 	logger := logging.NewLoggerTag("test suite syncer")
 	ctx, cancel := context.WithCancel(context.Background())
 	t.syncer = &Syncer{
-		logger: logger,
-		ctx:    ctx,
-		curEpochConfig: &mining.Schedule{
-			Epoch:     0,
-			StartTime: 0,
-			EndTime:   250,
-			WeightFee: decimal.NewFromFloat(0.7),
-			WeightMCB: decimal.NewFromFloat(0.3),
-			WeightOI:  decimal.NewFromFloat(0.3),
-		},
+		logger:              logger,
+		ctx:                 ctx,
 		blockGraphInterface: NewMockBlockGraph(),
 		mai3GraphInterface:  NewMockMAI3Graph(),
 		db:                  database.GetDB(),
@@ -243,11 +236,20 @@ func (t *SyncerTestSuite) TestState() {
 	var users []mining.UserInfo
 	np := int64(0)
 
-	err := t.syncer.initUserStates()
+	epoch := &mining.Schedule{
+		Epoch:     0,
+		StartTime: 0,
+		EndTime:   250,
+		WeightFee: decimal.NewFromFloat(0.7),
+		WeightMCB: decimal.NewFromFloat(0.3),
+		WeightOI:  decimal.NewFromFloat(0.3),
+	}
+
+	err := t.syncer.initUserStates(t.syncer.db, epoch)
 	t.Require().Equal(err, nil)
 	t.Require().Equal(progress.From, np)
-	for np < t.syncer.curEpochConfig.EndTime {
-		p, err := t.syncer.syncState()
+	for np < epoch.EndTime {
+		p, err := t.syncer.syncState(t.syncer.db, epoch)
 		fmt.Println(p)
 		t.Require().Equal(err, nil)
 
@@ -335,6 +337,14 @@ func (t *SyncerTestSuite) TestStakeGetScore() {
 }
 
 func (t *SyncerTestSuite) TestGetScore() {
+	epoch := &mining.Schedule{
+		Epoch:     0,
+		StartTime: 0,
+		EndTime:   250,
+		WeightFee: decimal.NewFromFloat(0.7),
+		WeightMCB: decimal.NewFromFloat(0.3),
+		WeightOI:  decimal.NewFromFloat(0.3),
+	}
 	minuteCeil := int64(math.Ceil((100.0 - 30.0) / 60.0))
 	elapse := decimal.NewFromInt(minuteCeil) // 100 seconds -> 2 minutes
 
@@ -346,7 +356,7 @@ func (t *SyncerTestSuite) TestGetScore() {
 		AccStakeScore: decimal.NewFromFloat(3.5),
 		CurStakeScore: decimal.NewFromFloat(3),
 	}
-	actual := t.syncer.getScore(&ui, elapse)
+	actual := t.syncer.getScore(epoch, &ui, elapse)
 	t.Require().Equal(actual, decimal.Zero)
 
 	ui = mining.UserInfo{
@@ -357,7 +367,7 @@ func (t *SyncerTestSuite) TestGetScore() {
 		AccStakeScore: decimal.NewFromFloat(3.5),
 		CurStakeScore: decimal.NewFromFloat(3),
 	}
-	actual = t.syncer.getScore(&ui, elapse)
+	actual = t.syncer.getScore(epoch, &ui, elapse)
 	t.Require().Equal(actual, decimal.Zero)
 
 	ui = mining.UserInfo{
@@ -368,7 +378,7 @@ func (t *SyncerTestSuite) TestGetScore() {
 		AccStakeScore: decimal.NewFromFloat(0),
 		CurStakeScore: decimal.NewFromFloat(0),
 	}
-	actual = t.syncer.getScore(&ui, elapse)
+	actual = t.syncer.getScore(epoch, &ui, elapse)
 	t.Require().Equal(actual, decimal.Zero)
 
 	ui = mining.UserInfo{
@@ -379,7 +389,7 @@ func (t *SyncerTestSuite) TestGetScore() {
 		AccStakeScore: decimal.NewFromFloat(3.5),
 		CurStakeScore: decimal.NewFromFloat(3),
 	}
-	actual = t.syncer.getScore(&ui, elapse)
+	actual = t.syncer.getScore(epoch, &ui, elapse)
 	// pow((5-2.5), 0.7) = 1.8991444823309347
 	// pow((3.5+3)/2, 0.3) = 1.4241804121672974
 	// pow((4.5+4)/2, 0.3) = 1.543535701445671
