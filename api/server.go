@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"strings"
 	"time"
@@ -27,11 +28,11 @@ type TMServer struct {
 }
 
 type EpochTradingMiningResp struct {
-	Fee        string `json:"fee"`
-	OI         string `json:"oi"`
-	Stake      string `json:"stake"`
-	Score      string `json:"score"`
-	Proportion string `json:"proportion"`
+	Fee          string `json:"fee"`
+	AverageOI    string `json:"averageOI"`
+	AverageStake string `json:"averageStake"`
+	Score        string `json:"score"`
+	Proportion   string `json:"proportion"`
 }
 
 func NewTMServer(ctx context.Context, logger logging.Logger) *TMServer {
@@ -194,10 +195,11 @@ func (s *TMServer) OnQueryTradingMining(w http.ResponseWriter, r *http.Request) 
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				s.logger.Info("user %s not found in db", traderID)
+			} else {
+				s.logger.Error("failed to get value from user info table err=%s", err)
+				s.jsonError(w, "internal error", 400)
+				return
 			}
-			s.logger.Error("failed to get value from user info table err=%w", err)
-			s.jsonError(w, "user not in database", 200)
-			return
 		}
 		s.logger.Info("user info %+v of epoch %d", rsp, i)
 		s.logger.Debug("score %+v", s.score)
@@ -207,6 +209,19 @@ func (s *TMServer) OnQueryTradingMining(w http.ResponseWriter, r *http.Request) 
 			s.jsonError(w, "internal error", 400)
 			return
 		}
+		var sch mining.Schedule
+		err = s.db.Model(mining.Schedule{}).Where("epoch = ?", i).First(&sch).Error
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				s.logger.Error("failed to get epoch from schedule table err=%s", err)
+			}
+			s.logger.Error("failed to get epoch from schedule table err=%s", err)
+			s.jsonError(w, "internal error", 400)
+			return
+		}
+		minuteCeil := int64(math.Floor((float64(time.Now().Unix()) - float64(sch.StartTime)) / 60.0))
+		elapsed := decimal.NewFromInt(minuteCeil) // Minutes
+
 		var proportion string
 		if totalScore.IsZero() {
 			proportion = "0"
@@ -214,11 +229,11 @@ func (s *TMServer) OnQueryTradingMining(w http.ResponseWriter, r *http.Request) 
 			proportion = (rsp.Score.Div(totalScore)).String()
 		}
 		resp := EpochTradingMiningResp{
-			Fee:        rsp.AccFee.Sub(rsp.InitFee).String(),
-			OI:         rsp.AccPosValue.Add(rsp.CurPosValue).String(),
-			Stake:      rsp.AccStakeScore.Add(rsp.CurStakeScore).String(),
-			Score:      rsp.Score.String(),
-			Proportion: proportion,
+			Fee:          rsp.AccFee.Sub(rsp.InitFee).String(),
+			AverageOI:    (rsp.AccPosValue.Add(rsp.CurPosValue)).Div(elapsed).String(),
+			AverageStake: (rsp.AccStakeScore.Add(rsp.CurStakeScore)).Div(elapsed).String(),
+			Score:        rsp.Score.String(),
+			Proportion:   proportion,
 		}
 		queryTradingMiningResp[i] = &resp
 	}
