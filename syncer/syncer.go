@@ -500,9 +500,9 @@ func (s Syncer) getScore(epoch *mining.Schedule, ui *mining.UserInfo, elapsed de
 	return decimal.NewFromFloat(score)
 }
 
-func (s *Syncer) getOIFeeValue(accounts []*graph.MarginAccount, bn int64, cache map[string]decimal.Decimal) (oi, fee decimal.Decimal, err error) {
-	oi = decimal.Zero
-	fee = decimal.Zero
+func (s *Syncer) getOIFeeValue(accounts []*graph.MarginAccount, bn int64, cache map[string]decimal.Decimal) (decimal.Decimal, decimal.Decimal, error) {
+	oi := decimal.Zero
+	fee := decimal.Zero
 	for _, a := range accounts {
 		var price decimal.Decimal
 
@@ -522,13 +522,11 @@ func (s *Syncer) getOIFeeValue(accounts []*graph.MarginAccount, bn int64, cache 
 		} else {
 			addr, _, index, err := splitMarginAccountID(a.ID)
 			if err != nil {
-				err = fmt.Errorf("fail to get pool address and index from id %s", err)
-				return
+				return oi, fee, fmt.Errorf("fail to get pool address and index from id %s", err)
 			}
 			p, err := s.getMarkPriceWithBlockNumberAddrIndex(bn, addr, index, s.mai3GraphInterface)
 			if err != nil {
-				err = fmt.Errorf("fail to get mark price %w", err)
-				return
+				return oi, fee, fmt.Errorf("fail to get mark price %w", err)
 			}
 			price = p
 			cache[perpId] = p
@@ -536,8 +534,7 @@ func (s *Syncer) getOIFeeValue(accounts []*graph.MarginAccount, bn int64, cache 
 		oi = oi.Add(price.Mul(a.Position).Abs())
 		fee = fee.Add(a.TotalFee)
 	}
-	err = nil
-	return
+	return oi, fee, nil
 }
 
 func (s *Syncer) detectEpoch(db *gorm.DB, lastTimestamp int64) (*mining.Schedule, error) {
