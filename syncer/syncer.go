@@ -161,7 +161,6 @@ func (s *Syncer) lastProgress(name string) (int64, error) {
 	var p mining.Progress
 	err := s.db.Model(mining.Progress{}).Where("table_name=?", name).Order("epoch desc").First(&p).Error
 	if err != nil {
-		s.logger.Debug("not found", err, errors.Is(err, gorm.ErrRecordNotFound))
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return 0, nil
 		}
@@ -174,7 +173,6 @@ func (s *Syncer) getProgress(name string, epoch int64) (int64, error) {
 	var p mining.Progress
 	err := s.db.Model(mining.Progress{}).Where("table_name=? and epoch=?", name, epoch).First(&p).Error
 	if err != nil {
-		s.logger.Debug("not found", err, errors.Is(err, gorm.ErrRecordNotFound))
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return 0, nil
 		}
