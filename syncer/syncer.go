@@ -63,29 +63,7 @@ func NewSyncer(
 	}
 }
 
-func (s *Syncer) SetDefaultEpoch() int64 {
-	// start := time.Now().Unix()
-	start := s.defaultEpochStartTime
-	err := s.db.Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "epoch"}},
-		UpdateAll: true,
-	}).Create(&mining.Schedule{
-		Epoch:     0,
-		StartTime: start,
-		EndTime:   start + 60*60*24*14,
-		WeightFee: decimal.NewFromFloat(0.7),
-		WeightMCB: decimal.NewFromFloat(0.3),
-		WeightOI:  decimal.NewFromFloat(0.3),
-	}).Error
-	if err != nil {
-		s.logger.Error("set default epoch error %s", err)
-		panic(err)
-	}
-	return start
-}
-
 func (s *Syncer) Run() error {
-	// s.SetDefaultEpoch()
 	for {
 		var err error
 		switch s.needRestore.Load() {
