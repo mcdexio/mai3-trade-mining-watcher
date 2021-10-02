@@ -512,7 +512,6 @@ func (s *Syncer) getOIFeeValue(accounts []*graph.MarginAccount, bn int64, cache 
 
 		// 0xc32a2dfee97e2babc90a2b5e6aef41e789ef2e13-0-0x00233150044aec4cba478d0bf0ecda0baaf5ad19
 		perpId := strings.Join(strings.Split(a.ID, "-")[:2], "-") // 0xc32a2dfee97e2babc90a2b5e6aef41e789ef2e13-0
-
 		// inverse contract
 		if env.InInverseContractWhiteList(perpId) {
 			oi = oi.Add(a.Position.Abs())

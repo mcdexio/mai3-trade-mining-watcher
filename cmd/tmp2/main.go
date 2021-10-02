@@ -4,10 +4,14 @@ import (
 	"context"
 	"fmt"
 	"github.com/mcdexio/mai3-trade-mining-watcher/api"
+	"github.com/mcdexio/mai3-trade-mining-watcher/common/config"
 	"github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
+	"github.com/mcdexio/mai3-trade-mining-watcher/env"
+	"github.com/mcdexio/mai3-trade-mining-watcher/graph"
 	"golang.org/x/sync/errgroup"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 )
 
@@ -23,6 +27,23 @@ func main() {
 	group, ctx := errgroup.WithContext(backgroundCtx)
 
 	fmt.Println(ctx)
+	client := graph.NewMAI3Client(logger, config.GetString("MAI3_TRADE_MINING_GRAPH_URL"))
+	users, err := client.GetUsersBasedOnBlockNumber(5171099)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	for _, u := range users {
+		// fmt.Println(u)
+		for _, m := range u.MarginAccounts {
+			perpId := strings.Join(strings.Split(m.ID, "-")[:2], "-")
+			if env.InInverseContractWhiteList(perpId) {
+				fmt.Println(m.Position)
+				fmt.Println(m.TotalFee)
+				fmt.Println(m.InversePoolTotalFee)
+			}
+		}
+	}
 
 	go WaitExitSignal(stop, logger)
 

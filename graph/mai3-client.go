@@ -156,7 +156,7 @@ func (m *MAI3Client) getUserWithBlockNumberID(blockNumber int64, id string) ([]U
 			id
 			stakedMCB
 			unlockMCBTime
-			marginAccounts(where: { position_gt: 0,  totalFee_gt: 0}) {
+			marginAccounts(where: { totalFee_gt: 0}) {
 				id
 				position
 				totalFee
