@@ -230,8 +230,8 @@ func (s *TMServer) OnQueryTradingMining(w http.ResponseWriter, r *http.Request) 
 		}
 		resp := EpochTradingMiningResp{
 			Fee:          rsp.AccFee.Sub(rsp.InitFee).String(),
-			AverageOI:    (rsp.AccPosValue.Add(rsp.CurPosValue)).Div(elapsed).String(),
-			AverageStake: (rsp.AccStakeScore.Add(rsp.CurStakeScore)).Div(elapsed).String(),
+			AverageOI:    rsp.AccPosValue.Div(elapsed).String(),
+			AverageStake: rsp.AccStakeScore.Div(elapsed).String(),
 			Score:        rsp.Score.String(),
 			Proportion:   proportion,
 		}
