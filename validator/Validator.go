@@ -30,17 +30,17 @@ func NewValidator(config *Config, logger logging.Logger) (*Validator, error) {
 		},
 		Logger: glogger.Default.LogMode(glogger.Silent), // silent orm logs
 	}
-	rpls := make([]*gorm.DB, len(config.DatabaseURLs))
+	replicas := make([]*gorm.DB, len(config.DatabaseURLs))
 	for i, u := range config.DatabaseURLs {
 		db, err := gorm.Open(postgres.Open(u), conf)
 		if err != nil {
 			return nil, err
 		}
-		rpls[i] = db
+		replicas[i] = db
 	}
 	return &Validator{
 		config:   config,
-		replicas: rpls,
+		replicas: replicas,
 		logger:   logger,
 	}, nil
 }
@@ -50,35 +50,47 @@ func (v *Validator) Run(ctx context.Context) error {
 		hourly := time.Now().Unix()/3600*3600 - 3600
 		v.logger.Info("going to check snapshot at %v", hourly)
 		if hourly > v.lastChecked {
-			if err := v.run(ctx, hourly); err != nil {
+			ok, err := v.run(ctx, hourly)
+			if err != nil {
 				v.logger.Warn("error occurs while check snapshots: timestamp=%v, error=%v", formatTime(hourly), err)
-			} else {
+			} else if ok {
+				v.OnOK(ctx, hourly)
 				v.lastChecked = hourly
+			} else {
+				v.OnConflict(ctx, hourly)
 			}
+
 		}
 		time.Sleep(1 * time.Minute)
 	}
 }
 
-func (v *Validator) run(ctx context.Context, timestamp int64) error {
+func (v *Validator) FindSafeTime(ctx context.Context, endTimestamp int64) (int64, error) {
+	ts := endTimestamp / 3600 * 3600
+	for {
+		ok, err := v.run(ctx, ts)
+		if err != nil {
+			return ts, fmt.Errorf("error when looking for safe timestamp: timestamp=%v %w", ts, err)
+		}
+		if ok {
+			return ts, nil
+		}
+		ts -= 3600
+	}
+}
+
+func (v *Validator) run(ctx context.Context, timestamp int64) (bool, error) {
 	if len(v.replicas) == 0 {
-		return errors.New("no replicas")
+		return false, errors.New("no replicas")
 	}
 	ok, err := v.ensureProgress(ctx, timestamp)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if !ok {
-		return fmt.Errorf("not all replica are ready for snapshot check %w", err)
+		return false, fmt.Errorf("not all replica are ready for snapshot check %w", err)
 	}
-	ok, err = v.compareDigest(ctx, timestamp)
-	if err != nil {
-		return err
-	}
-	if ok {
-		return v.OnOK(ctx, timestamp)
-	}
-	return v.OnConflict(ctx, timestamp)
+	return v.compareDigest(ctx, timestamp)
 }
 
 func (v *Validator) OnOK(ctx context.Context, timestamp int64) error {
