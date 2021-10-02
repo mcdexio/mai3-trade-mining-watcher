@@ -228,8 +228,10 @@ func (s *Syncer) initUserStates() error {
 		if cp != p {
 			return fmt.Errorf("progress changed, somewhere may run another instance")
 		}
-		if err := s.db.Model(mining.UserInfo{}).Create(&uis).Error; err != nil {
-			return fmt.Errorf("fail to create init user info %w", err)
+		if len(uis) > 0 {
+			if err := s.db.Model(mining.UserInfo{}).Create(&uis).Error; err != nil {
+				return fmt.Errorf("fail to create init user info %w", err)
+			}
 		}
 		if err := s.setProgress(PROGRESS_INIT_FEE, s.curEpochConfig.StartTime, s.curEpochConfig.Epoch); err != nil {
 			return fmt.Errorf("fail to save sync progress %w", err)
@@ -323,32 +325,34 @@ func (s *Syncer) syncState() (int64, error) {
 		if err != nil {
 			return fmt.Errorf("failed to set cur_stake_score and cur_pos_value to 0 %w", err)
 		}
-		if err := s.db.Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "trader"}, {Name: "epoch"}},
-			DoUpdates: clause.AssignmentColumns([]string{"cur_pos_value", "cur_stake_score", "acc_fee"}),
-		}).Create(&uis).Error; err != nil {
-			return fmt.Errorf("failed to create user_info: size=%v %w", len(uis), err)
-		}
-		// 3. update score
-		var (
-			minuteCeil = int64(math.Floor((float64(np) - float64(s.curEpochConfig.StartTime)) / 60.0))
-			elapsed    = decimal.NewFromInt(minuteCeil) // Minutes
-		)
 		var all []*mining.UserInfo
-		if err := s.db.Model(mining.UserInfo{}).Where("epoch=?", s.curEpochConfig.Epoch).Find(&all).Error; err != nil {
-			return fmt.Errorf("fail to fetch all users in this epoch %w", err)
-		}
-		for _, ui := range all {
-			ui.Score = s.getScore(ui, elapsed)
-		}
-		if err := s.db.Save(&all).Error; err != nil {
-			return fmt.Errorf("failed to create user_info: size=%v %w", len(uis), err)
+		if len(uis) > 0 {
+			if err := s.db.Clauses(clause.OnConflict{
+				Columns:   []clause.Column{{Name: "trader"}, {Name: "epoch"}},
+				DoUpdates: clause.AssignmentColumns([]string{"cur_pos_value", "cur_stake_score", "acc_fee"}),
+			}).Create(&uis).Error; err != nil {
+				return fmt.Errorf("failed to create user_info: size=%v %w", len(uis), err)
+			}
+			// update score
+			var (
+				minuteCeil = int64(math.Floor((float64(np) - float64(s.curEpochConfig.StartTime)) / 60.0))
+				elapsed    = decimal.NewFromInt(minuteCeil) // Minutes
+			)
+			if err := s.db.Model(mining.UserInfo{}).Where("epoch=?", s.curEpochConfig.Epoch).Find(&all).Error; err != nil {
+				return fmt.Errorf("fail to fetch all users in this epoch %w", err)
+			}
+			for _, ui := range all {
+				ui.Score = s.getScore(ui, elapsed)
+			}
+			if err := s.db.Save(&all).Error; err != nil {
+				return fmt.Errorf("failed to create user_info: size=%v %w", len(uis), err)
+			}
 		}
 		if err := s.setProgress(PROGRESS_SYNC_STATE, np, s.curEpochConfig.Epoch); err != nil {
 			return fmt.Errorf("fail to save sync progress %w", err)
 		}
 		h := normN(np, 3600)
-		if np-60 < h && np >= h {
+		if np-60 < h && np >= h && len(all) > 0 {
 			s.logger.Info("making snapshot for %v", h)
 			snapshot := make([]*mining.Snapshot, len(all))
 			for i, u := range all {
