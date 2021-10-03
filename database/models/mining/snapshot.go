@@ -11,13 +11,14 @@ type Snapshot struct {
 	Epoch     int64  `gorm:"column:epoch;primary_key;type:bigint;not null" json:"epoch"`
 	Timestamp int64  `gorm:"column:timestamp;primary_key;type:bigint;not null" json:"timestamp"`
 
-	InitFee       decimal.Decimal `gorm:"column:init_fee;type:decimal(38,18);not null" json:"init_fee"`
-	AccFee        decimal.Decimal `gorm:"column:acc_fee;type:decimal(38,18);not null" json:"acc_fee"`
-	AccPosValue   decimal.Decimal `gorm:"column:acc_pos_value;type:decimal(38,18);not null" json:"acc_pos_value"`
-	CurPosValue   decimal.Decimal `gorm:"column:cur_pos_value;type:decimal(38,18);not null" json:"cur_pos_value"`
-	AccStakeScore decimal.Decimal `gorm:"column:acc_stake_score;type:decimal(38,18);not null" json:"acc_stake_score"`
-	CurStakeScore decimal.Decimal `gorm:"column:cur_stake_score;type:decimal(38,18);not null" json:"cur_stake_score"`
-	Score         decimal.Decimal `gorm:"column:score;type:decimal(38,18);not null" json:"score"`
+	InitFee             decimal.Decimal `gorm:"column:init_fee;type:decimal(38,18);not null" json:"init_fee"`
+	AccFee              decimal.Decimal `gorm:"column:acc_fee;type:decimal(38,18);not null" json:"acc_fee"`
+	AccPosValue         decimal.Decimal `gorm:"column:acc_pos_value;type:decimal(38,18);not null" json:"acc_pos_value"`
+	CurPosValue         decimal.Decimal `gorm:"column:cur_pos_value;type:decimal(38,18);not null" json:"cur_pos_value"`
+	AccStakeScore       decimal.Decimal `gorm:"column:acc_stake_score;type:decimal(38,18);not null" json:"acc_stake_score"`
+	CurStakeScore       decimal.Decimal `gorm:"column:cur_stake_score;type:decimal(38,18);not null" json:"cur_stake_score"`
+	EstimatedStakeScore decimal.Decimal `gorm:"column:estimated_stake_score;type:decimal(38,18);not null" json:"estimated_stake_score"`
+	Score               decimal.Decimal `gorm:"column:score;type:decimal(38,18);not null" json:"score"`
 
 	models.Base
 }

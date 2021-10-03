@@ -300,16 +300,40 @@ func (s *Syncer) getUserStateBasedOnBlockNumber(epoch *mining.Schedule, timestam
 		}
 		// ss is (unlock time - now) * u.StackedMCB <=> s = n * t
 		ss := s.getStakeScore(timestamp, u.UnlockMCBTime, u.StakedMCB)
+		estimatedStakeScore := s.getEstimatedScore(timestamp, epoch, u.UnlockMCBTime, ss)
 		ui := &mining.UserInfo{
-			Trader:        strings.ToLower(u.ID),
-			Epoch:         epoch.Epoch,
-			CurPosValue:   pv,
-			CurStakeScore: ss,
-			AccFee:        fee,
+			Trader:              strings.ToLower(u.ID),
+			Epoch:               epoch.Epoch,
+			CurPosValue:         pv,
+			CurStakeScore:       ss,
+			EstimatedStakeScore: estimatedStakeScore,
+			AccFee:              fee,
 		}
 		uis[i] = ui
 	}
 	return uis, nil
+}
+
+func (s *Syncer) getEstimatedScore(
+	nowTimestamp int64, epoch *mining.Schedule, unlockTime int64,
+	currentStakingReward decimal.Decimal,
+) decimal.Decimal {
+	// A = (1 - Floor(RemainEpochSeconds / 86400) / UnlockTimeInDays / 2) * CurrentStakingReward * RemainEpochMinutes
+	// EstimatedAverageStakingScore  = (CumulativeStakingScore + A) / TotalEpochMinutes
+
+	// floor to 0 if less than 1 day
+	remainEpochDays := math.Floor(float64(epoch.EndTime-nowTimestamp) / 86400)
+	// fmt.Printf("remainEpochDays %v\n", remainEpochDays)
+	// ceil to 1 if less than 1 day
+	unlockTimeInDays := math.Ceil(float64(unlockTime-nowTimestamp) / 86400)
+	// fmt.Printf("unlockTimeInDays %v\n", unlockTimeInDays)
+	remainProportion := decimal.NewFromFloat(1.0 - (remainEpochDays / unlockTimeInDays / 2.0))
+	// fmt.Printf("remainProportion %v\n", remainProportion)
+	// ceil to 1 if less than 1 minute
+	remainEpochMinutes := decimal.NewFromFloat(math.Ceil(float64(epoch.EndTime-nowTimestamp) / 60))
+	// fmt.Printf("remainEpochMinutes %v\n", remainEpochMinutes)
+
+	return remainProportion.Mul(currentStakingReward).Mul(remainEpochMinutes)
 }
 
 func (s *Syncer) accumulateCurValues(db *gorm.DB, epoch int64) error {
@@ -352,7 +376,7 @@ func (s *Syncer) updateUserStates(db *gorm.DB, epoch *mining.Schedule, timestamp
 	}
 	if err := db.Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "trader"}, {Name: "epoch"}},
-		DoUpdates: clause.AssignmentColumns([]string{"cur_pos_value", "cur_stake_score", "acc_fee"}),
+		DoUpdates: clause.AssignmentColumns([]string{"cur_pos_value", "cur_stake_score", "acc_fee", "estimated_stake_score"}),
 	}).Create(&users).Error; err != nil {
 		return fmt.Errorf("failed to create user_info: size=%v %w", len(users), err)
 	}
@@ -462,6 +486,7 @@ func (s Syncer) getScore(epoch *mining.Schedule, ui *mining.UserInfo, elapsed de
 		return decimal.Zero
 	}
 	stake := ui.AccStakeScore.Add(ui.CurStakeScore)
+	stake = stake.Add(ui.EstimatedStakeScore)
 	if stake.IsZero() {
 		return decimal.Zero
 	}
@@ -469,6 +494,8 @@ func (s Syncer) getScore(epoch *mining.Schedule, ui *mining.UserInfo, elapsed de
 	if posVal.IsZero() {
 		return decimal.Zero
 	}
+	// ceil to 1 if less than 1 minute
+	totalEpochMinutes := math.Ceil(float64(epoch.EndTime-epoch.StartTime) / 60)
 
 	// decimal package has issue on pow function
 	elapsedFloat, _ := elapsed.Float64()
@@ -478,7 +505,7 @@ func (s Syncer) getScore(epoch *mining.Schedule, ui *mining.UserInfo, elapsed de
 	feeFloat, _ := fee.Float64()
 	stakeFloat, _ := stake.Float64()
 	posValFloat, _ := posVal.Float64()
-	score := math.Pow(feeFloat, wFee) * math.Pow(stakeFloat/elapsedFloat, wStake) * math.Pow(posValFloat/elapsedFloat, wPos)
+	score := math.Pow(feeFloat, wFee) * math.Pow(stakeFloat/totalEpochMinutes, wStake) * math.Pow(posValFloat/elapsedFloat, wPos)
 	return decimal.NewFromFloat(score)
 }
 

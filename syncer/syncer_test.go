@@ -3,7 +3,6 @@ package syncer
 import (
 	"context"
 	"errors"
-	"fmt"
 	"math"
 	"testing"
 	"time"
@@ -229,14 +228,11 @@ func (t *SyncerTestSuite) SetupSuite() {
 
 func (t *SyncerTestSuite) TearDownSuite() {
 	t.cancel()
-	// database.DeleteAllData(types.Watcher)
+	database.DeleteAllData(types.Watcher)
 	database.Finalize()
 }
 
 func (t *SyncerTestSuite) TestState() {
-
-	fmt.Println("enter testState")
-
 	var progress mining.Progress
 	var users []mining.UserInfo
 	np := int64(0)
@@ -343,14 +339,15 @@ func (t *SyncerTestSuite) TestStakeGetScore() {
 func (t *SyncerTestSuite) TestGetScore() {
 	epoch := &mining.Schedule{
 		Epoch:     0,
-		StartTime: 0,
+		StartTime: 30,
 		EndTime:   250,
 		WeightFee: decimal.NewFromFloat(0.7),
 		WeightMCB: decimal.NewFromFloat(0.3),
 		WeightOI:  decimal.NewFromFloat(0.3),
 	}
+	// now 100, start 30
 	minuteCeil := int64(math.Ceil((100.0 - 30.0) / 60.0))
-	elapse := decimal.NewFromInt(minuteCeil) // 100 seconds -> 2 minutes
+	elapse := decimal.NewFromInt(minuteCeil) // 2 minutes
 
 	ui := mining.UserInfo{
 		InitFee:       decimal.NewFromFloat(5),
@@ -385,20 +382,23 @@ func (t *SyncerTestSuite) TestGetScore() {
 	actual = t.syncer.getScore(epoch, &ui, elapse)
 	t.Require().Equal(actual, decimal.Zero)
 
+	currentStakeReward := decimal.NewFromFloat(3)
+	estimatedStakeScore := t.syncer.getEstimatedScore(100, epoch, 60*60*24*100, currentStakeReward)
 	ui = mining.UserInfo{
-		InitFee:       decimal.NewFromFloat(2.5),
-		AccFee:        decimal.NewFromFloat(5),
-		AccPosValue:   decimal.NewFromFloat(4.5),
-		CurPosValue:   decimal.NewFromFloat(4),
-		AccStakeScore: decimal.NewFromFloat(3.5),
-		CurStakeScore: decimal.NewFromFloat(3),
+		InitFee:             decimal.NewFromFloat(2.5),
+		AccFee:              decimal.NewFromFloat(5),
+		AccPosValue:         decimal.NewFromFloat(4.5),
+		CurPosValue:         decimal.NewFromFloat(4),
+		AccStakeScore:       decimal.NewFromFloat(3.5),
+		EstimatedStakeScore: estimatedStakeScore,
+		CurStakeScore:       currentStakeReward,
 	}
 	actual = t.syncer.getScore(epoch, &ui, elapse)
 	// pow((5-2.5), 0.7) = 1.8991444823309347
-	// pow((3.5+3)/2, 0.3) = 1.4241804121672974
+	// pow(((3.5+3+9)/4), 0.3) = 1.5013484918805586
 	// pow((4.5+4)/2, 0.3) = 1.543535701445671
-	// 1.8991444823309347 * 1.4241804121672974 * 1.543535701445671 = 4.174838630152279
-	t.Require().Equal(actual.String(), decimal.NewFromFloat(4.174838630152278).String())
+	// 1.8991444823309347 * 1.5013484918805586 * 1.543535701445671 = 4.4010489315
+	t.Require().Equal(actual.String(), decimal.NewFromFloat(4.401048931494177).String())
 }
 
 func (t *SyncerTestSuite) TestDetectEpoch() {

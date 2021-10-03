@@ -221,6 +221,7 @@ func (s *TMServer) OnQueryTradingMining(w http.ResponseWriter, r *http.Request) 
 		}
 		minuteCeil := int64(math.Floor((float64(rsp.Timestamp) - float64(sch.StartTime)) / 60.0))
 		elapsed := decimal.NewFromInt(minuteCeil) // Minutes
+		totalEpochMinutes := decimal.NewFromFloat(math.Ceil(float64(sch.EndTime-sch.StartTime) / 60))
 
 		var proportion string
 		if totalScore.IsZero() {
@@ -228,10 +229,11 @@ func (s *TMServer) OnQueryTradingMining(w http.ResponseWriter, r *http.Request) 
 		} else {
 			proportion = (rsp.Score.Div(totalScore)).String()
 		}
+
 		resp := EpochTradingMiningResp{
 			Fee:          rsp.AccFee.Sub(rsp.InitFee).String(),
-			AverageOI:    rsp.AccPosValue.Div(elapsed).String(),
-			AverageStake: rsp.AccStakeScore.Div(elapsed).String(),
+			AverageOI:    rsp.AccPosValue.Add(rsp.CurPosValue).Div(elapsed).String(),
+			AverageStake: rsp.AccStakeScore.Add(rsp.EstimatedStakeScore).Div(totalEpochMinutes).String(),
 			Score:        rsp.Score.String(),
 			Proportion:   proportion,
 		}
