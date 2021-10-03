@@ -207,7 +207,7 @@ func (s *Syncer) nowWithDelay() int64 {
 	if s.syncDelaySeconds != 0 {
 		now = now - s.syncDelaySeconds
 	}
-	return norm(now)
+	return now
 }
 
 func (s *Syncer) getLastProgress(db *gorm.DB, name string) (int64, error) {
