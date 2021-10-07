@@ -33,6 +33,7 @@ type EpochTradingMiningResp struct {
 	AverageStake string `json:"averageStake"`
 	Score        string `json:"score"`
 	Proportion   string `json:"proportion"`
+	TotalScore   string `json:"totalScore"`
 }
 
 func NewTMServer(ctx context.Context, logger logging.Logger) *TMServer {
@@ -236,6 +237,7 @@ func (s *TMServer) OnQueryTradingMining(w http.ResponseWriter, r *http.Request) 
 			AverageStake: rsp.AccStakeScore.Add(rsp.EstimatedStakeScore).Div(totalEpochMinutes).String(),
 			Score:        rsp.Score.String(),
 			Proportion:   proportion,
+			TotalScore:   totalScore.String(),
 		}
 		queryTradingMiningResp[i] = &resp
 	}
