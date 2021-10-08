@@ -389,10 +389,11 @@ func (s *Syncer) updateUserScores(db *gorm.DB, epoch *mining.Schedule, timestamp
 	}
 	var (
 		minuteCeil = int64(math.Floor((float64(timestamp) - float64(epoch.StartTime)) / 60.0))
-		elapsed    = decimal.NewFromInt(minuteCeil) // Minutes
+		elapsed    = decimal.NewFromInt(minuteCeil)                                        // elapsed epoch in Minutes
+		remains    = decimal.NewFromInt((epoch.EndTime-epoch.StartTime)/60.0 - minuteCeil) // total epoch in minutes
 	)
 	for _, ui := range users {
-		ui.Score = s.getScore(epoch, ui, elapsed)
+		ui.Score = s.getScore(epoch, ui, elapsed, remains)
 	}
 	if err := db.Model(&mining.UserInfo{}).Save(&users).Error; err != nil {
 		return fmt.Errorf("failed to create user_info: size=%v %w", len(users), err)
@@ -477,7 +478,7 @@ func (s *Syncer) getStakeScore(curTime int64, unlockTime int64, staked decimal.D
 	return decimal.NewFromInt(days).Mul(staked)
 }
 
-func (s Syncer) getScore(epoch *mining.Schedule, ui *mining.UserInfo, elapsed decimal.Decimal) decimal.Decimal {
+func (s Syncer) getScore(epoch *mining.Schedule, ui *mining.UserInfo, elapsed decimal.Decimal, remains decimal.Decimal) decimal.Decimal {
 	if ui.AccFee.IsZero() {
 		return decimal.Zero
 	}
@@ -490,7 +491,8 @@ func (s Syncer) getScore(epoch *mining.Schedule, ui *mining.UserInfo, elapsed de
 	if stake.IsZero() {
 		return decimal.Zero
 	}
-	posVal := ui.AccPosValue.Add(ui.CurPosValue)
+	// EstimatedOpenInterest = (CumulativeOpenInterest + CurrentOpenInterest * RemainEpochMinutes) / TotalEpochMinutes
+	posVal := ui.AccPosValue.Add(ui.CurPosValue.Mul(remains))
 	if posVal.IsZero() {
 		return decimal.Zero
 	}
@@ -498,14 +500,13 @@ func (s Syncer) getScore(epoch *mining.Schedule, ui *mining.UserInfo, elapsed de
 	totalEpochMinutes := math.Ceil(float64(epoch.EndTime-epoch.StartTime) / 60)
 
 	// decimal package has issue on pow function
-	elapsedFloat, _ := elapsed.Float64()
 	wFee, _ := epoch.WeightFee.Float64()
 	wStake, _ := epoch.WeightMCB.Float64()
 	wPos, _ := epoch.WeightOI.Float64()
 	feeFloat, _ := fee.Float64()
 	stakeFloat, _ := stake.Float64()
 	posValFloat, _ := posVal.Float64()
-	score := math.Pow(feeFloat, wFee) * math.Pow(stakeFloat/totalEpochMinutes, wStake) * math.Pow(posValFloat/elapsedFloat, wPos)
+	score := math.Pow(feeFloat, wFee) * math.Pow(stakeFloat/totalEpochMinutes, wStake) * math.Pow(posValFloat/totalEpochMinutes, wPos)
 	return decimal.NewFromFloat(score)
 }
 
