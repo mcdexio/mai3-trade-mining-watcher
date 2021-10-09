@@ -292,7 +292,7 @@ func (t *SyncerTestSuite) TestState() {
 			// position 2*90 + 4*900 = 3780
 			// fee 10
 			// elapsed (time 180 - 0) / 60 == 3
-			// score math.pow(10, 0.7), stake math.pow((300+99*3+98*3+estimatedScore)/totalTime, 0.3), oi math.pow((4620+3780)/elapsed, 0.3)
+			// score math.pow(10, 0.7), stake math.pow((300+99*3+98*3+estimatedScore)/totalTime, 0.3), oi math.pow((4620+3780*remains)/totalTime, 0.3)
 
 			t.Require().Equal(len(users), 1)
 			t.Require().Equal(users[0].AccStakeScore.String(), decimal.NewFromInt(300+99*3).String())
@@ -303,7 +303,11 @@ func (t *SyncerTestSuite) TestState() {
 			// remainEpochDays 0, remainProportion 1, remainEpochMinutes 2, A = (1 - 0) * 98*3 * 2 = 588
 			t.Require().Equal(users[0].EstimatedStakeScore.String(), decimal.NewFromInt(588).String())
 
-			score := math.Pow(10.0, 0.7) * math.Pow((300.0+99.0*3.0+98.0*3.0+588)/totalEpochMinutes, 0.3) * math.Pow((4620.0+3780.0)/3.0, 0.3)
+			minuteCeil := int64(math.Floor((float64(users[0].Timestamp) - float64(epoch.StartTime)) / 60.0))
+			remains    := decimal.NewFromInt((epoch.EndTime-epoch.StartTime)/60.0 - minuteCeil) // total epoch in minutes
+			remainsFloat, _ := remains.Float64()
+
+			score := math.Pow(10.0, 0.7) * math.Pow((300.0+99.0*3.0+98.0*3.0+588)/totalEpochMinutes, 0.3) * math.Pow((4620.0+3780.0*remainsFloat)/totalEpochMinutes, 0.3)
 			actualScore, _ := users[0].Score.Float64()
 			t.Require().Equal(actualScore, score)
 		}
@@ -322,9 +326,13 @@ func (t *SyncerTestSuite) TestState() {
 			// remainEpochDays 0, remainProportion 1, remainEpochMinutes 2, A = (1 - 0) * 100*10 * 1 = 1000
 			t.Require().Equal(users[0].EstimatedStakeScore.String(), decimal.NewFromInt(1000).String())
 
+			minuteCeil := int64(math.Floor((float64(users[0].Timestamp) - float64(epoch.StartTime)) / 60.0))
+			remains    := decimal.NewFromInt((epoch.EndTime-epoch.StartTime)/60.0 - minuteCeil) // total epoch in minutes
+			remainsFloat, _ := remains.Float64()
+
 			score := math.Pow(15.0, 0.7) * math.Pow(
 				(300.0+99.0*3.0+98.0*3.0+1000+1000)/totalEpochMinutes, 0.3) * math.Pow(
-				(4620.0+3780.0+9700.0)/4.0, 0.3)
+				(4620.0+3780.0+9700.0*remainsFloat)/totalEpochMinutes, 0.3)
 			actualScore, _ := users[0].Score.Float64()
 			t.Require().Equal(actualScore, score)
 		}
@@ -364,7 +372,7 @@ func (t *SyncerTestSuite) TestGetScore() {
 	}
 	// now 100, start 30
 	minuteCeil := int64(math.Ceil((100.0 - 30.0) / 60.0))
-	elapse := decimal.NewFromInt(minuteCeil) // 2 minutes
+	remains    := decimal.NewFromInt((epoch.EndTime-epoch.StartTime)/60.0 - minuteCeil) // total epoch in minutes
 
 	ui := mining.UserInfo{
 		InitFee:       decimal.NewFromFloat(5),
@@ -374,7 +382,7 @@ func (t *SyncerTestSuite) TestGetScore() {
 		AccStakeScore: decimal.NewFromFloat(3.5),
 		CurStakeScore: decimal.NewFromFloat(3),
 	}
-	actual := t.syncer.getScore(epoch, &ui, elapse)
+	actual := t.syncer.getScore(epoch, &ui, remains)
 	t.Require().Equal(actual, decimal.Zero)
 
 	ui = mining.UserInfo{
@@ -385,7 +393,7 @@ func (t *SyncerTestSuite) TestGetScore() {
 		AccStakeScore: decimal.NewFromFloat(3.5),
 		CurStakeScore: decimal.NewFromFloat(3),
 	}
-	actual = t.syncer.getScore(epoch, &ui, elapse)
+	actual = t.syncer.getScore(epoch, &ui, remains)
 	t.Require().Equal(actual, decimal.Zero)
 
 	ui = mining.UserInfo{
@@ -396,7 +404,7 @@ func (t *SyncerTestSuite) TestGetScore() {
 		AccStakeScore: decimal.NewFromFloat(0),
 		CurStakeScore: decimal.NewFromFloat(0),
 	}
-	actual = t.syncer.getScore(epoch, &ui, elapse)
+	actual = t.syncer.getScore(epoch, &ui, remains)
 	t.Require().Equal(actual, decimal.Zero)
 
 	currentStakeReward := decimal.NewFromFloat(3)
@@ -410,12 +418,12 @@ func (t *SyncerTestSuite) TestGetScore() {
 		EstimatedStakeScore: estimatedStakeScore,
 		CurStakeScore:       currentStakeReward,
 	}
-	actual = t.syncer.getScore(epoch, &ui, elapse)
+	actual = t.syncer.getScore(epoch, &ui, remains)
 	// pow((5-2.5), 0.7) = 1.8991444823309347
 	// pow(((3.5+3+9)/4), 0.3) = 1.5013484918805586
-	// pow((4.5+4)/2, 0.3) = 1.543535701445671
-	// 1.8991444823309347 * 1.5013484918805586 * 1.543535701445671 = 4.4010489315
-	t.Require().Equal(actual.String(), decimal.NewFromFloat(4.401048931494177).String())
+	// pow((4.5+4*1)/4, 0.3) = 1.2537405723606492
+	// 1.8991444823309347 * 1.5013484918805586 * 1.2537405723606492 = 4.4010489315
+	t.Require().Equal(actual.String(), decimal.NewFromFloat(3.5747625410871953).String())
 }
 
 func (t *SyncerTestSuite) TestDetectEpoch() {
@@ -527,68 +535,68 @@ func (t *SyncerTestSuite) TestRestoreFromSnapshot() {
 	t.Require().Equal(decimal.NewFromInt(300+297+294).String(), user.AccStakeScore.String())
 }
 
-// func (t *SyncerTestSuite) TestRestoreTransaction() {
-// 	epoch := &mining.Schedule{
-// 		Epoch:     0,
-// 		StartTime: 0,
-// 		EndTime:   250,
-// 		WeightFee: decimal.NewFromFloat(0.7),
-// 		WeightMCB: decimal.NewFromFloat(0.3),
-// 		WeightOI:  decimal.NewFromFloat(0.3),
-// 	}
-// 	db := t.syncer.db
-// 	db.Model(&mining.Schedule{}).Delete("epoch=0")
-// 	t.Require().Equal(nil, db.Model(&mining.Schedule{}).Create(&epoch).Error)
-// 	defer database.DeleteAllData(types.Watcher)
-//
-// 	t.syncer.snapshotInterval = 120
-// 	defer func() {
-// 		t.syncer.snapshotInterval = 3600
-// 	}()
-// 	// before
-// 	{
-// 		t.syncer.syncState(t.syncer.db, epoch)         // 60, 100
-// 		t.syncer.syncState(t.syncer.db, epoch)         // 120, 99
-// 		p, _ := t.syncer.syncState(t.syncer.db, epoch) // 180, 98
-// 		t.Require().Equal(int64(180), p)
-// 	}
-//
-// 	// set mock delay
-// 	g, _ := t.syncer.mai3GraphInterface.(*MockMAI3Graph)
-// 	g.delay = 1 * time.Second
-// 	defer func() {
-// 		g.delay = 0
-// 	}()
-// 	assert := func(css, asc, ts int64) {
-// 		var user mining.UserInfo
-// 		t.syncer.db.Model(&mining.UserInfo{}).Where("epoch = 0").First(&user)
-// 		t.Require().Equal(decimal.NewFromInt(css).String(), user.CurStakeScore.String())
-// 		t.Require().Equal(decimal.NewFromInt(asc).String(), user.AccStakeScore.String())
-// 		t.Require().Equal(user.Timestamp, ts)
-// 	}
-// 	ch := make(chan bool)
-// 	go func() {
-// 		for {
-// 			select {
-// 			case <-ch:
-// 				assert(1000, 300+297+294, 240)
-// 				return
-// 			default:
-// 				assert(294, 300+297, 180)
-// 			}
-// 			time.Sleep(500 * time.Millisecond)
-// 		}
-// 	}()
-//
-// 	err := t.syncer.runRestore(context.Background(), 120)
-// 	t.Require().Equal(nil, err)
-// 	ch <- false
-// 	assert(1000, 300+297+294, 240)
-//
-// 	var progress mining.Progress
-// 	t.syncer.db.Model(&mining.Progress{}).Where("table_name = 'user_info' and epoch = 0").First(&progress)
-// 	t.Require().Equal(int64(240), progress.From)
-// }
+func (t *SyncerTestSuite) TestRestoreTransaction() {
+	epoch := &mining.Schedule{
+		Epoch:     0,
+		StartTime: 0,
+		EndTime:   250,
+		WeightFee: decimal.NewFromFloat(0.7),
+		WeightMCB: decimal.NewFromFloat(0.3),
+		WeightOI:  decimal.NewFromFloat(0.3),
+	}
+	db := t.syncer.db
+	db.Model(&mining.Schedule{}).Delete("epoch=0")
+	t.Require().Equal(nil, db.Model(&mining.Schedule{}).Create(&epoch).Error)
+	defer database.DeleteAllData(types.Watcher)
+
+	t.syncer.snapshotInterval = 120
+	defer func() {
+		t.syncer.snapshotInterval = 3600
+	}()
+	// before
+	{
+		t.syncer.syncState(t.syncer.db, epoch)         // 60, 100
+		t.syncer.syncState(t.syncer.db, epoch)         // 120, 99
+		p, _ := t.syncer.syncState(t.syncer.db, epoch) // 180, 98
+		t.Require().Equal(int64(180), p)
+	}
+
+	// set mock delay
+	g, _ := t.syncer.mai3GraphInterface.(*MockMAI3Graph)
+	g.delay = 1 * time.Second
+	defer func() {
+		g.delay = 0
+	}()
+	assert := func(css, asc, ts int64) {
+		var user mining.UserInfo
+		t.syncer.db.Model(&mining.UserInfo{}).Where("epoch = 0").First(&user)
+		t.Require().Equal(decimal.NewFromInt(css).String(), user.CurStakeScore.String())
+		t.Require().Equal(decimal.NewFromInt(asc).String(), user.AccStakeScore.String())
+		t.Require().Equal(user.Timestamp, ts)
+	}
+	ch := make(chan bool)
+	go func() {
+		for {
+			select {
+			case <-ch:
+				assert(1000, 300+297+294, 240)
+				return
+			default:
+				assert(294, 300+297, 180)
+			}
+			time.Sleep(500 * time.Millisecond)
+		}
+	}()
+
+	err := t.syncer.runRestore(context.Background(), 120)
+	t.Require().Equal(nil, err)
+	ch <- false
+	assert(1000, 300+297+294, 240)
+
+	var progress mining.Progress
+	t.syncer.db.Model(&mining.Progress{}).Where("table_name = 'user_info' and epoch = 0").First(&progress)
+	t.Require().Equal(int64(240), progress.From)
+}
 
 func TestSyncer(t *testing.T) {
 	suite.Run(t, new(SyncerTestSuite))

@@ -389,11 +389,10 @@ func (s *Syncer) updateUserScores(db *gorm.DB, epoch *mining.Schedule, timestamp
 	}
 	var (
 		minuteCeil = int64(math.Floor((float64(timestamp) - float64(epoch.StartTime)) / 60.0))
-		elapsed    = decimal.NewFromInt(minuteCeil)                                        // elapsed epoch in Minutes
 		remains    = decimal.NewFromInt((epoch.EndTime-epoch.StartTime)/60.0 - minuteCeil) // total epoch in minutes
 	)
 	for _, ui := range users {
-		ui.Score = s.getScore(epoch, ui, elapsed, remains)
+		ui.Score = s.getScore(epoch, ui, remains)
 	}
 	if err := db.Model(&mining.UserInfo{}).Save(&users).Error; err != nil {
 		return fmt.Errorf("failed to create user_info: size=%v %w", len(users), err)
@@ -478,7 +477,7 @@ func (s *Syncer) getStakeScore(curTime int64, unlockTime int64, staked decimal.D
 	return decimal.NewFromInt(days).Mul(staked)
 }
 
-func (s Syncer) getScore(epoch *mining.Schedule, ui *mining.UserInfo, elapsed decimal.Decimal, remains decimal.Decimal) decimal.Decimal {
+func (s Syncer) getScore(epoch *mining.Schedule, ui *mining.UserInfo, remains decimal.Decimal) decimal.Decimal {
 	if ui.AccFee.IsZero() {
 		return decimal.Zero
 	}
