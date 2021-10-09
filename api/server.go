@@ -135,7 +135,7 @@ func (s *TMServer) getScheduleWithEpoch(db *gorm.DB, epoch int) (sch *mining.Sch
 func (s *TMServer) getLatestSchedule(db *gorm.DB) (*mining.Schedule, error) {
 	// start from default epoch start time
 	var ss *mining.Schedule
-	if err := db.Where("end_time<?", time.Now().Unix()).Order("epoch desc").First(&ss).Error; err != nil {
+	if err := db.Where("start_time < ?", time.Now().Unix()).Order("epoch desc").First(&ss).Error; err != nil {
 		return nil, fmt.Errorf("fail to found epoch config %w", err)
 	}
 	return ss, nil
