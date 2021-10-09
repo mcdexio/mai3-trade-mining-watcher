@@ -20,7 +20,7 @@ export BLOCKS_GRAPH_URL=https://api.thegraph.com/subgraphs/name/renpu-mcarlo/arb
 
 # setting
 export DEFAULT_EPOCH_0_START_TIME=1633176000
-export RESET_DATABASE=true
+export RESET_DATABASE=false
 export SYNC_DELAY=0
 
 # inverse white list
