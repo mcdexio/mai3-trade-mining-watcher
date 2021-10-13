@@ -304,7 +304,7 @@ func (t *SyncerTestSuite) TestState() {
 			t.Require().Equal(users[0].EstimatedStakeScore.String(), decimal.NewFromInt(588).String())
 
 			minuteCeil := int64(math.Floor((float64(users[0].Timestamp) - float64(epoch.StartTime)) / 60.0))
-			remains    := decimal.NewFromInt((epoch.EndTime-epoch.StartTime)/60.0 - minuteCeil) // total epoch in minutes
+			remains := decimal.NewFromInt((epoch.EndTime-epoch.StartTime)/60.0 - minuteCeil) // total epoch in minutes
 			remainsFloat, _ := remains.Float64()
 
 			score := math.Pow(10.0, 0.7) * math.Pow((300.0+99.0*3.0+98.0*3.0+588)/totalEpochMinutes, 0.3) * math.Pow((4620.0+3780.0*remainsFloat)/totalEpochMinutes, 0.3)
@@ -327,7 +327,7 @@ func (t *SyncerTestSuite) TestState() {
 			t.Require().Equal(users[0].EstimatedStakeScore.String(), decimal.NewFromInt(1000).String())
 
 			minuteCeil := int64(math.Floor((float64(users[0].Timestamp) - float64(epoch.StartTime)) / 60.0))
-			remains    := decimal.NewFromInt((epoch.EndTime-epoch.StartTime)/60.0 - minuteCeil) // total epoch in minutes
+			remains := decimal.NewFromInt((epoch.EndTime-epoch.StartTime)/60.0 - minuteCeil) // total epoch in minutes
 			remainsFloat, _ := remains.Float64()
 
 			score := math.Pow(15.0, 0.7) * math.Pow(
@@ -372,7 +372,7 @@ func (t *SyncerTestSuite) TestGetScore() {
 	}
 	// now 100, start 30
 	minuteCeil := int64(math.Ceil((100.0 - 30.0) / 60.0))
-	remains    := decimal.NewFromInt((epoch.EndTime-epoch.StartTime)/60.0 - minuteCeil) // total epoch in minutes
+	remains := decimal.NewFromInt((epoch.EndTime-epoch.StartTime)/60.0 - minuteCeil) // total epoch in minutes
 
 	ui := mining.UserInfo{
 		InitFee:       decimal.NewFromFloat(5),
