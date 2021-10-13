@@ -63,7 +63,7 @@ func main() {
 	fmt.Println(count)
 	prices, err := client.GetMarkPrices(2771249)
 	if err != nil {
-		fmt.Println("fail to get mark prices %s", err)
+		fmt.Println(err)
 		return
 	}
 	fmt.Println(prices)
