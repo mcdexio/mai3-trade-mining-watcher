@@ -506,6 +506,9 @@ func (s Syncer) getScore(epoch *mining.Schedule, ui *mining.UserInfo, remains de
 	stakeFloat, _ := stake.Float64()
 	posValFloat, _ := posVal.Float64()
 	score := math.Pow(feeFloat, wFee) * math.Pow(stakeFloat/totalEpochMinutes, wStake) * math.Pow(posValFloat/totalEpochMinutes, wPos)
+	if math.IsNaN(score) {
+		return decimal.Zero
+	}
 	return decimal.NewFromFloat(score)
 }
 
@@ -517,10 +520,52 @@ func (s *Syncer) getOIFeeValue(accounts []*graph.MarginAccount, bn int64, cache 
 
 		// 0xc32a2dfee97e2babc90a2b5e6aef41e789ef2e13-0-0x00233150044aec4cba478d0bf0ecda0baaf5ad19
 		perpId := strings.Join(strings.Split(a.ID, "-")[:2], "-") // 0xc32a2dfee97e2babc90a2b5e6aef41e789ef2e13-0
-		// inverse contract
-		if env.InInverseContractWhiteList(perpId) {
-			oi = oi.Add(a.Position.Abs())
-			fee = fee.Add(a.InversePoolTotalFee)
+
+		match := false
+		quote := ""
+		// is BTC inverse contract
+		match, quote = env.InBTCInverseContractWhiteList(perpId)
+		if match {
+			btcPerpetualID, err := env.GetPerpetualID("BTC")
+			if err != nil {
+				return oi, fee, err
+			}
+			fee = fee.Add(a.TotalFee.Mul(cache[btcPerpetualID]))
+
+			if quote == "USD" {
+				oi = oi.Add(a.Position.Abs())
+				continue
+			}
+			// quote not USD
+			quotePerpetualID, err := env.GetPerpetualID(quote)
+			if err != nil {
+				return oi, fee, err
+			}
+			oi = oi.Add(a.Position.Abs().Mul(cache[quotePerpetualID]))
+			continue
+		}
+		match, quote = env.InETHInverseContractWhiteList(perpId)
+		if match {
+			ethPerpetualID, err := env.GetPerpetualID("ETH")
+			if err != nil {
+				return oi, fee, err
+			}
+			fee = fee.Add(a.TotalFee.Mul(cache[ethPerpetualID]))
+
+			if quote == "USD" {
+				oi = oi.Add(a.Position.Abs())
+				continue
+			}
+			// quote not USD
+			quotePerpetualID, err := env.GetPerpetualID(quote)
+			if err != nil {
+				return oi, fee, err
+			}
+			if a.Position.Abs().Mul(cache[quotePerpetualID]).GreaterThan(decimal.Zero) {
+				fmt.Printf("marginAcc %+v, fee %+v\n",a, a.TotalFee.Mul(cache[ethPerpetualID]))
+				fmt.Printf("position %+v\n", a.Position.Abs().Mul(cache[quotePerpetualID]))
+			}
+			oi = oi.Add(a.Position.Abs().Mul(cache[quotePerpetualID]))
 			continue
 		}
 

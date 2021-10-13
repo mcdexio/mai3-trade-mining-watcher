@@ -3,6 +3,7 @@ package env
 import (
 	"fmt"
 	"github.com/mcdexio/mai3-trade-mining-watcher/common/config"
+	"strings"
 )
 
 // IsCI returns true if we are in CI mode.
@@ -23,18 +24,77 @@ func ResetDatabase() bool {
 	return reset == "true"
 }
 
-var whiteList map[string]bool
+var btcWhiteList map[string]string
+var ethWhiteList map[string]string
 
-// InInverseContractWhiteList return true if this contract is inverse
-func InInverseContractWhiteList(marginAccountID string) bool {
-	if len(whiteList) != 0 {
-		return whiteList[marginAccountID]
+// InBTCInverseContractWhiteList return true, quote if this contract is inverse
+func InBTCInverseContractWhiteList(marginAccountID string) (bool, string) {
+	if len(btcWhiteList) != 0 {
+		if quote, match := btcWhiteList[marginAccountID]; match {
+			return true, quote
+		}
+		return false, ""
 	}
-	whiteList = make(map[string]bool)
-	total := config.GetInt("COUNT_INVERSE_CONTRACT_WHITELIST", 0)
+	btcWhiteList = make(map[string]string)
+	total := config.GetInt("BTC_COUNT_INVERSE_CONTRACT_WHITELIST", 0)
 	for i := 0; i < total; i++ {
-		addr := config.GetString(fmt.Sprintf("INVERSE_CONTRACT_WHITELIST%d", i))
-		whiteList[addr] = true
+		addr := config.GetString(fmt.Sprintf("BTC_INVERSE_CONTRACT_WHITELIST%d", i))
+		if i == 0 {
+			btcWhiteList[addr] = "USD"
+		}
 	}
-	return whiteList[marginAccountID]
+	if quote, match := btcWhiteList[marginAccountID]; match {
+		return true, quote
+	}
+	return false, ""
+}
+
+// InETHInverseContractWhiteList return true, quote if this contract is inverse
+func InETHInverseContractWhiteList(marginAccountID string) (bool, string) {
+	if len(ethWhiteList) != 0 {
+		if quote, match := ethWhiteList[marginAccountID]; match {
+			return true, quote
+		}
+		return false, ""
+	}
+	ethWhiteList = make(map[string]string)
+	total := config.GetInt("ETH_COUNT_INVERSE_CONTRACT_WHITELIST", 0)
+	for i := 0; i < total; i++ {
+		addr := config.GetString(fmt.Sprintf("ETH_INVERSE_CONTRACT_WHITELIST%d", i))
+		if i == 0 {
+			ethWhiteList[addr] = "USD"
+		} else if i == 1 {
+			ethWhiteList[addr] = "BTC"
+		}
+	}
+	if quote, match := ethWhiteList[marginAccountID]; match {
+		return true, quote
+	}
+	return false, ""
+}
+
+// GetPerpetualID get perpetual id depend on symbol.
+func GetPerpetualID(symbol string) (string, error) {
+	// TODO(champFu) refactor
+	network := config.GetString("NETWORK", "arb-rinkeby")
+	network = strings.ToLower(network)
+	symbol = strings.ToLower(symbol)
+	if network == "arb-rinkeby" {
+		if symbol == "eth" {
+			return "0xc32a2dfee97e2babc90a2b5e6aef41e789ef2e13-0", nil // perpetualIndex = 0 is ETH
+		} else if symbol == "btc" {
+			return "0xc32a2dfee97e2babc90a2b5e6aef41e789ef2e13-1", nil // perpetualIndex = 1 is BTC
+		}
+		return "", fmt.Errorf("fail to get perpetualID of symbol %s", symbol)
+	} else if network == "bsc" {
+		if symbol == "btc" {
+			return "0xdb282bbace4e375ff2901b84aceb33016d0d663d-0", nil
+		} else if symbol == "eth" {
+			return "0xdb282bbace4e375ff2901b84aceb33016d0d663d-1", nil
+		} else if symbol == "bnb" {
+			return "0xdb282bbace4e375ff2901b84aceb33016d0d663d-2", nil
+		}
+		return "", fmt.Errorf("fail to get perpetualID of symbol %s", symbol)
+	}
+	return "", fmt.Errorf("fail to get perpetualID of symbol %s", symbol)
 }

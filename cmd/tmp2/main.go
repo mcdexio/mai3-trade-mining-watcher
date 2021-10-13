@@ -4,11 +4,14 @@ import (
 	"context"
 	"fmt"
 	"github.com/mcdexio/mai3-trade-mining-watcher/api"
+	"github.com/mcdexio/mai3-trade-mining-watcher/common/config"
 	"github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
+	"github.com/mcdexio/mai3-trade-mining-watcher/graph"
 	"github.com/shopspring/decimal"
 	"golang.org/x/sync/errgroup"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 )
 
@@ -37,23 +40,33 @@ func main() {
 	group, ctx := errgroup.WithContext(backgroundCtx)
 
 	fmt.Println(ctx)
-	// client := graph.NewMAI3Client(logger, config.GetString("MAI3_TRADE_MINING_GRAPH_URL"))
-	// users, err := client.GetUsersBasedOnBlockNumber(5171099)
-	// if err != nil {
-	// 	fmt.Println(err)
-	// 	return
-	// }
-	// for _, u := range users {
-	// 	// fmt.Println(u)
-	// 	for _, m := range u.MarginAccounts {
-	// 		perpId := strings.Join(strings.Split(m.ID, "-")[:2], "-")
-	// 		if env.InInverseContractWhiteList(perpId) {
-	// 			fmt.Println(m.Position)
-	// 			fmt.Println(m.TotalFee)
-	// 			fmt.Println(m.InversePoolTotalFee)
-	// 		}
-	// 	}
-	// }
+
+	client := graph.NewMAI3Client(logger, config.GetString("MAI3_TRADE_MINING_GRAPH_URL"))
+	users, err := client.GetUsersBasedOnBlockNumber(2771249)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	fmt.Println(len(users))
+	count := 0
+	for _, u := range users {
+		// fmt.Println(u)
+		for _, m := range u.MarginAccounts {
+			perpId := strings.Join(strings.Split(m.ID, "-")[:2], "-")
+
+			if perpId == "0xf6b2d76c248af20009188139660a516e5c4e0532-1" {
+				count += 1
+				fmt.Println(u.ID)
+			}
+		}
+	}
+	fmt.Println(count)
+	prices, err := client.GetMarkPrices(2771249)
+	if err != nil {
+		fmt.Println("fail to get mark prices %s", err)
+		return
+	}
+	fmt.Println(prices)
 
 	go WaitExitSignal(stop, logger)
 
