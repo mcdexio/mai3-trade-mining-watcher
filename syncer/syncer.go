@@ -561,10 +561,6 @@ func (s *Syncer) getOIFeeValue(accounts []*graph.MarginAccount, bn int64, cache 
 			if err != nil {
 				return oi, fee, err
 			}
-			if a.Position.Abs().Mul(cache[quotePerpetualID]).GreaterThan(decimal.Zero) {
-				fmt.Printf("marginAcc %+v, fee %+v\n",a, a.TotalFee.Mul(cache[ethPerpetualID]))
-				fmt.Printf("position %+v\n", a.Position.Abs().Mul(cache[quotePerpetualID]))
-			}
 			oi = oi.Add(a.Position.Abs().Mul(cache[quotePerpetualID]))
 			continue
 		}
