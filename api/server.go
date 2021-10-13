@@ -316,7 +316,11 @@ func (s *TMServer) OnQueryScore(w http.ResponseWriter, r *http.Request) {
 		if totalScore.IsZero() {
 			proportion = "0"
 		} else {
-			proportion = (rsp.Score.Div(totalScore)).String()
+			if rsp.Score.GreaterThanOrEqual(totalScore) {
+				proportion = "1"
+			} else {
+				proportion = (rsp.Score.Div(totalScore)).String()
+			}
 		}
 
 		fee, oi, stake := s.calculateStat(&rsp, sch)
