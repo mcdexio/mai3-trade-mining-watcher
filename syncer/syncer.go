@@ -115,6 +115,8 @@ func (s *Syncer) restoreFromSnapshot(db *gorm.DB, checkpoint int64) error {
 			Epoch:         s.Epoch,
 			InitFee:       s.InitFee,
 			AccFee:        s.AccFee,
+			InitTotalFee:  s.InitTotalFee,
+			AccTotalFee:   s.AccTotalFee,
 			AccPosValue:   s.AccPosValue,
 			CurPosValue:   s.CurPosValue,
 			AccStakeScore: s.AccStakeScore,
@@ -247,26 +249,40 @@ func (s *Syncer) initUserStates(db *gorm.DB, epoch *mining.Schedule) error {
 	}
 	uis := make([]*mining.UserInfo, len(users))
 	for i, u := range users {
-		_, initFee, err := s.getOIFeeValue(u.MarginAccounts, startBn, prices)
+		_, totalFee, daoFee, err := s.getOIFeeValue(u.MarginAccounts, startBn, prices)
 		if err != nil {
 			return fmt.Errorf("fail to get initial fee %s", err)
 		}
 		uis[i] = &mining.UserInfo{
-			Trader:  strings.ToLower(u.ID),
-			Epoch:   epoch.Epoch,
-			InitFee: initFee,
+			Trader:       strings.ToLower(u.ID),
+			Epoch:        epoch.Epoch,
+			InitFee:      daoFee,
+			InitTotalFee: totalFee,
 		}
 	}
+
+	// update columns if conflict
+	updatedColumns := []string{"epoch", "init_fee", "init_total_fee"}
 	err = db.Transaction(func(tx *gorm.DB) error {
-		if len(uis) > 0 {
-			if err := db.Clauses(clause.OnConflict{
-				Columns:   []clause.Column{{Name: "trader"}, {Name: "epoch"}},
-				DoUpdates: clause.AssignmentColumns([]string{"epoch", "init_fee"}),
-			}).Create(&uis).Error; err != nil {
-				return fmt.Errorf("fail to create init user info %w", err)
+		lengthUis := len(uis)
+
+		if lengthUis > 0 {
+			// len(uis) > 0, because of limitation of postgresql (65535 parameters), do batch
+			for i := 0; i < lengthUis; i += 1000 {
+				toIndex := (i+1)*1000
+				if toIndex >= lengthUis {
+					toIndex = lengthUis - 1
+				}
+				uBatch := uis[i:toIndex]
+				if err = db.Clauses(clause.OnConflict{
+					Columns:   []clause.Column{{Name: "trader"}, {Name: "epoch"}},
+					DoUpdates: clause.AssignmentColumns(updatedColumns),
+				}).Create(&uBatch).Error; err != nil {
+					return fmt.Errorf("fail to create init user info %w", err)
+				}
 			}
 		}
-		if err := s.setProgress(db, PROGRESS_INIT_FEE, epoch.StartTime, epoch.Epoch); err != nil {
+		if err = s.setProgress(db, PROGRESS_INIT_FEE, epoch.StartTime, epoch.Epoch); err != nil {
 			return fmt.Errorf("fail to save sync progress %w", err)
 		}
 		return nil
@@ -294,27 +310,28 @@ func (s *Syncer) getUserStateBasedOnBlockNumber(epoch *mining.Schedule, timestam
 	}
 	uis := make([]*mining.UserInfo, len(users))
 	for i, u := range users {
-		pv, fee, err := s.getOIFeeValue(u.MarginAccounts, bn, prices)
+		pv, totalFee, daoFee, err := s.getOIFeeValue(u.MarginAccounts, bn, prices)
 		if err != nil {
 			return nil, fmt.Errorf("failed to set cur_stake_score and cur_pos_value to 0 %w", err)
 		}
 		// ss is (unlock time - now) * u.StackedMCB <=> s = n * t
 		ss := s.getStakeScore(timestamp, u.UnlockMCBTime, u.StakedMCB)
-		estimatedStakeScore := s.getEstimatedScore(timestamp, epoch, u.UnlockMCBTime, ss)
+		estimatedStakeScore := s.getEstimatedStakeScore(timestamp, epoch, u.UnlockMCBTime, ss)
 		ui := &mining.UserInfo{
 			Trader:              strings.ToLower(u.ID),
 			Epoch:               epoch.Epoch,
 			CurPosValue:         pv,
 			CurStakeScore:       ss,
 			EstimatedStakeScore: estimatedStakeScore,
-			AccFee:              fee,
+			AccFee:              daoFee,
+			AccTotalFee:         totalFee,
 		}
 		uis[i] = ui
 	}
 	return uis, nil
 }
 
-func (s *Syncer) getEstimatedScore(
+func (s *Syncer) getEstimatedStakeScore(
 	nowTimestamp int64, epoch *mining.Schedule, unlockTime int64,
 	currentStakingReward decimal.Decimal,
 ) decimal.Decimal {
@@ -374,11 +391,23 @@ func (s *Syncer) updateUserStates(db *gorm.DB, epoch *mining.Schedule, timestamp
 	if err := s.resetCurValues(db, epoch.Epoch, timestamp); err != nil {
 		return fmt.Errorf("failed to accumulate current state %w", err)
 	}
-	if err := db.Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "trader"}, {Name: "epoch"}},
-		DoUpdates: clause.AssignmentColumns([]string{"cur_pos_value", "cur_stake_score", "acc_fee", "estimated_stake_score"}),
-	}).Create(&users).Error; err != nil {
-		return fmt.Errorf("failed to create user_info: size=%v %w", len(users), err)
+
+	// update columns if conflict
+	updatedColumns := []string{"cur_pos_value", "cur_stake_score", "acc_fee", "acc_total_fee", "estimated_stake_score"}
+	// because of limitation of postgresql (65535 parameters), do batch
+	lengthUsers := len(users)
+	for i := 0; i < lengthUsers; i += 250 {
+		toIndex := (i+1)*250
+		if toIndex >= lengthUsers {
+			toIndex = lengthUsers - 1
+		}
+		uBatch := users[i:toIndex]
+		if err := db.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "trader"}, {Name: "epoch"}},
+			DoUpdates: clause.AssignmentColumns(updatedColumns),
+		}).Create(&uBatch).Error; err != nil {
+			return fmt.Errorf("failed to create user_info: size=%v %w", len(users), err)
+		}
 	}
 	return nil
 }
@@ -410,6 +439,8 @@ func (s *Syncer) makeSnapshot(db *gorm.DB, timestamp int64, users []*mining.User
 			Timestamp:     timestamp,
 			InitFee:       u.InitFee,
 			AccFee:        u.AccFee,
+			InitTotalFee:  u.InitTotalFee,
+			AccTotalFee:   u.AccTotalFee,
 			AccPosValue:   u.AccPosValue,
 			CurPosValue:   u.CurPosValue,
 			AccStakeScore: u.AccStakeScore,
@@ -512,9 +543,10 @@ func (s Syncer) getScore(epoch *mining.Schedule, ui *mining.UserInfo, remains de
 	return decimal.NewFromFloat(score)
 }
 
-func (s *Syncer) getOIFeeValue(accounts []*graph.MarginAccount, bn int64, cache map[string]decimal.Decimal) (decimal.Decimal, decimal.Decimal, error) {
-	oi := decimal.Zero
-	fee := decimal.Zero
+func (s *Syncer) getOIFeeValue(accounts []*graph.MarginAccount, bn int64, cache map[string]decimal.Decimal) (oi, totalFee, daoFee decimal.Decimal, err error) {
+	oi = decimal.Zero
+	totalFee = decimal.Zero
+	daoFee = decimal.Zero
 	for _, a := range accounts {
 		var price decimal.Decimal
 
@@ -526,40 +558,49 @@ func (s *Syncer) getOIFeeValue(accounts []*graph.MarginAccount, bn int64, cache 
 		// is BTC inverse contract
 		match, quote = env.InBTCInverseContractWhiteList(perpId)
 		if match {
-			btcPerpetualID, err := env.GetPerpetualID("BTC")
+			var btcPerpetualID, quotePerpetualID string
+
+			btcPerpetualID, err = env.GetPerpetualID("BTC")
 			if err != nil {
-				return oi, fee, err
+				return
 			}
-			fee = fee.Add(a.TotalFee.Mul(cache[btcPerpetualID]))
+			totalFee = totalFee.Add(a.TotalFee.Mul(cache[btcPerpetualID]))
+			dFee := a.OperatorFee.Add(a.VaultFee)
+			daoFee = daoFee.Add(dFee.Mul(cache[btcPerpetualID]))
 
 			if quote == "USD" {
 				oi = oi.Add(a.Position.Abs())
 				continue
 			}
 			// quote not USD
-			quotePerpetualID, err := env.GetPerpetualID(quote)
+			quotePerpetualID, err = env.GetPerpetualID(quote)
 			if err != nil {
-				return oi, fee, err
+				return
 			}
 			oi = oi.Add(a.Position.Abs().Mul(cache[quotePerpetualID]))
 			continue
 		}
+		// is ETH inverse contract
 		match, quote = env.InETHInverseContractWhiteList(perpId)
 		if match {
-			ethPerpetualID, err := env.GetPerpetualID("ETH")
+			var ethPerpetualID, quotePerpetualID string
+
+			ethPerpetualID, err = env.GetPerpetualID("ETH")
 			if err != nil {
-				return oi, fee, err
+				return
 			}
-			fee = fee.Add(a.TotalFee.Mul(cache[ethPerpetualID]))
+			totalFee = totalFee.Add(a.TotalFee.Mul(cache[ethPerpetualID]))
+			dFee := a.OperatorFee.Add(a.VaultFee)
+			daoFee = daoFee.Add(dFee.Mul(cache[ethPerpetualID]))
 
 			if quote == "USD" {
 				oi = oi.Add(a.Position.Abs())
 				continue
 			}
 			// quote not USD
-			quotePerpetualID, err := env.GetPerpetualID(quote)
+			quotePerpetualID, err = env.GetPerpetualID(quote)
 			if err != nil {
-				return oi, fee, err
+				return
 			}
 			oi = oi.Add(a.Position.Abs().Mul(cache[quotePerpetualID]))
 			continue
@@ -569,21 +610,30 @@ func (s *Syncer) getOIFeeValue(accounts []*graph.MarginAccount, bn int64, cache 
 		if v, ok := cache[perpId]; ok {
 			price = v
 		} else {
-			addr, _, index, err := splitMarginAccountID(a.ID)
+			var addr string
+			var index int
+			var p decimal.Decimal
+
+			addr, _, index, err = splitMarginAccountID(a.ID)
 			if err != nil {
-				return oi, fee, fmt.Errorf("fail to get pool address and index from id %s", err)
+				err = fmt.Errorf("fail to get pool address and index from id %s", err)
+				return
 			}
-			p, err := s.getMarkPriceWithBlockNumberAddrIndex(bn, addr, index, s.mai3GraphInterface)
+			p, err = s.getMarkPriceWithBlockNumberAddrIndex(bn, addr, index, s.mai3GraphInterface)
 			if err != nil {
-				return oi, fee, fmt.Errorf("fail to get mark price %w", err)
+				err = fmt.Errorf("fail to get mark price %w", err)
+				return
 			}
 			price = p
 			cache[perpId] = p
 		}
 		oi = oi.Add(price.Mul(a.Position).Abs())
-		fee = fee.Add(a.TotalFee)
+		totalFee = totalFee.Add(a.TotalFee)
+		dFee := a.OperatorFee.Add(a.VaultFee)
+		daoFee = daoFee.Add(dFee)
 	}
-	return oi, fee, nil
+	err = nil
+	return
 }
 
 func (s *Syncer) detectEpoch(db *gorm.DB, lastTimestamp int64) (*mining.Schedule, error) {

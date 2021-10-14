@@ -408,7 +408,7 @@ func (t *SyncerTestSuite) TestGetScore() {
 	t.Require().Equal(actual, decimal.Zero)
 
 	currentStakeReward := decimal.NewFromFloat(3)
-	estimatedStakeScore := t.syncer.getEstimatedScore(100, epoch, 60*60*24*100, currentStakeReward)
+	estimatedStakeScore := t.syncer.getEstimatedStakeScore(100, epoch, 60*60*24*100, currentStakeReward)
 	ui = mining.UserInfo{
 		InitFee:             decimal.NewFromFloat(2.5),
 		AccFee:              decimal.NewFromFloat(5),

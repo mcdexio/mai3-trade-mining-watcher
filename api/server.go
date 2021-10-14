@@ -21,6 +21,7 @@ type epochStats struct {
 	epoch           int64
 	totalTrader     int64
 	totalFee        decimal.Decimal
+	totalDaoFee     decimal.Decimal
 	totalStakeScore decimal.Decimal
 	totalOI         decimal.Decimal
 	totalScore      decimal.Decimal
@@ -29,6 +30,7 @@ type epochStats struct {
 type EpochTotalStatsResp struct {
 	TotalTrader     int64  `json:"totalTrader"`
 	TotalFee        string `json:"totalFee"`
+	TotalDaoFee     string `json:"totalDaoFee"`
 	TotalStakeScore string `json:"totalStakeScore"`
 	TotalOI         string `json:"totalOI"`
 	TotalScore      string `json:"totalScore"`
@@ -45,12 +47,12 @@ type TMServer struct {
 }
 
 type EpochScoreResp struct {
-	Fee          string `json:"fee"`
+	TotalFee     string `json:"totalFee"`
+	DaoFee       string `json:"daoFee"`
 	AverageOI    string `json:"averageOI"`
 	AverageStake string `json:"averageStake"`
 	Score        string `json:"score"`
 	Proportion   string `json:"proportion"`
-	TotalScore   string `json:"totalScore"`
 }
 
 func NewTMServer(ctx context.Context, logger logging.Logger) *TMServer {
@@ -64,6 +66,7 @@ func NewTMServer(ctx context.Context, logger logging.Logger) *TMServer {
 		epoch:           0,
 		totalTrader:     0,
 		totalFee:        decimal.Zero,
+		totalDaoFee:     decimal.Zero,
 		totalStakeScore: decimal.Zero,
 		totalOI:         decimal.Zero,
 		totalScore:      decimal.Zero,
@@ -141,7 +144,7 @@ func (s *TMServer) getLatestSchedule(db *gorm.DB) (*mining.Schedule, error) {
 	return ss, nil
 }
 
-func (s *TMServer) calculateStat(info *mining.UserInfo, schedule *mining.Schedule) (fee decimal.Decimal, oi decimal.Decimal, stake decimal.Decimal) {
+func (s *TMServer) calculateStat(info *mining.UserInfo, schedule *mining.Schedule) (totalFee, daoFee, oi, stake decimal.Decimal) {
 	if info == nil || schedule == nil {
 		return
 	}
@@ -155,7 +158,8 @@ func (s *TMServer) calculateStat(info *mining.UserInfo, schedule *mining.Schedul
 	// stake
 	stake = info.AccStakeScore.Add(info.EstimatedStakeScore).Div(totalEpochMinutes)
 	// fee
-	fee = info.AccFee.Sub(info.InitFee)
+	daoFee = info.AccFee.Sub(info.InitFee)
+	totalFee = info.AccTotalFee.Sub(info.InitTotalFee)
 	return
 }
 
@@ -200,10 +204,11 @@ func (s *TMServer) calculateTotalStats() (err error) {
 		epochStat.epoch = i
 		epochStat.totalTrader = int64(count)
 		for _, t := range traders {
-			fee, oi, stake := s.calculateStat(t, sch)
+			totalFee, daoFee, oi, stake := s.calculateStat(t, sch)
 			epochStat.totalOI = epochStat.totalOI.Add(oi)
 			epochStat.totalStakeScore = epochStat.totalStakeScore.Add(stake)
-			epochStat.totalFee = epochStat.totalFee.Add(fee)
+			epochStat.totalFee = epochStat.totalFee.Add(totalFee)
+			epochStat.totalDaoFee = epochStat.totalDaoFee.Add(daoFee)
 			epochStat.totalScore = epochStat.totalScore.Add(t.Score)
 		}
 		s.history[int(i)] = epochStat
@@ -323,15 +328,15 @@ func (s *TMServer) OnQueryScore(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		fee, oi, stake := s.calculateStat(&rsp, sch)
+		totalFee, daoFee, oi, stake := s.calculateStat(&rsp, sch)
 
 		resp := EpochScoreResp{
-			Fee:          fee.String(),
+			TotalFee:     totalFee.String(),
+			DaoFee:       daoFee.String(),
 			AverageOI:    oi.String(),
 			AverageStake: stake.String(),
 			Score:        rsp.Score.String(),
 			Proportion:   proportion,
-			TotalScore:   totalScore.String(),
 		}
 		queryTradingMiningResp[i] = &resp
 	}

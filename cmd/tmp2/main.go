@@ -11,7 +11,6 @@ import (
 	"golang.org/x/sync/errgroup"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 )
 
@@ -42,7 +41,7 @@ func main() {
 	fmt.Println(ctx)
 
 	client := graph.NewMAI3Client(logger, config.GetString("MAI3_TRADE_MINING_GRAPH_URL"))
-	users, err := client.GetUsersBasedOnBlockNumber(2771249)
+	users, err := client.GetUsersBasedOnBlockNumber(5573054)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -52,21 +51,12 @@ func main() {
 	for _, u := range users {
 		// fmt.Println(u)
 		for _, m := range u.MarginAccounts {
-			perpId := strings.Join(strings.Split(m.ID, "-")[:2], "-")
-
-			if perpId == "0xf6b2d76c248af20009188139660a516e5c4e0532-1" {
-				count += 1
-				fmt.Println(u.ID)
+			if m.VaultFee.GreaterThan(decimal.Zero) {
+				fmt.Printf("userID %s, totalFee %s, vaultFee %s, operatorFee %s\n", u.ID, m.TotalFee.String(), m.VaultFee.String(), m.OperatorFee.String())
 			}
 		}
 	}
 	fmt.Println(count)
-	prices, err := client.GetMarkPrices(2771249)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	fmt.Println(prices)
 
 	go WaitExitSignal(stop, logger)
 
