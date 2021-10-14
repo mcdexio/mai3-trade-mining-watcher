@@ -272,7 +272,7 @@ func (s *Syncer) initUserStates(db *gorm.DB, epoch *mining.Schedule) error {
 				fromIndex := i*500
 				toIndex := (i+1)*500
 				if toIndex >= lengthUis {
-					toIndex = lengthUis - 1
+					toIndex = lengthUis
 				}
 				uBatch := uis[fromIndex:toIndex]
 				if err = db.Clauses(clause.OnConflict{
@@ -401,9 +401,10 @@ func (s *Syncer) updateUserStates(db *gorm.DB, epoch *mining.Schedule, timestamp
 		fromIndex := i*500
 		toIndex := (i+1)*500
 		if toIndex >= lengthUsers {
-			toIndex = lengthUsers - 1
+			toIndex = lengthUsers
 		}
-		uBatch := users[fromIndex:toIndex]
+		uBatch := make([]*mining.UserInfo, toIndex-fromIndex)
+		uBatch = users[fromIndex:toIndex]
 		if err := db.Clauses(clause.OnConflict{
 			Columns:   []clause.Column{{Name: "trader"}, {Name: "epoch"}},
 			DoUpdates: clause.AssignmentColumns(updatedColumns),
