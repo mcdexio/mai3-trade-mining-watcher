@@ -239,7 +239,7 @@ func (s *Syncer) initUserStates(db *gorm.DB, epoch *mining.Schedule) error {
 	if err != nil {
 		return err
 	}
-	users, err := s.getUsersBasedOnBlockNumber(startBn, s.mai3GraphInterface)
+	users, err := s.getUsersBasedOnBlockNumber(startBn-1, s.mai3GraphInterface)
 	if err != nil {
 		return err
 	}
