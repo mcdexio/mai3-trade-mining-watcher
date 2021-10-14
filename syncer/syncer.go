@@ -502,7 +502,13 @@ func (s Syncer) getScore(epoch *mining.Schedule, ui *mining.UserInfo, remains de
 	if ui.AccFee.IsZero() {
 		return decimal.Zero
 	}
-	fee := ui.AccFee.Sub(ui.InitFee)
+	fee := decimal.Zero
+	if epoch.Epoch == 0 {
+		// epoch 0 is totalFee
+		fee = ui.AccTotalFee.Sub(ui.InitTotalFee)
+	} else {
+		fee = ui.AccFee.Sub(ui.InitFee)
+	}
 	if fee.IsZero() {
 		return decimal.Zero
 	}
