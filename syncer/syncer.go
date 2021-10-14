@@ -268,12 +268,13 @@ func (s *Syncer) initUserStates(db *gorm.DB, epoch *mining.Schedule) error {
 
 		if lengthUis > 0 {
 			// len(uis) > 0, because of limitation of postgresql (65535 parameters), do batch
-			for i := 0; i < lengthUis; i += 1000 {
-				toIndex := (i+1)*1000
+			for i := 0; i*500 < lengthUis; i++ {
+				fromIndex := i*500
+				toIndex := (i+1)*500
 				if toIndex >= lengthUis {
 					toIndex = lengthUis - 1
 				}
-				uBatch := uis[i:toIndex]
+				uBatch := uis[fromIndex:toIndex]
 				if err = db.Clauses(clause.OnConflict{
 					Columns:   []clause.Column{{Name: "trader"}, {Name: "epoch"}},
 					DoUpdates: clause.AssignmentColumns(updatedColumns),
@@ -396,17 +397,18 @@ func (s *Syncer) updateUserStates(db *gorm.DB, epoch *mining.Schedule, timestamp
 	updatedColumns := []string{"cur_pos_value", "cur_stake_score", "acc_fee", "acc_total_fee", "estimated_stake_score"}
 	// because of limitation of postgresql (65535 parameters), do batch
 	lengthUsers := len(users)
-	for i := 0; i < lengthUsers; i += 250 {
-		toIndex := (i+1)*250
+	for i := 0; i*500 < lengthUsers; i++ {
+		fromIndex := i*500
+		toIndex := (i+1)*500
 		if toIndex >= lengthUsers {
 			toIndex = lengthUsers - 1
 		}
-		uBatch := users[i:toIndex]
+		uBatch := users[fromIndex:toIndex]
 		if err := db.Clauses(clause.OnConflict{
 			Columns:   []clause.Column{{Name: "trader"}, {Name: "epoch"}},
 			DoUpdates: clause.AssignmentColumns(updatedColumns),
 		}).Create(&uBatch).Error; err != nil {
-			return fmt.Errorf("failed to create user_info: size=%v %w", len(users), err)
+			return fmt.Errorf("failed to create user_info: size=%v %w", len(uBatch), err)
 		}
 	}
 	return nil
