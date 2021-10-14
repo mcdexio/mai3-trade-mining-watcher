@@ -25,10 +25,8 @@ type MarginAccount struct {
 	ID             string          `json:"id"`
 	Position       decimal.Decimal `json:"position"`
 	TotalFee       decimal.Decimal `json:"totalFee"`
-	LpFee          decimal.Decimal `json:"lpFee"`
 	VaultFee       decimal.Decimal `json:"vaultFee"`
 	OperatorFee    decimal.Decimal `json:"operatorFee"`
-	ReferralRebate decimal.Decimal `json:"referralRebate"`
 }
 
 type MarkPrice struct {
