@@ -499,7 +499,7 @@ func (s *Syncer) getStakeScore(curTime int64, unlockTime int64, staked decimal.D
 }
 
 func (s Syncer) getScore(epoch *mining.Schedule, ui *mining.UserInfo, remains decimal.Decimal) decimal.Decimal {
-	if ui.AccFee.IsZero() {
+	if ui.AccTotalFee.IsZero() {
 		return decimal.Zero
 	}
 	fee := decimal.Zero
@@ -509,17 +509,17 @@ func (s Syncer) getScore(epoch *mining.Schedule, ui *mining.UserInfo, remains de
 	} else {
 		fee = ui.AccFee.Sub(ui.InitFee)
 	}
-	if fee.IsZero() {
+	if fee.LessThanOrEqual(decimal.Zero) {
 		return decimal.Zero
 	}
 	stake := ui.AccStakeScore.Add(ui.CurStakeScore)
 	stake = stake.Add(ui.EstimatedStakeScore)
-	if stake.IsZero() {
+	if stake.LessThanOrEqual(decimal.Zero) {
 		return decimal.Zero
 	}
 	// EstimatedOpenInterest = (CumulativeOpenInterest + CurrentOpenInterest * RemainEpochMinutes) / TotalEpochMinutes
 	posVal := ui.AccPosValue.Add(ui.CurPosValue.Mul(remains))
-	if posVal.IsZero() {
+	if posVal.LessThanOrEqual(decimal.Zero) {
 		return decimal.Zero
 	}
 	// ceil to 1 if less than 1 minute
