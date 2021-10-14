@@ -265,22 +265,13 @@ func (s *Syncer) initUserStates(db *gorm.DB, epoch *mining.Schedule) error {
 	updatedColumns := []string{"epoch", "init_fee", "init_total_fee"}
 	err = db.Transaction(func(tx *gorm.DB) error {
 		lengthUis := len(uis)
-
 		if lengthUis > 0 {
 			// len(uis) > 0, because of limitation of postgresql (65535 parameters), do batch
-			for i := 0; i*500 < lengthUis; i++ {
-				fromIndex := i*500
-				toIndex := (i+1)*500
-				if toIndex >= lengthUis {
-					toIndex = lengthUis
-				}
-				uBatch := uis[fromIndex:toIndex]
-				if err = db.Clauses(clause.OnConflict{
-					Columns:   []clause.Column{{Name: "trader"}, {Name: "epoch"}},
-					DoUpdates: clause.AssignmentColumns(updatedColumns),
-				}).Create(&uBatch).Error; err != nil {
-					return fmt.Errorf("fail to create init user info %w", err)
-				}
+			if err = db.Clauses(clause.OnConflict{
+				Columns:   []clause.Column{{Name: "trader"}, {Name: "epoch"}},
+				DoUpdates: clause.AssignmentColumns(updatedColumns),
+			}).CreateInBatches(&uis, 500).Error; err != nil {
+				return fmt.Errorf("fail to create init user info %w", err)
 			}
 		}
 		if err = s.setProgress(db, PROGRESS_INIT_FEE, epoch.StartTime, epoch.Epoch); err != nil {
@@ -396,21 +387,11 @@ func (s *Syncer) updateUserStates(db *gorm.DB, epoch *mining.Schedule, timestamp
 	// update columns if conflict
 	updatedColumns := []string{"cur_pos_value", "cur_stake_score", "acc_fee", "acc_total_fee", "estimated_stake_score"}
 	// because of limitation of postgresql (65535 parameters), do batch
-	lengthUsers := len(users)
-	for i := 0; i*500 < lengthUsers; i++ {
-		fromIndex := i*500
-		toIndex := (i+1)*500
-		if toIndex >= lengthUsers {
-			toIndex = lengthUsers
-		}
-		uBatch := make([]*mining.UserInfo, toIndex-fromIndex)
-		uBatch = users[fromIndex:toIndex]
-		if err := db.Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "trader"}, {Name: "epoch"}},
-			DoUpdates: clause.AssignmentColumns(updatedColumns),
-		}).Create(&uBatch).Error; err != nil {
-			return fmt.Errorf("failed to create user_info: size=%v %w", len(uBatch), err)
-		}
+	if err := db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "trader"}, {Name: "epoch"}},
+		DoUpdates: clause.AssignmentColumns(updatedColumns),
+	}).CreateInBatches(&users, 500).Error; err != nil {
+		return fmt.Errorf("failed to create user_info: size=%v %w", len(users), err)
 	}
 	return nil
 }
@@ -426,7 +407,13 @@ func (s *Syncer) updateUserScores(db *gorm.DB, epoch *mining.Schedule, timestamp
 	for _, ui := range users {
 		ui.Score = s.getScore(epoch, ui, remains)
 	}
-	if err := db.Model(&mining.UserInfo{}).Save(&users).Error; err != nil {
+	// update columns if conflict
+	updatedColumns := []string{"score"}
+	// because of limitation of postgresql (65535 parameters), do batch
+	if err := db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "trader"}, {Name: "epoch"}},
+		DoUpdates: clause.AssignmentColumns(updatedColumns),
+	}).CreateInBatches(&users, 500).Error; err != nil {
 		return fmt.Errorf("failed to create user_info: size=%v %w", len(users), err)
 	}
 	return nil
@@ -477,14 +464,14 @@ func (s *Syncer) syncState(db *gorm.DB, epoch *mining.Schedule) (int64, error) {
 	}
 	err = db.Transaction(func(tx *gorm.DB) error {
 		if err := s.updateUserStates(tx, epoch, np, newStates); err != nil {
-			return fmt.Errorf("fail to update current user states: timestamp=%v %w", np, err)
+			return fmt.Errorf("fail to updateUserStates: timestamp=%v %w", np, err)
 		}
 		var allStates []*mining.UserInfo
 		if err := tx.Where("epoch=?", epoch.Epoch).Find(&allStates).Error; err != nil {
 			return fmt.Errorf("fail to fetch all users in this epoch %w", err)
 		}
 		if err := s.updateUserScores(tx, epoch, np, allStates); err != nil {
-			return fmt.Errorf("fail to update current user states: timestamp=%v %w", np, err)
+			return fmt.Errorf("fail to updateUserScores: timestamp=%v %w", np, err)
 		}
 		if err := s.setProgress(tx, PROGRESS_SYNC_STATE, np, epoch.Epoch); err != nil {
 			return fmt.Errorf("fail to save sync progress %w", err)
