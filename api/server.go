@@ -289,7 +289,7 @@ func (s *TMServer) OnQueryScore(w http.ResponseWriter, r *http.Request) {
 			"trader = ? and epoch = ?", traderID, i).First(&rsp).Error
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				s.logger.Info("user %s not found in db", traderID)
+				s.logger.Info("user %s not found in db epoch %d", traderID, i)
 			} else {
 				s.logger.Error("failed to get value from user info table err=%s", err)
 				s.jsonError(w, "internal error", 400)
