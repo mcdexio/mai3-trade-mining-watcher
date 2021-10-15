@@ -2,13 +2,12 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"github.com/mcdexio/mai3-trade-mining-watcher/api"
-	"github.com/mcdexio/mai3-trade-mining-watcher/common/config"
 	"github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
-	"github.com/mcdexio/mai3-trade-mining-watcher/graph"
+	database "github.com/mcdexio/mai3-trade-mining-watcher/database/db"
+	"github.com/mcdexio/mai3-trade-mining-watcher/database/models/mining"
 	"github.com/shopspring/decimal"
-	"golang.org/x/sync/errgroup"
+	"gorm.io/gorm"
 	"os"
 	"os/signal"
 	"syscall"
@@ -29,40 +28,39 @@ func main() {
 	logging.Initialize(name)
 	defer logging.Finalize()
 	logger := logging.NewLoggerTag(name)
-	// db := database.GetDB()
+	db := database.GetDB()
 
-	score := make(map[int]epochStats)
-	fmt.Println(score[0].totalScore)
-	fmt.Println(score[1])
+	migrationAddUserInfoColumn(db, "AccTotalFee", logger)
+	migrationAddUserInfoColumn(db, "InitTotalFee", logger)
+	migrationAddSnapshotColumn(db, "AccTotalFee", logger)
+	migrationAddSnapshotColumn(db, "InitTotalFee", logger)
 
-	backgroundCtx, stop := context.WithCancel(context.Background())
-	group, ctx := errgroup.WithContext(backgroundCtx)
+	// backgroundCtx, stop := context.WithCancel(context.Background())
+	// group, ctx := errgroup.WithContext(backgroundCtx)
 
-	fmt.Println(ctx)
+	// fmt.Println(ctx)
 
-	client := graph.NewMAI3Client(logger, config.GetString("MAI3_TRADE_MINING_GRAPH_URL"))
-	users, err := client.GetUsersBasedOnBlockNumber(5573054)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	fmt.Println(len(users))
-	count := 0
-	for _, u := range users {
-		// fmt.Println(u)
-		for _, m := range u.MarginAccounts {
-			if m.VaultFee.GreaterThan(decimal.Zero) {
-				fmt.Printf("userID %s, totalFee %s, vaultFee %s, operatorFee %s\n", u.ID, m.TotalFee.String(), m.VaultFee.String(), m.OperatorFee.String())
-			}
-		}
-	}
-	fmt.Println(count)
+	// client := graph.NewMAI3Client(logger, config.GetString("MAI3_TRADE_MINING_GRAPH_URL"))
+	// users, err := client.GetUsersBasedOnBlockNumber(5573054)
+	// if err != nil {
+	// 	fmt.Println(err)
+	// 	return
+	// }
+	// fmt.Println(len(users))
+	// for _, u := range users {
+	// 	// fmt.Println(u)
+	// 	for _, m := range u.MarginAccounts {
+	// 		if m.VaultFee.GreaterThan(decimal.Zero) || m.OperatorFee.GreaterThan(decimal.Zero) {
+	// 			fmt.Printf("userID %s, totalFee %s, vaultFee %s, operatorFee %s\n", u.ID, m.TotalFee.String(), m.VaultFee.String(), m.OperatorFee.String())
+	// 		}
+	// 	}
+	// }
 
-	go WaitExitSignal(stop, logger)
+	// go WaitExitSignal(stop, logger)
 
-	if err := group.Wait(); err != nil {
-		logger.Critical("service stopped: %s", err)
-	}
+	// if err := group.Wait(); err != nil {
+	// 	logger.Critical("service stopped: %s", err)
+	// }
 }
 
 func WaitExitSignal(ctxStop context.CancelFunc, logger logging.Logger) {
@@ -86,4 +84,30 @@ func WaitExitSignalWithServer(ctxStop context.CancelFunc, logger logging.Logger,
 		logger.Error("Server shutdown failed:%+v", err)
 	}
 	ctxStop()
+}
+
+func migrationAddUserInfoColumn(db *gorm.DB, columnName string, logger logging.Logger) {
+	isExist := db.Migrator().HasColumn(&mining.UserInfo{}, columnName)
+	if isExist {
+		logger.Info("column %s is exist in user_info table", columnName)
+		return
+	}
+	err := db.Migrator().AddColumn(&mining.UserInfo{}, columnName)
+	if err != nil {
+		logger.Warn("failed to add column %s in user_info table", columnName)
+	}
+	return
+}
+
+func migrationAddSnapshotColumn(db *gorm.DB, columnName string, logger logging.Logger) {
+	isExist := db.Migrator().HasColumn(&mining.Snapshot{}, columnName)
+	if isExist {
+		logger.Info("column %s is exist in snapshot table", columnName)
+		return
+	}
+	err := db.Migrator().AddColumn(&mining.Snapshot{}, columnName)
+	if err != nil {
+		logger.Warn("failed to add column %s in snapshot table", columnName)
+	}
+	return
 }

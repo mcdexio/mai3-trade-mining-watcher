@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"github.com/mcdexio/mai3-trade-mining-watcher/database/models/mining"
+	"gorm.io/gorm"
 	"os"
 	"os/signal"
 	"syscall"
@@ -30,6 +32,12 @@ func main() {
 	if env.ResetDatabase() {
 		database.Reset(database.GetDB(), types.Watcher, true)
 	}
+
+	db := database.GetDB()
+	migrationAddUserInfoColumn(db, "AccTotalFee", logger)
+	migrationAddUserInfoColumn(db, "InitTotalFee", logger)
+	migrationAddSnapshotColumn(db, "AccTotalFee", logger)
+	migrationAddSnapshotColumn(db, "InitTotalFee", logger)
 
 	backgroundCtx, stop := context.WithCancel(context.Background())
 	group, ctx := errgroup.WithContext(backgroundCtx)
@@ -110,4 +118,32 @@ func optional(names ...string) []string {
 func mustParseDuration(s string) time.Duration {
 	d, _ := time.ParseDuration(s)
 	return d
+}
+
+func migrationAddUserInfoColumn(db *gorm.DB, columnName string, logger logging.Logger) {
+	isExist := db.Migrator().HasColumn(&mining.UserInfo{}, columnName)
+	if isExist {
+		logger.Info("column %s is exist in user_info table", columnName)
+		return
+	}
+	err := db.Migrator().AddColumn(&mining.UserInfo{}, columnName)
+	if err != nil {
+		logger.Warn("failed to add column %s in user_info table", columnName)
+	}
+	logger.Info("migration: add new column %s in user_info table", columnName)
+	return
+}
+
+func migrationAddSnapshotColumn(db *gorm.DB, columnName string, logger logging.Logger) {
+	isExist := db.Migrator().HasColumn(&mining.Snapshot{}, columnName)
+	if isExist {
+		logger.Info("column %s is exist in snapshot table", columnName)
+		return
+	}
+	err := db.Migrator().AddColumn(&mining.Snapshot{}, columnName)
+	if err != nil {
+		logger.Warn("failed to add column %s in snapshot table", columnName)
+	}
+	logger.Info("migration: add new column %s in snapshot table", columnName)
+	return
 }

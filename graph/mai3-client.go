@@ -22,11 +22,11 @@ type User struct {
 }
 
 type MarginAccount struct {
-	ID             string          `json:"id"`
-	Position       decimal.Decimal `json:"position"`
-	TotalFee       decimal.Decimal `json:"totalFee"`
-	VaultFee       decimal.Decimal `json:"vaultFee"`
-	OperatorFee    decimal.Decimal `json:"operatorFee"`
+	ID          string          `json:"id"`
+	Position    decimal.Decimal `json:"position"`
+	TotalFee    decimal.Decimal `json:"totalFee"`
+	VaultFee    decimal.Decimal `json:"vaultFee"`
+	OperatorFee decimal.Decimal `json:"operatorFee"`
 }
 
 type MarkPrice struct {

@@ -20,7 +20,7 @@ func LogColor() bool {
 
 // ResetDatabase returns true if want reset database.
 func ResetDatabase() bool {
-	reset := config.GetString("RESET_DATABASE")
+	reset := config.GetString("RESET_DATABASE", "false")
 	return reset == "true"
 }
 
