@@ -165,7 +165,6 @@ func (s *TMServer) calculateStat(info *mining.UserInfo, schedule *mining.Schedul
 
 func (s *TMServer) calculateTotalStats() (err error) {
 	s.logger.Info("calculateTotalStats.....")
-	lastEpoch := s.nowEpoch
 
 	var schedule *mining.Schedule
 	for {
@@ -179,8 +178,8 @@ func (s *TMServer) calculateTotalStats() (err error) {
 	}
 	s.nowEpoch = schedule.Epoch
 
-	s.logger.Info("calculate total status from %d to this epoch %d", lastEpoch, s.nowEpoch)
-	for i := lastEpoch; i <= s.nowEpoch; i++ {
+	s.logger.Info("calculate total status from 0 to this epoch %d", s.nowEpoch)
+	for i := int64(0); i <= s.nowEpoch; i++ {
 		var traders []*mining.UserInfo
 		err = s.db.Model(&mining.UserInfo{}).Where("epoch = ?", i).Scan(&traders).Error
 		if err != nil {
