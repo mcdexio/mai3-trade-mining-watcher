@@ -39,7 +39,7 @@ func (mockMAI3 *MockMAI3Graph) GetUsersBasedOnBlockNumber(blockNumber int64) ([]
 	if mockMAI3.delay > 0 {
 		time.Sleep(mockMAI3.delay)
 	}
-	if blockNumber == 0 {
+	if blockNumber <= 0 {
 		return []graph.User{
 			{
 				ID:             "0xUser1",
@@ -86,14 +86,18 @@ func (mockMAI3 *MockMAI3Graph) GetUsersBasedOnBlockNumber(blockNumber int64) ([]
 				UnlockMCBTime: 60 * 60 * 24 * 98, // 98 days
 				MarginAccounts: []*graph.MarginAccount{
 					{
-						ID:       "0xPool-0-0xUser1",
-						TotalFee: decimal.NewFromFloat(3),
-						Position: decimal.NewFromFloat(2),
+						ID:          "0xPool-0-0xUser1",
+						TotalFee:    decimal.NewFromFloat(3),
+						VaultFee:    decimal.NewFromFloat(3 / 4),
+						OperatorFee: decimal.NewFromFloat(3 / 4),
+						Position:    decimal.NewFromFloat(2),
 					},
 					{
-						ID:       "0xPool-1-0xUser1",
-						TotalFee: decimal.NewFromFloat(7),
-						Position: decimal.NewFromFloat(4),
+						ID:          "0xPool-1-0xUser1",
+						TotalFee:    decimal.NewFromFloat(7),
+						VaultFee:    decimal.NewFromFloat(7 / 4),
+						OperatorFee: decimal.NewFromFloat(7 / 4),
+						Position:    decimal.NewFromFloat(4),
 					},
 				},
 			},
@@ -107,14 +111,18 @@ func (mockMAI3 *MockMAI3Graph) GetUsersBasedOnBlockNumber(blockNumber int64) ([]
 				UnlockMCBTime: 60 * 60 * 24 * 100, // 100 days
 				MarginAccounts: []*graph.MarginAccount{
 					{
-						ID:       "0xPool-0-0xUser1",
-						TotalFee: decimal.NewFromFloat(5),
-						Position: decimal.NewFromFloat(7),
+						ID:          "0xPool-0-0xUser1",
+						TotalFee:    decimal.NewFromFloat(5),
+						VaultFee:    decimal.NewFromFloat(5 / 4),
+						OperatorFee: decimal.NewFromFloat(5 / 4),
+						Position:    decimal.NewFromFloat(7),
 					},
 					{
-						ID:       "0xPool-1-0xUser1",
-						TotalFee: decimal.NewFromFloat(10),
-						Position: decimal.NewFromFloat(9),
+						ID:          "0xPool-1-0xUser1",
+						TotalFee:    decimal.NewFromFloat(10),
+						VaultFee:    decimal.NewFromFloat(10 / 4),
+						OperatorFee: decimal.NewFromFloat(10 / 4),
+						Position:    decimal.NewFromFloat(9),
 					},
 				},
 			},
@@ -226,6 +234,7 @@ func (t *SyncerTestSuite) SetupSuite() {
 		blockGraphInterface: NewMockBlockGraph(),
 		mai3GraphInterface:  NewMockMAI3Graph(),
 		db:                  database.GetDB(),
+		snapshotInterval:    3600,
 	}
 	t.cancel = cancel
 }
@@ -249,6 +258,11 @@ func (t *SyncerTestSuite) TestState() {
 		WeightMCB: decimal.NewFromFloat(0.3),
 		WeightOI:  decimal.NewFromFloat(0.3),
 	}
+
+	db := t.syncer.db
+	db.Model(&mining.Schedule{}).Delete("epoch=0")
+	db.Model(&mining.UserInfo{}).Delete("epoch=0")
+	defer database.DeleteAllData(types.Watcher)
 
 	err := t.syncer.initUserStates(t.syncer.db, epoch)
 	t.Require().Equal(err, nil)
@@ -299,7 +313,7 @@ func (t *SyncerTestSuite) TestState() {
 			t.Require().Equal(users[0].CurStakeScore.String(), decimal.NewFromInt(98*3).String())
 			t.Require().Equal(users[0].AccPosValue.String(), decimal.NewFromInt(4620).String())
 			t.Require().Equal(users[0].CurPosValue.String(), decimal.NewFromInt(3780).String())
-			t.Require().Equal(users[0].AccFee.String(), decimal.NewFromInt(10).String())
+			t.Require().Equal(users[0].AccTotalFee.String(), decimal.NewFromInt(10).String())
 			// remainEpochDays 0, remainProportion 1, remainEpochMinutes 2, A = (1 - 0) * 98*3 * 2 = 588
 			t.Require().Equal(users[0].EstimatedStakeScore.String(), decimal.NewFromInt(588).String())
 
@@ -322,7 +336,7 @@ func (t *SyncerTestSuite) TestState() {
 			t.Require().Equal(users[0].CurStakeScore.String(), decimal.NewFromInt(1000).String())
 			t.Require().Equal(users[0].AccPosValue.String(), decimal.NewFromInt(4620+3780).String())
 			t.Require().Equal(users[0].CurPosValue.String(), decimal.NewFromInt(9700).String())
-			t.Require().Equal(users[0].AccFee.String(), decimal.NewFromInt(15).String())
+			t.Require().Equal(users[0].AccTotalFee.String(), decimal.NewFromInt(15).String())
 			// remainEpochDays 0, remainProportion 1, remainEpochMinutes 2, A = (1 - 0) * 100*10 * 1 = 1000
 			t.Require().Equal(users[0].EstimatedStakeScore.String(), decimal.NewFromInt(1000).String())
 
@@ -375,8 +389,8 @@ func (t *SyncerTestSuite) TestGetScore() {
 	remains := decimal.NewFromInt((epoch.EndTime-epoch.StartTime)/60.0 - minuteCeil) // total epoch in minutes
 
 	ui := mining.UserInfo{
-		InitFee:       decimal.NewFromFloat(5),
-		AccFee:        decimal.NewFromFloat(5),
+		InitTotalFee:  decimal.NewFromFloat(5),
+		AccTotalFee:   decimal.NewFromFloat(5),
 		AccPosValue:   decimal.NewFromFloat(4.5),
 		CurPosValue:   decimal.NewFromFloat(4),
 		AccStakeScore: decimal.NewFromFloat(3.5),
@@ -386,8 +400,8 @@ func (t *SyncerTestSuite) TestGetScore() {
 	t.Require().Equal(actual, decimal.Zero)
 
 	ui = mining.UserInfo{
-		InitFee:       decimal.NewFromFloat(5),
-		AccFee:        decimal.NewFromFloat(213),
+		InitTotalFee:  decimal.NewFromFloat(5),
+		AccTotalFee:   decimal.NewFromFloat(213),
 		AccPosValue:   decimal.NewFromFloat(0),
 		CurPosValue:   decimal.NewFromFloat(0),
 		AccStakeScore: decimal.NewFromFloat(3.5),
@@ -397,8 +411,8 @@ func (t *SyncerTestSuite) TestGetScore() {
 	t.Require().Equal(actual, decimal.Zero)
 
 	ui = mining.UserInfo{
-		InitFee:       decimal.NewFromFloat(5),
-		AccFee:        decimal.NewFromFloat(56),
+		InitTotalFee:  decimal.NewFromFloat(5),
+		AccTotalFee:   decimal.NewFromFloat(56),
 		AccPosValue:   decimal.NewFromFloat(12345),
 		CurPosValue:   decimal.NewFromFloat(12),
 		AccStakeScore: decimal.NewFromFloat(0),
@@ -410,8 +424,8 @@ func (t *SyncerTestSuite) TestGetScore() {
 	currentStakeReward := decimal.NewFromFloat(3)
 	estimatedStakeScore := t.syncer.getEstimatedStakeScore(100, epoch, 60*60*24*100, currentStakeReward)
 	ui = mining.UserInfo{
-		InitFee:             decimal.NewFromFloat(2.5),
-		AccFee:              decimal.NewFromFloat(5),
+		InitTotalFee:        decimal.NewFromFloat(2.5),
+		AccTotalFee:         decimal.NewFromFloat(5),
 		AccPosValue:         decimal.NewFromFloat(4.5),
 		CurPosValue:         decimal.NewFromFloat(4),
 		AccStakeScore:       decimal.NewFromFloat(3.5),
