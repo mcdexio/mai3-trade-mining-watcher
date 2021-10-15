@@ -401,7 +401,7 @@ func (s *Syncer) updateUserStates(db *gorm.DB, epoch *mining.Schedule, timestamp
 			"acc_fee":       gorm.Expr("GREATEST(user_info.acc_fee, user_info.init_fee)"),
 			"acc_total_fee": gorm.Expr("GREATEST(user_info.acc_total_fee, user_info.init_total_fee)"),
 		}),
-	}).CreateInBatches(&users, 500).Error; err != nil {
+	}).CreateInBatches(&users, 1000).Error; err != nil {
 		return fmt.Errorf("failed to max(acc_fee, init_fee): size=%v %w", len(users), err)
 	}
 	return nil
@@ -457,7 +457,11 @@ func (s *Syncer) makeSnapshot(db *gorm.DB, timestamp int64, users []*mining.User
 
 func (s *Syncer) syncState(db *gorm.DB, epoch *mining.Schedule) (int64, error) {
 	s.logger.Info("enter sync state")
-	defer s.logger.Info("leave sync state")
+	startTime := time.Now().Unix()
+	defer func() {
+		endTime := time.Now().Unix()
+		s.logger.Info("leave sync state, takes %d second for syncState", endTime-startTime)
+	}()
 
 	p, err := s.getProgress(db, PROGRESS_SYNC_STATE, epoch.Epoch)
 	if err != nil {
