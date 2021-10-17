@@ -296,20 +296,16 @@ func (s *TMServer) OnQueryScore(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		s.logger.Info("Epoch %d: user info %+v", i, rsp)
-		s.logger.Info("Epoch %d: totalScore %s", i, s.history[i].totalScore)
 		stats, match := s.history[i]
 		if !match {
 			s.logger.Error("failed to get stats %+v", s.history)
 			s.jsonError(w, "internal error", 400)
 			return
 		}
+		s.logger.Debug("Epoch %d: user info %+v, totalScore %s", i, rsp, s.history[i].totalScore.String())
 
 		sch, err := s.getScheduleWithEpoch(s.db, i)
 		if err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				s.logger.Error("failed to get epoch %d from schedule table err=%s", i, err)
-			}
 			s.logger.Error("failed to get epoch %d from schedule table err=%s", i, err)
 			s.jsonError(w, "internal error", 400)
 			return
