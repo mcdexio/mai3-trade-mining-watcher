@@ -246,6 +246,7 @@ func (s *TMServer) OnQueryTotalStats(w http.ResponseWriter, r *http.Request) {
 			TotalFee:        history.totalFee.String(),
 			TotalStakeScore: history.totalStakeScore.String(),
 			TotalOI:         history.totalOI.String(),
+			TotalDaoFee:     history.totalDaoFee.String(),
 			TotalScore:      history.totalScore.String(),
 		}
 	}
