@@ -55,8 +55,10 @@ func main() {
 	syn := syncer.NewSyncer(
 		ctx,
 		logger,
-		config.GetString("MAI3_TRADE_MINING_GRAPH_URL"),
-		config.GetString("BLOCKS_GRAPH_URL"),
+		config.GetString("MAI3_TRADE_MINING_GRAPH_BSC_URL"),
+		config.GetString("MAI3_TRADE_MINING_GRAPH_ARB_URL"),
+		config.GetString("BLOCKS_GRAPH_BSC_URL"),
+		config.GetString("BLOCKS_GRAPH_ARB_URL"),
 		config.GetInt64("DEFAULT_EPOCH_0_START_TIME"),
 		config.GetInt64("SYNC_DELAY", 0),
 	)

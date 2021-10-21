@@ -40,7 +40,7 @@ func main() {
 
 	// fmt.Println(ctx)
 
-	// client := graph.NewMAI3Client(logger, config.GetString("MAI3_TRADE_MINING_GRAPH_URL"))
+	// client := graph.NewClient(logger, config.GetString("MAI3_TRADE_MINING_GRAPH_URL"))
 	// users, err := client.GetUsersBasedOnBlockNumber(5573054)
 	// if err != nil {
 	// 	fmt.Println(err)

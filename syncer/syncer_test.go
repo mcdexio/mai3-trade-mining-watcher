@@ -3,6 +3,7 @@ package syncer
 import (
 	"context"
 	"errors"
+	"github.com/mcdexio/mai3-trade-mining-watcher/graph/mai3"
 	"math"
 	"testing"
 	"time"
@@ -10,7 +11,6 @@ import (
 	"github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
 	database "github.com/mcdexio/mai3-trade-mining-watcher/database/db"
 	"github.com/mcdexio/mai3-trade-mining-watcher/database/models/mining"
-	"github.com/mcdexio/mai3-trade-mining-watcher/graph"
 	"github.com/mcdexio/mai3-trade-mining-watcher/types"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/suite"
@@ -21,7 +21,7 @@ var TEST_ERROR = errors.New("test error")
 type MockBlockGraph struct {
 }
 
-func (mockBlock *MockBlockGraph) GetTimestampToBlockNumber(timestamp int64) (int64, error) {
+func (mockBlock *MockBlockGraph) GetBlockNumberWithTS(timestamp int64) (int64, error) {
 	// 60 second for 1 block:
 	// timestamp 0~59 return 0, timestamp 60~119 return 1
 	return timestamp / 60, nil
@@ -35,37 +35,37 @@ type MockMAI3Graph struct {
 	delay time.Duration
 }
 
-func (mockMAI3 *MockMAI3Graph) GetUsersBasedOnBlockNumber(blockNumber int64) ([]graph.User, error) {
+func (mockMAI3 *MockMAI3Graph) GetUsersBasedOnBlockNumber(blockNumber int64) ([]mai3.User, error) {
 	if mockMAI3.delay > 0 {
 		time.Sleep(mockMAI3.delay)
 	}
 	if blockNumber <= 0 {
-		return []graph.User{
+		return []mai3.User{
 			{
 				ID:             "0xUser1",
 				StakedMCB:      decimal.NewFromInt(0),
 				UnlockMCBTime:  0,
-				MarginAccounts: []*graph.MarginAccount{},
+				MarginAccounts: []*mai3.MarginAccount{},
 			},
 		}, nil
 	}
 	if blockNumber == 1 {
-		return []graph.User{
+		return []mai3.User{
 			{
 				ID:             "0xUser1",
 				StakedMCB:      decimal.NewFromInt(3),
 				UnlockMCBTime:  60 * 60 * 24 * 100, // 100 days
-				MarginAccounts: []*graph.MarginAccount{},
+				MarginAccounts: []*mai3.MarginAccount{},
 			},
 		}, nil
 	}
 	if blockNumber == 2 {
-		return []graph.User{
+		return []mai3.User{
 			{
 				ID:            "0xUser1",
 				StakedMCB:     decimal.NewFromInt(3),
 				UnlockMCBTime: 60 * 60 * 24 * 99, // 99 days
-				MarginAccounts: []*graph.MarginAccount{
+				MarginAccounts: []*mai3.MarginAccount{
 					{
 						ID:       "0xPool-0-0xUser1",
 						Position: decimal.NewFromFloat(2),
@@ -79,12 +79,12 @@ func (mockMAI3 *MockMAI3Graph) GetUsersBasedOnBlockNumber(blockNumber int64) ([]
 		}, nil
 	}
 	if blockNumber == 3 {
-		return []graph.User{
+		return []mai3.User{
 			{
 				ID:            "0xUser1",
 				StakedMCB:     decimal.NewFromInt(3),
 				UnlockMCBTime: 60 * 60 * 24 * 98, // 98 days
-				MarginAccounts: []*graph.MarginAccount{
+				MarginAccounts: []*mai3.MarginAccount{
 					{
 						ID:          "0xPool-0-0xUser1",
 						TotalFee:    decimal.NewFromFloat(3),
@@ -104,12 +104,12 @@ func (mockMAI3 *MockMAI3Graph) GetUsersBasedOnBlockNumber(blockNumber int64) ([]
 		}, nil
 	}
 	if blockNumber == 4 {
-		return []graph.User{
+		return []mai3.User{
 			{
 				ID:            "0xUser1",
 				StakedMCB:     decimal.NewFromInt(10),
 				UnlockMCBTime: 60 * 60 * 24 * 100, // 100 days
-				MarginAccounts: []*graph.MarginAccount{
+				MarginAccounts: []*mai3.MarginAccount{
 					{
 						ID:          "0xPool-0-0xUser1",
 						TotalFee:    decimal.NewFromFloat(5),
@@ -128,7 +128,7 @@ func (mockMAI3 *MockMAI3Graph) GetUsersBasedOnBlockNumber(blockNumber int64) ([]
 			},
 		}, nil
 	}
-	return []graph.User{}, TEST_ERROR
+	return []mai3.User{}, TEST_ERROR
 }
 
 var retMap0 = map[string]decimal.Decimal{
@@ -173,38 +173,38 @@ func (mockMAI3 *MockMAI3Graph) GetMarkPrices(blockNumber int64) (map[string]deci
 	return map[string]decimal.Decimal{}, TEST_ERROR
 }
 
-func (mockMAI3 *MockMAI3Graph) GetMarkPriceWithBlockNumberAddrIndex(blockNumber int64, poolAddr string, perpetualIndex int) (decimal.Decimal, error) {
+func (mockMAI3 *MockMAI3Graph) GetMarkPriceWithBlockNumberAddrIndex(blockNumber int64, poolAddr string, perpIndex int) (decimal.Decimal, error) {
 	if blockNumber == 0 {
 		return decimal.Zero, nil
 	}
 	if blockNumber == 1 {
-		if perpetualIndex == 0 {
+		if perpIndex == 0 {
 			return retMap1["0xPool-0"], nil
-		} else if perpetualIndex == 1 {
+		} else if perpIndex == 1 {
 			return retMap1["0xPool-1"], nil
 		}
 		return decimal.Zero, TEST_ERROR
 	}
 	if blockNumber == 2 {
-		if perpetualIndex == 0 {
+		if perpIndex == 0 {
 			return retMap2["0xPool-0"], nil
-		} else if perpetualIndex == 1 {
+		} else if perpIndex == 1 {
 			return retMap2["0xPool-1"], nil
 		}
 		return decimal.Zero, TEST_ERROR
 	}
 	if blockNumber == 3 {
-		if perpetualIndex == 0 {
+		if perpIndex == 0 {
 			return retMap3["0xPool-0"], nil
-		} else if perpetualIndex == 1 {
+		} else if perpIndex == 1 {
 			return retMap3["0xPool-1"], nil
 		}
 		return decimal.Zero, TEST_ERROR
 	}
 	if blockNumber == 4 {
-		if perpetualIndex == 0 {
+		if perpIndex == 0 {
 			return retMap4["0xPool-0"], nil
-		} else if perpetualIndex == 1 {
+		} else if perpIndex == 1 {
 			return retMap4["0xPool-1"], nil
 		}
 		return decimal.Zero, TEST_ERROR
@@ -229,12 +229,12 @@ func (t *SyncerTestSuite) SetupSuite() {
 	logger := logging.NewLoggerTag("test suite syncer")
 	ctx, cancel := context.WithCancel(context.Background())
 	t.syncer = &Syncer{
-		logger:              logger,
-		ctx:                 ctx,
-		blockGraphInterface: NewMockBlockGraph(),
-		mai3GraphInterface:  NewMockMAI3Graph(),
-		db:                  database.GetDB(),
-		snapshotInterval:    3600,
+		logger:           logger,
+		ctx:              ctx,
+		blockGraph1:      NewMockBlockGraph(),
+		mai3Graph1:       NewMockMAI3Graph(),
+		db:               database.GetDB(),
+		snapshotInterval: 3600,
 	}
 	t.cancel = cancel
 }
@@ -576,7 +576,7 @@ func (t *SyncerTestSuite) TestRestoreTransaction() {
 	}
 
 	// set mock delay
-	g, _ := t.syncer.mai3GraphInterface.(*MockMAI3Graph)
+	g, _ := t.syncer.mai3Graph1.(*MockMAI3Graph)
 	g.delay = 1 * time.Second
 	defer func() {
 		g.delay = 0
