@@ -73,26 +73,27 @@ func InETHInverseContractWhiteList(marginAccountID string) (bool, string) {
 	return false, ""
 }
 
-// GetPerpetualID get perpetual id depend on symbol.
-func GetPerpetualID(symbol string) (string, error) {
-	// TODO(champFu) refactor
-	network := config.GetString("NETWORK", "arb-rinkeby")
-	network = strings.ToLower(network)
+// GetPerpIDWithUSDBased get perpetual id depend on symbol and network.
+func GetPerpIDWithUSDBased(symbol string, networkIndex int) (string, error) {
+	// TODO(champFu): refactor
+	// bsc == 0 networkIndex
+	// arb-rinkeby == 1 networkIndex
+
 	symbol = strings.ToLower(symbol)
-	if network == "arb-rinkeby" {
-		if symbol == "eth" {
-			return "0xc32a2dfee97e2babc90a2b5e6aef41e789ef2e13-0", nil // perpetualIndex = 0 is ETH
-		} else if symbol == "btc" {
-			return "0xc32a2dfee97e2babc90a2b5e6aef41e789ef2e13-1", nil // perpetualIndex = 1 is BTC
-		}
-		return "", fmt.Errorf("fail to get perpetualID of symbol %s", symbol)
-	} else if network == "bsc" {
+	if networkIndex == 0 {
 		if symbol == "btc" {
 			return "0xdb282bbace4e375ff2901b84aceb33016d0d663d-0", nil
 		} else if symbol == "eth" {
 			return "0xdb282bbace4e375ff2901b84aceb33016d0d663d-1", nil
 		} else if symbol == "bnb" {
 			return "0xdb282bbace4e375ff2901b84aceb33016d0d663d-2", nil
+		}
+		return "", fmt.Errorf("fail to get perpetualID of symbol %s", symbol)
+	} else if networkIndex == 1 {
+		if symbol == "eth" {
+			return "0xc32a2dfee97e2babc90a2b5e6aef41e789ef2e13-0", nil // perpIndex = 0 is ETH
+		} else if symbol == "btc" {
+			return "0xc32a2dfee97e2babc90a2b5e6aef41e789ef2e13-1", nil // perpIndex = 1 is BTC
 		}
 		return "", fmt.Errorf("fail to get perpetualID of symbol %s", symbol)
 	}

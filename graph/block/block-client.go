@@ -1,4 +1,4 @@
-package graph
+package block
 
 import (
 	"encoding/json"
@@ -9,18 +9,18 @@ import (
 	"strconv"
 )
 
-type BlockInterface interface {
-	GetTimestampToBlockNumber(timestamp int64) (int64, error)
+type Interface interface {
+	GetBlockNumberWithTS(timestamp int64) (int64, error)
 }
 
-type BlockClient struct {
+type Client struct {
 	logger logging.Logger
 	client *utils.Client
 }
 
-func NewBlockClient(logger logging.Logger, url string) *BlockClient {
-	logger.Info("New block client with url %s", url)
-	return &BlockClient{
+func NewClient(logger logging.Logger, url string) *Client {
+	logger.Info("New block graph client with url %s", url)
+	return &Client{
 		logger: logger,
 		client: utils.NewHttpClient(utils.DefaultTransport, logger, url),
 	}
@@ -32,9 +32,9 @@ type Block struct {
 	Timestamp string `json:"timestamp"`
 }
 
-// GetTimestampToBlockNumber which is the closest but less than or equal to timestamp
-func (b *BlockClient) GetTimestampToBlockNumber(timestamp int64) (int64, error) {
-	b.logger.Debug("get block number which is the closest but less than or equal to timestamp %d", timestamp)
+// GetBlockNumberWithTS which is the closest but less than or equal to timestamp
+func (b *Client) GetBlockNumberWithTS(timestamp int64) (int64, error) {
+	b.logger.Debug("get block number which is the closest but <= @ts:%d", timestamp)
 	query := `{
 		blocks(
 			first:1, orderBy: number, orderDirection: asc, 
@@ -52,21 +52,23 @@ func (b *BlockClient) GetTimestampToBlockNumber(timestamp int64) (int64, error) 
 	}
 	// return err when can't get block number in three times
 	if err := b.queryGraph(&response, query, timestamp); err != nil {
-		return -1, fmt.Errorf("fail to transform timestamp to block number in three times %w", err)
+		return -1, err
 	}
 
 	if len(response.Data.Blocks) != 1 {
-		return -1, fmt.Errorf("length of block of response is not equal to 1: expect=1, actual=%v, timestamp=%v", len(response.Data.Blocks), timestamp)
+		return -1, fmt.Errorf("length of block response: expect=1, actual=%v, timestamp=%v",
+			len(response.Data.Blocks), timestamp)
 	}
-	number, err := strconv.Atoi(response.Data.Blocks[0].Number)
+	bn := response.Data.Blocks[0].Number
+	number, err := strconv.Atoi(bn)
 	if err != nil {
-		return -1, fmt.Errorf("failed to convert block number from string to int err:%s", err)
+		return -1, fmt.Errorf("fail to get block number %s from string err=%s", bn, err)
 	}
 	return int64(number - 1), nil
 }
 
 // queryGraph return err if failed to get response from graph in three times
-func (b *BlockClient) queryGraph(resp interface{}, query string, args ...interface{}) error {
+func (b *Client) queryGraph(resp interface{}, query string, args ...interface{}) error {
 	var params struct {
 		Query string `json:"query"`
 	}
@@ -74,19 +76,19 @@ func (b *BlockClient) queryGraph(resp interface{}, query string, args ...interfa
 	for i := 0; i < 3; i++ {
 		err, code, res := b.client.Post(nil, params, nil)
 		if err != nil {
-			b.logger.Error("fail to post http request %w", err)
+			b.logger.Error("fail to post http params=%+v err=%s", params, err)
 			continue
 		} else if code/100 != 2 {
-			b.logger.Error("unexpected http response: %v", code)
+			b.logger.Error("unexpected http response=%v", code)
 			continue
 		}
 		err = json.Unmarshal(res, &resp)
 		if err != nil {
-			b.logger.Error("failed to unmarshal %w", err)
+			b.logger.Error("fail to unmarshal err=%s", err)
 			continue
 		}
 		// success
 		return nil
 	}
-	return errors.New("failed to query block graph in three times")
+	return errors.New("fail to query block graph in three times")
 }

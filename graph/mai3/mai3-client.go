@@ -1,4 +1,4 @@
-package graph
+package mai3
 
 import (
 	"encoding/json"
@@ -9,7 +9,7 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-type MAI3Client struct {
+type Client struct {
 	logger logging.Logger
 	client *utils.Client
 }
@@ -34,24 +34,23 @@ type MarkPrice struct {
 	Price decimal.Decimal `json:"price"`
 }
 
-type MAI3Interface interface {
+type Interface interface {
 	GetUsersBasedOnBlockNumber(blockNumber int64) ([]User, error)
 	GetMarkPrices(blockNumber int64) (map[string]decimal.Decimal, error)
 	GetMarkPriceWithBlockNumberAddrIndex(
-		blockNumber int64, poolAddr string, perpetualIndex int) (decimal.Decimal, error)
+		blockNumber int64, poolAddr string, perpIndex int) (decimal.Decimal, error)
 }
 
-func NewMAI3Client(logger logging.Logger, url string) *MAI3Client {
-	logger.Info("New MAI3 client with url %s", url)
-	return &MAI3Client{
+func NewClient(logger logging.Logger, url string) *Client {
+	logger.Info("New MAI3 graph client with url %s", url)
+	return &Client{
 		logger: logger,
 		client: utils.NewHttpClient(utils.DefaultTransport, logger, url),
 	}
 }
 
 // GetMarkPrices get mark prices with block number. return map[markPriceID]price
-func (m *MAI3Client) GetMarkPrices(blockNumber int64) (map[string]decimal.Decimal, error) {
-	m.logger.Debug("Get mark price based on block number %d", blockNumber)
+func (m *Client) GetMarkPrices(blockNumber int64) (map[string]decimal.Decimal, error) {
 	prices := make(map[string]decimal.Decimal)
 	idFilter := "0x0"
 	for {
@@ -75,7 +74,7 @@ func (m *MAI3Client) GetMarkPrices(blockNumber int64) (map[string]decimal.Decima
 }
 
 // getMarkPricesWithBlockNumberID try three times to get markPrices depend on ID with order and filter
-func (m *MAI3Client) getMarkPricesWithBlockNumberID(blockNumber int64, id string) ([]MarkPrice, error) {
+func (m *Client) getMarkPricesWithBlockNumberID(blockNumber int64, id string) ([]MarkPrice, error) {
 	m.logger.Debug("Get mark price based on block number %d and order and filter by ID %s", blockNumber, id)
 	query := `{
 		markPrices(first: 1000, block: { number: %v }, orderBy: id, orderDirection: asc,
@@ -92,13 +91,14 @@ func (m *MAI3Client) getMarkPricesWithBlockNumberID(blockNumber int64, id string
 		}
 	}
 	if err := m.queryGraph(&resp, query, blockNumber, id); err != nil {
-		return nil, fmt.Errorf("fail to get mark price %w", err)
+		return nil, fmt.Errorf(
+			"fail to get mark price with BN=%d, ID=%s, err=%s", blockNumber, id, err)
 	}
 	return resp.Data.MarkPrices, nil
 }
 
 // queryGraph return err if failed to get response from graph in three times
-func (m *MAI3Client) queryGraph(resp interface{}, query string, args ...interface{}) error {
+func (m *Client) queryGraph(resp interface{}, query string, args ...interface{}) error {
 	var params struct {
 		Query string `json:"query"`
 	}
@@ -106,25 +106,25 @@ func (m *MAI3Client) queryGraph(resp interface{}, query string, args ...interfac
 	for i := 0; i < 3; i++ {
 		err, code, res := m.client.Post(nil, params, nil)
 		if err != nil {
-			m.logger.Error("fail to post http request %w", err)
+			m.logger.Error("fail to post http params=%+v err=%s", params, err)
 			continue
 		} else if code/100 != 2 {
-			m.logger.Error("unexpected http response: %v", code)
+			m.logger.Error("unexpected http response=%v", code)
 			continue
 		}
 		err = json.Unmarshal(res, &resp)
 		if err != nil {
-			m.logger.Error("failed to unmarshal %w", err)
+			m.logger.Error("fail to unmarshal err=%s", err)
 			continue
 		}
 		// success
 		return nil
 	}
-	return errors.New("failed to query block graph in three times")
+	return errors.New("fail to query MAI3 graph in three times")
 }
 
 // GetUsersBasedOnBlockNumber get users based on blockNumber.
-func (m *MAI3Client) GetUsersBasedOnBlockNumber(blockNumber int64) ([]User, error) {
+func (m *Client) GetUsersBasedOnBlockNumber(blockNumber int64) ([]User, error) {
 	m.logger.Debug("Get users based on block number %d", blockNumber)
 	var retUser []User
 
@@ -148,7 +148,7 @@ func (m *MAI3Client) GetUsersBasedOnBlockNumber(blockNumber int64) ([]User, erro
 }
 
 // getUserWithBlockNumberID try three times to get users depend on ID with order and filter
-func (m *MAI3Client) getUserWithBlockNumberID(blockNumber int64, id string) ([]User, error) {
+func (m *Client) getUserWithBlockNumberID(blockNumber int64, id string) ([]User, error) {
 	// s.logger.Debug("Get users based on block number %d and order and filter by ID %s", blockNumber, id)
 	query := `{
 		users(first: 1000, block: {number: %d}, orderBy: id, orderDirection: asc,
@@ -179,10 +179,10 @@ func (m *MAI3Client) getUserWithBlockNumberID(blockNumber int64, id string) ([]U
 }
 
 // GetMarkPriceWithBlockNumberAddrIndex get mark price based on block number, pool address, perpetual index.
-func (m *MAI3Client) GetMarkPriceWithBlockNumberAddrIndex(
-	blockNumber int64, poolAddr string, perpetualIndex int) (decimal.Decimal, error) {
-	m.logger.Debug("Get mark price based on block number %d, poolAddr %s, perpetualIndex %d",
-		blockNumber, poolAddr, perpetualIndex)
+func (m *Client) GetMarkPriceWithBlockNumberAddrIndex(
+	blockNumber int64, poolAddr string, perpIndex int) (decimal.Decimal, error) {
+	m.logger.Debug("Get mark price based on block number %d, poolAddr %s, perpIndex %d",
+		blockNumber, poolAddr, perpIndex)
 	query := `{
 		markPrices(first: 1, block: { number: %d }, where: {id: "%s"}) {
     		id
@@ -195,12 +195,14 @@ func (m *MAI3Client) GetMarkPriceWithBlockNumberAddrIndex(
 			MarkPrices []MarkPrice
 		}
 	}
-	id := fmt.Sprintf("%s-%d", poolAddr, perpetualIndex)
+	id := fmt.Sprintf("%s-%d", poolAddr, perpIndex)
 	if err := m.queryGraph(&resp, query, blockNumber, id); err != nil {
-		return decimal.Zero, fmt.Errorf("fail to get mark price %w", err)
+		return decimal.Zero, fmt.Errorf(
+			"fail to get mark price with BN=%d, poolAddr=%s, perpIndex=%d err=%s",
+			blockNumber, poolAddr, perpIndex, err)
 	}
 	if len(resp.Data.MarkPrices) == 0 {
-		return decimal.Zero, errors.New("empty mark price")
+		return decimal.Zero, fmt.Errorf("empty mark price resp=%+v", resp)
 	}
 	return resp.Data.MarkPrices[0].Price, nil
 }
