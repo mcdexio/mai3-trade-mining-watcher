@@ -234,7 +234,11 @@ func (s *Syncer) setProgress(db *gorm.DB, name string, ts int64, epoch int64) er
 
 func (s *Syncer) initUserStates(db *gorm.DB, epoch *mining.Schedule) error {
 	s.logger.Debug("enter initUserStates epoch %d", epoch.Epoch)
-	defer s.logger.Debug("leave initUserStates")
+	startTime := time.Now().Unix()
+	defer func() {
+		endTime := time.Now().Unix()
+		s.logger.Info("leave initUserState, takes %d second for initUserState", endTime-startTime)
+	}()
 
 	p, err := s.getProgress(db, PROGRESS_INIT_FEE, epoch.Epoch)
 	if err != nil {
@@ -245,7 +249,8 @@ func (s *Syncer) initUserStates(db *gorm.DB, epoch *mining.Schedule) error {
 		s.logger.Info("fee already initialized")
 		return nil
 	}
-	multiBns, multiUsers, multiPrices, err := s.getMultiChainInfo(epoch.StartTime)
+
+	multiBNs, multiUsers, multiPrices, err := s.getMultiChainInfo(epoch.StartTime)
 	if err != nil {
 		return err
 	}
@@ -254,7 +259,7 @@ func (s *Syncer) initUserStates(db *gorm.DB, epoch *mining.Schedule) error {
 	// handle multi-chain
 	for i, users := range multiUsers {
 		for _, u := range users {
-			_, totalFee, daoFee, err := s.getOIFeeValue(u.MarginAccounts, multiBns[i], multiPrices, i)
+			_, totalFee, daoFee, err := s.getOIFeeValue(u.MarginAccounts, multiBNs[i], multiPrices, i)
 			if err != nil {
 				return fmt.Errorf("fail to get initial fee %s", err)
 			}
@@ -279,6 +284,10 @@ func (s *Syncer) initUserStates(db *gorm.DB, epoch *mining.Schedule) error {
 	for _, u := range summaryUser {
 		uis = append(uis, u)
 	}
+	for i, u := range multiUsers {
+		s.logger.Info("Network (%d/%d): %d users @BN=%d", i, len(multiUsers), len(u), multiBNs[i])
+	}
+	s.logger.Info("Total users %d @TS=%d", len(uis), epoch.StartTime)
 
 	// update columns if conflict
 	updatedColumns := []string{"epoch", "init_fee", "init_total_fee"}
@@ -309,11 +318,6 @@ func (s *Syncer) getUserStateBasedOnBlockNumber(epoch *mining.Schedule, timestam
 	if err != nil {
 		return nil, err
 	}
-
-	for i, u := range multiUsers {
-		s.logger.Info("Network (%d/%d): %d users @%+v", i, len(multiUsers), len(u), multiBNs[i])
-	}
-
 	summaryUser := make(map[string]*mining.UserInfo)
 	// handle multi-chain
 	for i, users := range multiUsers {
@@ -351,6 +355,10 @@ func (s *Syncer) getUserStateBasedOnBlockNumber(epoch *mining.Schedule, timestam
 	for _, u := range summaryUser {
 		uis = append(uis, u)
 	}
+	for i, u := range multiUsers {
+		s.logger.Info("Network (%d/%d): %d users @BN=%d", i, len(multiUsers), len(u), multiBNs[i])
+	}
+	s.logger.Info("Total users %d @TS=%d", len(uis), timestamp)
 	return uis, nil
 }
 
