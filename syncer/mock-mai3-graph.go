@@ -30,6 +30,10 @@ var retMap4 = map[string]decimal.Decimal{
 	"0xPool-0": decimal.NewFromInt(100),
 	"0xPool-1": decimal.NewFromInt(1000),
 }
+var retMap5 = map[string]decimal.Decimal{
+	"0xPool-0": decimal.NewFromInt(100),
+	"0xPool-1": decimal.NewFromInt(1000),
+}
 
 type MockMAI3Graph1 struct {
 	delay time.Duration
@@ -128,6 +132,31 @@ func (mockMAI3 *MockMAI3Graph1) GetUsersBasedOnBlockNumber(blockNumber int64) ([
 			},
 		}, nil
 	}
+	if blockNumber == 5 {
+		return []mai3.User{
+			{
+				ID:            "0xUser1",
+				StakedMCB:     decimal.NewFromInt(10),
+				UnlockMCBTime: 60 * 60 * 24 * 99, // 99 days
+				MarginAccounts: []*mai3.MarginAccount{
+					{
+						ID:          "0xPool-0-0xUser1",
+						TotalFee:    decimal.NewFromFloat(6),
+						VaultFee:    decimal.NewFromFloat(6 / 4),
+						OperatorFee: decimal.NewFromFloat(6 / 4),
+						Position:    decimal.NewFromFloat(12),
+					},
+					{
+						ID:          "0xPool-1-0xUser1",
+						TotalFee:    decimal.NewFromFloat(12),
+						VaultFee:    decimal.NewFromFloat(12 / 4),
+						OperatorFee: decimal.NewFromFloat(12 / 4),
+						Position:    decimal.NewFromFloat(24),
+					},
+				},
+			},
+		}, nil
+	}
 	return []mai3.User{}, TEST_ERROR
 }
 
@@ -146,6 +175,9 @@ func (mockMAI3 *MockMAI3Graph1) GetMarkPrices(blockNumber int64) (map[string]dec
 	}
 	if blockNumber == 4 {
 		return retMap4, nil
+	}
+	if blockNumber == 5 {
+		return retMap5, nil
 	}
 	return map[string]decimal.Decimal{}, TEST_ERROR
 }
@@ -186,11 +218,166 @@ func (mockMAI3 *MockMAI3Graph1) GetMarkPriceWithBlockNumberAddrIndex(blockNumber
 		}
 		return decimal.Zero, TEST_ERROR
 	}
+	if blockNumber == 5 {
+		if perpIndex == 0 {
+			return retMap5["0xPool-0"], nil
+		} else if perpIndex == 1 {
+			return retMap5["0xPool-1"], nil
+		}
+		return decimal.Zero, TEST_ERROR
+	}
 	return decimal.Zero, TEST_ERROR
 }
 
 func NewMockMAI3Graph1() *MockMAI3Graph1 {
 	return &MockMAI3Graph1{}
+}
+
+type MockMAI3Graph2 struct{}
+
+func (mockMAI3 *MockMAI3Graph2) GetUsersBasedOnBlockNumber(blockNumber int64) ([]mai3.User, error) {
+	if blockNumber <= 0 {
+		return []mai3.User{
+			{
+				ID:             "0xUser1",
+				StakedMCB:      decimal.NewFromInt(0),
+				UnlockMCBTime:  0,
+				MarginAccounts: []*mai3.MarginAccount{},
+			},
+		}, nil
+	}
+	if blockNumber == 1 {
+		return []mai3.User{
+			{
+				ID:             "0xUser1",
+				StakedMCB:      decimal.NewFromInt(0),
+				UnlockMCBTime:  0,
+				MarginAccounts: []*mai3.MarginAccount{},
+			},
+		}, nil
+	}
+	if blockNumber == 2 {
+		return []mai3.User{
+			{
+				ID:             "0xUser1",
+				StakedMCB:      decimal.NewFromInt(0),
+				UnlockMCBTime:  0,
+				MarginAccounts: []*mai3.MarginAccount{},
+			},
+		}, nil
+	}
+	if blockNumber == 3 {
+		return []mai3.User{
+			{
+				ID:             "0xUser1",
+				StakedMCB:      decimal.NewFromInt(0),
+				UnlockMCBTime:  0,
+				MarginAccounts: []*mai3.MarginAccount{},
+			},
+		}, nil
+	}
+	if blockNumber == 4 {
+		return []mai3.User{
+			{
+				ID:             "0xUser1",
+				StakedMCB:      decimal.NewFromInt(0),
+				UnlockMCBTime:  0,
+				MarginAccounts: []*mai3.MarginAccount{},
+			},
+		}, nil
+	}
+	if blockNumber == 5 {
+		return []mai3.User{
+			{
+				ID:            "0xUser1",
+				StakedMCB:     decimal.NewFromInt(6),
+				UnlockMCBTime: 60 * 60 * 24 * 100, // 100 days
+				MarginAccounts: []*mai3.MarginAccount{
+					{
+						ID:          "0xPool-0-0xUser1",
+						TotalFee:    decimal.NewFromFloat(40),
+						VaultFee:    decimal.NewFromFloat(40 / 4),
+						OperatorFee: decimal.NewFromFloat(40 / 4),
+						Position:    decimal.NewFromFloat(100),
+					},
+				},
+			},
+		}, nil
+	}
+	return []mai3.User{}, TEST_ERROR
+}
+
+func (mockMAI3 *MockMAI3Graph2) GetMarkPrices(blockNumber int64) (map[string]decimal.Decimal, error) {
+	if blockNumber == 0 {
+		return retMap0, nil
+	}
+	if blockNumber == 1 {
+		return retMap1, nil
+	}
+	if blockNumber == 2 {
+		return retMap2, nil
+	}
+	if blockNumber == 3 {
+		return retMap3, nil
+	}
+	if blockNumber == 4 {
+		return retMap4, nil
+	}
+	if blockNumber == 5 {
+		return retMap5, nil
+	}
+	return map[string]decimal.Decimal{}, TEST_ERROR
+}
+
+func (mockMAI3 *MockMAI3Graph2) GetMarkPriceWithBlockNumberAddrIndex(blockNumber int64, poolAddr string, perpIndex int) (decimal.Decimal, error) {
+	if blockNumber == 0 {
+		return decimal.Zero, nil
+	}
+	if blockNumber == 1 {
+		if perpIndex == 0 {
+			return retMap1["0xPool-0"], nil
+		} else if perpIndex == 1 {
+			return retMap1["0xPool-1"], nil
+		}
+		return decimal.Zero, TEST_ERROR
+	}
+	if blockNumber == 2 {
+		if perpIndex == 0 {
+			return retMap2["0xPool-0"], nil
+		} else if perpIndex == 1 {
+			return retMap2["0xPool-1"], nil
+		}
+		return decimal.Zero, TEST_ERROR
+	}
+	if blockNumber == 3 {
+		if perpIndex == 0 {
+			return retMap3["0xPool-0"], nil
+		} else if perpIndex == 1 {
+			return retMap3["0xPool-1"], nil
+		}
+		return decimal.Zero, TEST_ERROR
+	}
+	if blockNumber == 4 {
+		if perpIndex == 0 {
+			return retMap4["0xPool-0"], nil
+		} else if perpIndex == 1 {
+			return retMap4["0xPool-1"], nil
+		}
+		return decimal.Zero, TEST_ERROR
+	}
+	if blockNumber == 5 {
+		if perpIndex == 0 {
+			return retMap5["0xPool-0"], nil
+		} else if perpIndex == 1 {
+			return retMap5["0xPool-1"], nil
+		}
+		return decimal.Zero, TEST_ERROR
+	}
+	return decimal.Zero, TEST_ERROR
+}
+
+func NewMockMAI3Graph2() *MockMAI3Graph2 {
+	return &MockMAI3Graph2{}
 }
 
 type MockMultiMAI3Graphs struct {
@@ -246,5 +433,14 @@ func NewMockMultiMAI3GraphsOneChain() *MockMultiMAI3Graphs {
 		clients: make([]mai3.GraphInterface, 0),
 	}
 	multiMai3Clients.clients = append(multiMai3Clients.clients, NewMockMAI3Graph1())
+	return &multiMai3Clients
+}
+
+func NewMockMultiMAI3GraphsMultiChain() *MockMultiMAI3Graphs {
+	multiMai3Clients := MockMultiMAI3Graphs{
+		clients: make([]mai3.GraphInterface, 0),
+	}
+	multiMai3Clients.clients = append(multiMai3Clients.clients, NewMockMAI3Graph1())
+	multiMai3Clients.clients = append(multiMai3Clients.clients, NewMockMAI3Graph2())
 	return &multiMai3Clients
 }
