@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/suite"
 	"math"
 	"testing"
+	"time"
 )
 
 type SyncerTestSuite struct {
@@ -41,8 +42,8 @@ func (t *SyncerTestSuite) TearDownSuite() {
 
 func (t *SyncerTestSuite) TestStateOnlyOneChain() {
 	// setup blockGraphs, mai3Graphs
-	t.syncer.blockGraphs = NewMockMultiBlockGraphs()
-	t.syncer.mai3Graphs = NewMockMultiMAI3Graphs()
+	t.syncer.blockGraphs = NewMockMultiBlockGraphsOneChain()
+	t.syncer.mai3Graphs = NewMockMultiMAI3GraphsOneChain()
 
 	var progress mining.Progress
 	var users []mining.UserInfo
@@ -350,8 +351,8 @@ func (t *SyncerTestSuite) TestDetectEpoch() {
 
 func (t *SyncerTestSuite) TestRestoreFromSnapshot() {
 	// setup blockGraphs, mai3Graphs
-	t.syncer.blockGraphs = NewMockMultiBlockGraphs()
-	t.syncer.mai3Graphs = NewMockMultiMAI3Graphs()
+	t.syncer.blockGraphs = NewMockMultiBlockGraphsOneChain()
+	t.syncer.mai3Graphs = NewMockMultiMAI3GraphsOneChain()
 
 	epoch := &mining.Schedule{
 		Epoch:     0,
@@ -418,68 +419,68 @@ func (t *SyncerTestSuite) TestRestoreFromSnapshot() {
 	t.Require().Equal(decimal.NewFromInt(300+297+294).String(), user.AccStakeScore.String())
 }
 
-// func (t *SyncerTestSuite) TestRestoreTransaction() {
-// 	epoch := &mining.Schedule{
-// 		Epoch:     0,
-// 		StartTime: 0,
-// 		EndTime:   250,
-// 		WeightFee: decimal.NewFromFloat(0.7),
-// 		WeightMCB: decimal.NewFromFloat(0.3),
-// 		WeightOI:  decimal.NewFromFloat(0.3),
-// 	}
-// 	db := t.syncer.db
-// 	db.Model(&mining.Schedule{}).Delete("epoch=0")
-// 	t.Require().Equal(nil, db.Model(&mining.Schedule{}).Create(&epoch).Error)
-// 	defer database.DeleteAllData(types.Watcher)
-//
-// 	t.syncer.snapshotInterval = 120
-// 	defer func() {
-// 		t.syncer.snapshotInterval = 3600
-// 	}()
-// 	// before
-// 	{
-// 		t.syncer.syncState(t.syncer.db, epoch)         // 60, 100
-// 		t.syncer.syncState(t.syncer.db, epoch)         // 120, 99
-// 		p, _ := t.syncer.syncState(t.syncer.db, epoch) // 180, 98
-// 		t.Require().Equal(int64(180), p)
-// 	}
-//
-// 	// set mock delay
-// 	g, _ := t.syncer.mai3Graph1.(*MockMAI3Graph1)
-// 	g.delay = 1 * time.Second
-// 	defer func() {
-// 		g.delay = 0
-// 	}()
-// 	assert := func(css, asc, ts int64) {
-// 		var user mining.UserInfo
-// 		t.syncer.db.Model(&mining.UserInfo{}).Where("epoch = 0").First(&user)
-// 		t.Require().Equal(decimal.NewFromInt(css).String(), user.CurStakeScore.String())
-// 		t.Require().Equal(decimal.NewFromInt(asc).String(), user.AccStakeScore.String())
-// 		t.Require().Equal(user.Timestamp, ts)
-// 	}
-// 	ch := make(chan bool)
-// 	go func() {
-// 		for {
-// 			select {
-// 			case <-ch:
-// 				assert(1000, 300+297+294, 240)
-// 				return
-// 			default:
-// 				assert(294, 300+297, 180)
-// 			}
-// 			time.Sleep(500 * time.Millisecond)
-// 		}
-// 	}()
-//
-// 	err := t.syncer.runRestore(context.Background(), 120)
-// 	t.Require().Equal(nil, err)
-// 	ch <- false
-// 	assert(1000, 300+297+294, 240)
-//
-// 	var progress mining.Progress
-// 	t.syncer.db.Model(&mining.Progress{}).Where("table_name = 'user_info' and epoch = 0").First(&progress)
-// 	t.Require().Equal(int64(240), progress.From)
-// }
+func (t *SyncerTestSuite) TestRestoreTransaction() {
+	epoch := &mining.Schedule{
+		Epoch:     0,
+		StartTime: 0,
+		EndTime:   250,
+		WeightFee: decimal.NewFromFloat(0.7),
+		WeightMCB: decimal.NewFromFloat(0.3),
+		WeightOI:  decimal.NewFromFloat(0.3),
+	}
+	db := t.syncer.db
+	db.Model(&mining.Schedule{}).Delete("epoch=0")
+	t.Require().Equal(nil, db.Model(&mining.Schedule{}).Create(&epoch).Error)
+	defer database.DeleteAllData(types.Watcher)
+
+	t.syncer.snapshotInterval = 120
+	defer func() {
+		t.syncer.snapshotInterval = 3600
+	}()
+	// before
+	{
+		t.syncer.syncState(t.syncer.db, epoch)         // 60, 100
+		t.syncer.syncState(t.syncer.db, epoch)         // 120, 99
+		p, _ := t.syncer.syncState(t.syncer.db, epoch) // 180, 98
+		t.Require().Equal(int64(180), p)
+	}
+
+	// set mock delay
+	g, _ := t.syncer.mai3Graphs.GetMai3GraphInterface(0)
+	g.(*MockMAI3Graph1).delay = 1 * time.Second
+	defer func() {
+		g.(*MockMAI3Graph1).delay = 0
+	}()
+	assert := func(css, asc, ts int64) {
+		var user mining.UserInfo
+		t.syncer.db.Model(&mining.UserInfo{}).Where("epoch = 0").First(&user)
+		t.Require().Equal(decimal.NewFromInt(css).String(), user.CurStakeScore.String())
+		t.Require().Equal(decimal.NewFromInt(asc).String(), user.AccStakeScore.String())
+		t.Require().Equal(user.Timestamp, ts)
+	}
+	ch := make(chan bool)
+	go func() {
+		for {
+			select {
+			case <-ch:
+				assert(1000, 300+297+294, 240)
+				return
+			default:
+				assert(294, 300+297, 180)
+			}
+			time.Sleep(500 * time.Millisecond)
+		}
+	}()
+
+	err := t.syncer.runRestore(context.Background(), 120)
+	t.Require().Equal(nil, err)
+	ch <- false
+	assert(1000, 300+297+294, 240)
+
+	var progress mining.Progress
+	t.syncer.db.Model(&mining.Progress{}).Where("table_name = 'user_info' and epoch = 0").First(&progress)
+	t.Require().Equal(int64(240), progress.From)
+}
 
 func TestSyncer(t *testing.T) {
 	suite.Run(t, new(SyncerTestSuite))

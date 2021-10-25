@@ -241,7 +241,7 @@ func (mockMultiMAI3Graphs *MockMultiMAI3Graphs) GetMai3GraphInterface(
 	return mockMultiMAI3Graphs.clients[index], nil
 }
 
-func NewMockMultiMAI3Graphs() *MockMultiMAI3Graphs {
+func NewMockMultiMAI3GraphsOneChain() *MockMultiMAI3Graphs {
 	multiMai3Clients := MockMultiMAI3Graphs{
 		clients: make([]mai3.GraphInterface, 0),
 	}
