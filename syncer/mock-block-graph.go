@@ -32,7 +32,7 @@ func (mockMultiBlocks *MockMultiBlockGraphs) GetMultiBlockNumberWithTS(timestamp
 	return ret, nil
 }
 
-func NewMockMultiBlockGraphs() *MockMultiBlockGraphs {
+func NewMockMultiBlockGraphsOneChain() *MockMultiBlockGraphs {
 	multiBlockClients := MockMultiBlockGraphs{
 		clients: make([]block.BlockInterface, 0),
 	}
