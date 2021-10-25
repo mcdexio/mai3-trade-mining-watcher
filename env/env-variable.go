@@ -41,6 +41,8 @@ func InBTCInverseContractWhiteList(marginAccountID string) (bool, string) {
 		addr := config.GetString(fmt.Sprintf("BTC_INVERSE_CONTRACT_WHITELIST%d", i))
 		if i == 0 {
 			btcWhiteList[addr] = "USD"
+		} else if i == 1 {
+			btcWhiteList[addr] = "USD"
 		}
 	}
 	if quote, match := btcWhiteList[marginAccountID]; match {
@@ -64,6 +66,8 @@ func InETHInverseContractWhiteList(marginAccountID string) (bool, string) {
 		if i == 0 {
 			ethWhiteList[addr] = "USD"
 		} else if i == 1 {
+			ethWhiteList[addr] = "USD"
+		} else if i == 2 {
 			ethWhiteList[addr] = "BTC"
 		}
 	}
