@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"github.com/mcdexio/mai3-trade-mining-watcher/database/models/mining"
+	"github.com/mcdexio/mai3-trade-mining-watcher/graph/block"
+	"github.com/mcdexio/mai3-trade-mining-watcher/graph/mai3"
 	"gorm.io/gorm"
 	"os"
 	"os/signal"
@@ -51,14 +53,21 @@ func main() {
 	group.Go(func() error {
 		return internalServer.Run()
 	})
-
-	syn := syncer.NewSyncer(
-		ctx,
+	multiMai3Graphs := mai3.NewMultiClient(
 		logger,
 		config.GetString("MAI3_TRADE_MINING_GRAPH_BSC_URL"),
 		config.GetString("MAI3_TRADE_MINING_GRAPH_ARB_URL"),
+	)
+	multiBlockGraphs := block.NewMultiClient(
+		logger,
 		config.GetString("BLOCKS_GRAPH_BSC_URL"),
 		config.GetString("BLOCKS_GRAPH_ARB_URL"),
+	)
+	syn := syncer.NewSyncer(
+		ctx,
+		logger,
+		multiMai3Graphs,
+		multiBlockGraphs,
 		config.GetInt64("DEFAULT_EPOCH_0_START_TIME"),
 		config.GetInt64("SYNC_DELAY", 0),
 	)

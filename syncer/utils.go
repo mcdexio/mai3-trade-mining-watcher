@@ -33,7 +33,7 @@ func getEstimatedStakeScore(
 	nowTimestamp int64, epoch *mining.Schedule, unlockTime int64,
 	currentStakingReward decimal.Decimal,
 ) decimal.Decimal {
-	// s.logger.Debug("nowTS %d, epochEndTime %d, unlockTime %d", nowTimestamp, epoch.EndTime, unlockTime)
+	// fmt.Printf("nowTS %d, epochEndTime %d, unlockTime %d\n", nowTimestamp, epoch.EndTime, unlockTime)
 	// A = (1 - Floor(RemainEpochSeconds / 86400) / UnlockTimeInDays / 2) * CurrentStakingReward * RemainEpochMinutes
 	// EstimatedAverageStakingScore  = (CumulativeStakingScore + A) / TotalEpochMinutes
 
@@ -44,10 +44,10 @@ func getEstimatedStakeScore(
 		return decimal.Zero
 	}
 	remainEpochDays := math.Floor(endTimeMinusNowTS / 86400)
-	// s.logger.Debug("remainEpochDays %v", remainEpochDays)
+	// fmt.Printf("remainEpochDays %v\n", remainEpochDays)
 	// ceil to 1 if less than 1 day
 	unlockTimeInDays := math.Ceil(float64(unlockTime-nowTimestamp) / 86400)
-	// s.logger.Debug("unlockTimeInDays %v", unlockTimeInDays)
+	// fmt.Printf("unlockTimeInDays %v\n", unlockTimeInDays)
 	var remainProportion decimal.Decimal
 	if unlockTimeInDays <= 0 {
 		// there is no stake time
@@ -55,12 +55,12 @@ func getEstimatedStakeScore(
 	} else {
 		remainProportion = decimal.NewFromFloat(1.0 - (remainEpochDays / unlockTimeInDays / 2.0))
 	}
-	// s.logger.Debug("remainProportion %v", remainProportion)
+	// fmt.Printf("remainProportion %v\n", remainProportion)
 	// ceil to 1 if less than 1 minute
 	remainEpochMinutes := decimal.NewFromFloat(math.Ceil(endTimeMinusNowTS / 60))
-	// s.logger.Debug("remainEpochMinutes %v", remainEpochMinutes)
+	// fmt.Printf("remainEpochMinutes %v\n", remainEpochMinutes)
 	estimatedSS := remainProportion.Mul(currentStakingReward).Mul(remainEpochMinutes)
-	// s.logger.Debug("estimatedStakeScore %v", estimatedSS)
+	// fmt.Printf("estimatedStakeScore %v\n", estimatedSS)
 	return estimatedSS
 }
 
