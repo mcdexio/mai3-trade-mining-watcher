@@ -39,3 +39,12 @@ func NewMockMultiBlockGraphsOneChain() *MockMultiBlockGraphs {
 	multiBlockClients.clients = append(multiBlockClients.clients, NewMockBlockGraph1())
 	return &multiBlockClients
 }
+
+func NewMockMultiBlockGraphsMultiChain() *MockMultiBlockGraphs {
+	multiBlockClients := MockMultiBlockGraphs{
+		clients: make([]block.BlockInterface, 0),
+	}
+	multiBlockClients.clients = append(multiBlockClients.clients, NewMockBlockGraph1())
+	multiBlockClients.clients = append(multiBlockClients.clients, NewMockBlockGraph1())
+	return &multiBlockClients
+}
