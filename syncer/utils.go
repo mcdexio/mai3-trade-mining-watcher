@@ -38,7 +38,7 @@ func getEstimatedStakeScore(
 	// EstimatedAverageStakingScore  = (CumulativeStakingScore + A) / TotalEpochMinutes
 
 	// floor to 0 if less than 1 day
-	endTimeMinusNowTS := float64(epoch.EndTime-nowTimestamp)
+	endTimeMinusNowTS := float64(epoch.EndTime - nowTimestamp)
 	if endTimeMinusNowTS <= 0 {
 		// there is no remainTime in this epoch
 		return decimal.Zero
@@ -108,7 +108,8 @@ func getScore(epoch *mining.Schedule, ui *mining.UserInfo, remains decimal.Decim
 	feeFloat, _ := fee.Float64()
 	stakeFloat, _ := stake.Float64()
 	posValFloat, _ := posVal.Float64()
-	score := math.Pow(feeFloat, wFee) * math.Pow(stakeFloat/totalEpochMinutes, wStake) * math.Pow(posValFloat/totalEpochMinutes, wPos)
+	score := math.Pow(feeFloat, wFee) * math.Pow(stakeFloat/totalEpochMinutes, wStake) * math.Pow(
+		posValFloat/totalEpochMinutes, wPos)
 	if math.IsNaN(score) {
 		return decimal.Zero
 	}
