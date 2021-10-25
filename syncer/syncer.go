@@ -142,7 +142,8 @@ func (s *Syncer) restoreFromSnapshot(db *gorm.DB, checkpoint int64) error {
 // sync until now or current epoch end
 func (s *Syncer) runSync(ctx context.Context, db *gorm.DB) error {
 	lastTs, err := s.getLastProgress(db, PROGRESS_SYNC_STATE)
-	s.logger.Debug("runSync lastTs %d", lastTs)
+	startTime := time.Now().Unix()
+	s.logger.Info("enter runSync lastTs %d", lastTs)
 	if err != nil {
 		return err
 	}
@@ -181,7 +182,11 @@ func (s *Syncer) runSync(ctx context.Context, db *gorm.DB) error {
 			}
 		}
 	}
-	s.logger.Info("epoch done: epoch=%+v", epoch)
+	defer func() {
+		endTime := time.Now().Unix()
+		s.logger.Info("leave runSync epoch done: epoch=%+v, takes %d seconds",
+			epoch, endTime-startTime)
+	}()
 	return nil
 }
 
@@ -230,7 +235,7 @@ func (s *Syncer) initUserStates(db *gorm.DB, epoch *mining.Schedule) error {
 	startTime := time.Now().Unix()
 	defer func() {
 		endTime := time.Now().Unix()
-		s.logger.Info("leave initUserState, takes %d second for initUserState", endTime-startTime)
+		s.logger.Info("leave initUserState, takes %d seconds", endTime-startTime)
 	}()
 
 	p, err := s.getProgress(db, PROGRESS_INIT_FEE, epoch.Epoch)
@@ -470,7 +475,7 @@ func (s *Syncer) syncState(db *gorm.DB, epoch *mining.Schedule) (int64, error) {
 	startTime := time.Now().Unix()
 	defer func() {
 		endTime := time.Now().Unix()
-		s.logger.Info("leave sync state, takes %d second for syncState", endTime-startTime)
+		s.logger.Info("leave sync state, takes %d seconds", endTime-startTime)
 	}()
 
 	p, err := s.getProgress(db, PROGRESS_SYNC_STATE, epoch.Epoch)
