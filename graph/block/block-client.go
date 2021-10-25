@@ -9,7 +9,7 @@ import (
 	"strconv"
 )
 
-type Interface interface {
+type BlockInterface interface {
 	GetBlockNumberWithTS(timestamp int64) (int64, error)
 }
 
@@ -79,12 +79,12 @@ func (b *Client) queryGraph(resp interface{}, query string, args ...interface{})
 			b.logger.Error("fail to post http params=%+v err=%s", params, err)
 			continue
 		} else if code/100 != 2 {
-			b.logger.Error("unexpected http response=%v", code)
+			b.logger.Error("unexpected http params=%+v, response=%v", params, code)
 			continue
 		}
 		err = json.Unmarshal(res, &resp)
 		if err != nil {
-			b.logger.Error("fail to unmarshal err=%s", err)
+			b.logger.Error("fail to unmarshal result=%+v, err=%s", res, err)
 			continue
 		}
 		// success

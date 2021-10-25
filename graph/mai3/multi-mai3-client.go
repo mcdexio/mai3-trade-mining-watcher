@@ -13,12 +13,18 @@ var (
 )
 
 type MultiClient struct {
-	clients []*Client
+	clients []GraphInterface
+}
+
+type MultiGraphInterface interface {
+	GetMultiUsersBasedOnMultiBlockNumbers(blockNumbers []int64) ([][]User, error)
+	GetMultiMarkPrices(blockNumbers []int64) (map[string]decimal.Decimal, error)
+	GetMai3GraphInterface(index int) (GraphInterface, error)
 }
 
 func NewMultiClient(logger logging.Logger, urls ...string) *MultiClient {
 	multiClient := &MultiClient{
-		clients: make([]*Client, 0),
+		clients: make([]GraphInterface, 0),
 	}
 	logger.Warn("make sure the order of MAI3 graphs is match block graphs")
 	for _, url := range urls {
@@ -64,7 +70,7 @@ func (c *MultiClient) GetMultiMarkPrices(blockNumbers []int64) (map[string]decim
 	return ret, nil
 }
 
-func (c *MultiClient) GetMai3GraphInterface(index int) (Interface, error) {
+func (c *MultiClient) GetMai3GraphInterface(index int) (GraphInterface, error) {
 	if index < 0 || len(c.clients) <= index {
 		return nil, fmt.Errorf("fail to getMai3GraphInterface index %d", index)
 	}

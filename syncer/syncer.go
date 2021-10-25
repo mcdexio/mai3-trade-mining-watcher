@@ -37,8 +37,8 @@ type Syncer struct {
 	logger logging.Logger
 	db     *gorm.DB
 
-	blockGraphs *block.MultiClient
-	mai3Graphs  *mai3.MultiClient
+	blockGraphs block.MultiBlockInterface
+	mai3Graphs  mai3.MultiGraphInterface
 
 	// default if you don't set epoch in schedule database
 	defaultEpochStartTime int64
@@ -628,23 +628,24 @@ func (s *Syncer) detectEpoch(db *gorm.DB, lastTimestamp int64) (*mining.Schedule
 
 // getMultiChainUsersBasedOnBlockNumber the order of mai3Graphs need to match blockNumbers, return 2-D users
 func (s *Syncer) getMultiChainUsersBasedOnBlockNumber(
-	blockNumbers []int64, mai3Graphs *mai3.MultiClient) ([][]mai3.User, error) {
+	blockNumbers []int64, mai3Graphs mai3.MultiGraphInterface) ([][]mai3.User, error) {
 	return mai3Graphs.GetMultiUsersBasedOnMultiBlockNumbers(blockNumbers)
 }
 
 // getMarkPrices the order of mai3Graphs need to match blockNumbers
-func (s *Syncer) getMultiMarkPrices(blockNumbers []int64, mai3Graphs *mai3.MultiClient) (
-	map[string]decimal.Decimal, error) {
+func (s *Syncer) getMultiMarkPrices(
+	blockNumbers []int64, mai3Graphs mai3.MultiGraphInterface) (map[string]decimal.Decimal, error) {
 	return mai3Graphs.GetMultiMarkPrices(blockNumbers)
 }
 
 func (s *Syncer) getMarkPriceWithBlockNumberAddrIndex(
-	blockNumbers int64, poolAddr string, perpIndex int, mai3Graph mai3.Interface) (decimal.Decimal, error) {
+	blockNumbers int64, poolAddr string, perpIndex int, mai3Graph mai3.GraphInterface) (
+	decimal.Decimal, error) {
 	return mai3Graph.GetMarkPriceWithBlockNumberAddrIndex(blockNumbers, poolAddr, perpIndex)
 }
 
-func (s *Syncer) getMultiBlockNumberWithTS(timestamp int64, blockGraphs *block.MultiClient) (
-	[]int64, error) {
+func (s *Syncer) getMultiBlockNumberWithTS(
+	timestamp int64, blockGraphs block.MultiBlockInterface) ([]int64, error) {
 	return blockGraphs.GetMultiBlockNumberWithTS(timestamp)
 }
 

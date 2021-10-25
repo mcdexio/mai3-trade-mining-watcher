@@ -34,7 +34,7 @@ type MarkPrice struct {
 	Price decimal.Decimal `json:"price"`
 }
 
-type Interface interface {
+type GraphInterface interface {
 	GetUsersBasedOnBlockNumber(blockNumber int64) ([]User, error)
 	GetMarkPrices(blockNumber int64) (map[string]decimal.Decimal, error)
 	GetMarkPriceWithBlockNumberAddrIndex(
@@ -109,12 +109,12 @@ func (m *Client) queryGraph(resp interface{}, query string, args ...interface{})
 			m.logger.Error("fail to post http params=%+v err=%s", params, err)
 			continue
 		} else if code/100 != 2 {
-			m.logger.Error("unexpected http response=%v", code)
+			m.logger.Error("unexpected http params=%+v, response=%v", params, code)
 			continue
 		}
 		err = json.Unmarshal(res, &resp)
 		if err != nil {
-			m.logger.Error("fail to unmarshal err=%s", err)
+			m.logger.Error("fail to unmarshal result=%+v, err=%s", res, err)
 			continue
 		}
 		// success

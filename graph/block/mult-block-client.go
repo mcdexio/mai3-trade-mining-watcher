@@ -3,12 +3,16 @@ package block
 import "github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
 
 type MultiClient struct {
-	clients []*Client
+	clients []BlockInterface
+}
+
+type MultiBlockInterface interface {
+	GetMultiBlockNumberWithTS(timestamp int64) ([]int64, error)
 }
 
 func NewMultiClient(logger logging.Logger, urls ...string) *MultiClient {
 	multiClient := &MultiClient{
-		clients: make([]*Client, 0),
+		clients: make([]BlockInterface, 0),
 	}
 	logger.Warn("make sure the order of block graphs is match MAI3 graphs")
 	for _, url := range urls {
