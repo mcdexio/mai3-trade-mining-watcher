@@ -5,27 +5,25 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"github.com/mcdexio/mai3-trade-mining-watcher/graph/block"
-	"github.com/mcdexio/mai3-trade-mining-watcher/graph/mai3"
-	"math"
-	"strings"
-	"time"
-
 	"github.com/shopspring/decimal"
 	"go.uber.org/atomic"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+	"math"
+	"strings"
+	"time"
 
 	"github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
 	database "github.com/mcdexio/mai3-trade-mining-watcher/database/db"
 	"github.com/mcdexio/mai3-trade-mining-watcher/database/models/mining"
 	"github.com/mcdexio/mai3-trade-mining-watcher/env"
+	"github.com/mcdexio/mai3-trade-mining-watcher/graph/block"
+	"github.com/mcdexio/mai3-trade-mining-watcher/graph/mai3"
 	"github.com/mcdexio/mai3-trade-mining-watcher/types"
 )
 
 var (
-	ErrNotInEpoch              = errors.New("not in epoch period")
-	ErrBlockLengthNotEqualMAI3 = errors.New("length of block graph not equal to mai3 graph")
+	ErrNotInEpoch = errors.New("not in epoch period")
 )
 
 var (
@@ -39,13 +37,8 @@ type Syncer struct {
 	logger logging.Logger
 	db     *gorm.DB
 
-	// block graph
-	blockGraph1 block.Interface
-	blockGraph2 block.Interface
-
-	// MAI3 graph
-	mai3Graph1 mai3.Interface
-	mai3Graph2 mai3.Interface
+	blockGraphs *block.MultiClient
+	mai3Graphs  *mai3.MultiClient
 
 	// default if you don't set epoch in schedule database
 	defaultEpochStartTime int64
@@ -57,14 +50,14 @@ type Syncer struct {
 }
 
 func NewSyncer(
-	ctx context.Context, logger logging.Logger, mai3GraphUrlBsc, mai3GraphUrlArb, blockGraphUrlBsc, blockGraphUrlArb string, defaultEpochStartTime int64, syncDelaySeconds int64) *Syncer {
+	ctx context.Context, logger logging.Logger, multiMAI3GraphClient *mai3.MultiClient,
+	multiBlockGraphClient *block.MultiClient, defaultEpochStartTime int64, syncDelaySeconds int64,
+) *Syncer {
 	return &Syncer{
 		ctx:                   ctx,
 		logger:                logger,
-		blockGraph1:           block.NewClient(logger, blockGraphUrlBsc),
-		blockGraph2:           block.NewClient(logger, blockGraphUrlArb),
-		mai3Graph1:            mai3.NewClient(logger, mai3GraphUrlBsc),
-		mai3Graph2:            mai3.NewClient(logger, mai3GraphUrlArb),
+		blockGraphs:           multiBlockGraphClient,
+		mai3Graphs:            multiMAI3GraphClient,
 		db:                    database.GetDB(),
 		defaultEpochStartTime: defaultEpochStartTime,
 		syncDelaySeconds:      syncDelaySeconds,
@@ -524,7 +517,7 @@ func (s *Syncer) syncState(db *gorm.DB, epoch *mining.Schedule) (int64, error) {
 func (s *Syncer) getOIFeeValue(
 	accounts []*mai3.MarginAccount, blockNumbers int64, cache map[string]decimal.Decimal,
 	mai3GraphIndex int) (oi, totalFee, daoFee decimal.Decimal, err error) {
-	mai3Graph, err := s.getMai3GraphInterface(mai3GraphIndex)
+	mai3Graph, err := s.mai3Graphs.GetMai3GraphInterface(mai3GraphIndex)
 	if err != nil {
 		return
 	}
@@ -635,38 +628,14 @@ func (s *Syncer) detectEpoch(db *gorm.DB, lastTimestamp int64) (*mining.Schedule
 
 // getMultiChainUsersBasedOnBlockNumber the order of mai3Graphs need to match blockNumbers, return 2-D users
 func (s *Syncer) getMultiChainUsersBasedOnBlockNumber(
-	blockNumbers []int64, mai3Graphs ...mai3.Interface) ([][]mai3.User, error) {
-	if len(blockNumbers) != len(mai3Graphs) {
-		return nil, ErrBlockLengthNotEqualMAI3
-	}
-
-	ret := make([][]mai3.User, len(blockNumbers))
-	for i, bn := range blockNumbers {
-		users, err := mai3Graphs[i].GetUsersBasedOnBlockNumber(bn)
-		if err != nil {
-			return nil, err
-		}
-		ret[i] = users
-	}
-	return ret, nil
+	blockNumbers []int64, mai3Graphs *mai3.MultiClient) ([][]mai3.User, error) {
+	return mai3Graphs.GetMultiUsersBasedOnMultiBlockNumbers(blockNumbers)
 }
 
 // getMarkPrices the order of mai3Graphs need to match blockNumbers
-func (s *Syncer) getMultiMarkPrices(blockNumbers []int64, mai3Graphs ...mai3.Interface) (map[string]decimal.Decimal, error) {
-	if len(blockNumbers) != len(mai3Graphs) {
-		return nil, ErrBlockLengthNotEqualMAI3
-	}
-	ret := make(map[string]decimal.Decimal)
-	for i, bn := range blockNumbers {
-		prices, err := mai3Graphs[i].GetMarkPrices(bn)
-		if err != nil {
-			return nil, err
-		}
-		for k, v := range prices {
-			ret[k] = v
-		}
-	}
-	return ret, nil
+func (s *Syncer) getMultiMarkPrices(blockNumbers []int64, mai3Graphs *mai3.MultiClient) (
+	map[string]decimal.Decimal, error) {
+	return mai3Graphs.GetMultiMarkPrices(blockNumbers)
 }
 
 func (s *Syncer) getMarkPriceWithBlockNumberAddrIndex(
@@ -674,40 +643,22 @@ func (s *Syncer) getMarkPriceWithBlockNumberAddrIndex(
 	return mai3Graph.GetMarkPriceWithBlockNumberAddrIndex(blockNumbers, poolAddr, perpIndex)
 }
 
-func (s *Syncer) getMultiBlockNumberWithTS(timestamp int64, blockGraphs ...block.Interface) (
+func (s *Syncer) getMultiBlockNumberWithTS(timestamp int64, blockGraphs *block.MultiClient) (
 	[]int64, error) {
-	var ret []int64
-	for _, blockGraph := range blockGraphs {
-		bn, err := blockGraph.GetBlockNumberWithTS(timestamp)
-		if err != nil {
-			return nil, err
-		}
-		ret = append(ret, bn)
-	}
-	return ret, nil
-}
-
-func (s *Syncer) getMai3GraphInterface(index int) (mai3.Interface, error) {
-	if index == 0 {
-		return s.mai3Graph1, nil
-	} else if index == 1 {
-		return s.mai3Graph2, nil
-	} else {
-		return nil, fmt.Errorf("fail to getMai3GraphInterface index %d", index)
-	}
+	return blockGraphs.GetMultiBlockNumberWithTS(timestamp)
 }
 
 func (s *Syncer) getMultiChainInfo(timestamp int64) (
 	multiBNs []int64, multiUsers [][]mai3.User, multiPrices map[string]decimal.Decimal, err error) {
-	multiBNs, err = s.getMultiBlockNumberWithTS(timestamp, s.blockGraph1, s.blockGraph2)
+	multiBNs, err = s.getMultiBlockNumberWithTS(timestamp, s.blockGraphs)
 	if err != nil {
 		return
 	}
-	multiUsers, err = s.getMultiChainUsersBasedOnBlockNumber(multiBNs, s.mai3Graph1, s.mai3Graph2)
+	multiUsers, err = s.getMultiChainUsersBasedOnBlockNumber(multiBNs, s.mai3Graphs)
 	if err != nil {
 		return
 	}
-	multiPrices, err = s.getMultiMarkPrices(multiBNs, s.mai3Graph1, s.mai3Graph2)
+	multiPrices, err = s.getMultiMarkPrices(multiBNs, s.mai3Graphs)
 	if err != nil {
 		return
 	}
