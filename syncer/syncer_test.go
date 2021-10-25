@@ -356,22 +356,22 @@ func (t *SyncerTestSuite) TestState() {
 
 func (t *SyncerTestSuite) TestGetStakeScore() {
 	// one day
-	stakeScore := t.syncer.getStakeScore(0, 86400, decimal.NewFromInt(1))
+	stakeScore := getStakeScore(0, 86400, decimal.NewFromInt(1))
 	t.Require().Equal(stakeScore, decimal.NewFromInt(1))
 
 	// less than one day
-	stakeScore = t.syncer.getStakeScore(0, 86300, decimal.NewFromInt(1))
+	stakeScore = getStakeScore(0, 86300, decimal.NewFromInt(1))
 	t.Require().Equal(stakeScore, decimal.NewFromInt(1))
 
 	// more than one day
-	stakeScore = t.syncer.getStakeScore(0, 86401, decimal.NewFromInt(1))
+	stakeScore = getStakeScore(0, 86401, decimal.NewFromInt(1))
 	t.Require().Equal(stakeScore, decimal.NewFromInt(2))
 
 	// two day
-	stakeScore = t.syncer.getStakeScore(0, 86400*2, decimal.NewFromInt(2))
+	stakeScore = getStakeScore(0, 86400*2, decimal.NewFromInt(2))
 	t.Require().Equal(stakeScore, decimal.NewFromInt(4))
 
-	stakeScore = t.syncer.getStakeScore(0, 86400*2, decimal.NewFromFloat(1.5))
+	stakeScore = getStakeScore(0, 86400*2, decimal.NewFromFloat(1.5))
 	t.Require().Equal(stakeScore.String(), decimal.NewFromInt(3).String())
 }
 
@@ -383,7 +383,7 @@ func (t *SyncerTestSuite) TestGetEstimatedStakeScore() {
 	// remainEpochDays floor((250 - 125) / 86400) = 0, unlockTimeInDays ceil((300-250)/ 86400) = 1
 	// remainEpochMinutes ceil((250-125)/60) = 3
 	// estimatedSS 1 * 50 * 3 = 150
-	estimatedSS := t.syncer.getEstimatedStakeScore(125, epoch, 300, decimal.NewFromInt(50))
+	estimatedSS := getEstimatedStakeScore(125, epoch, 300, decimal.NewFromInt(50))
 	t.Require().Equal(estimatedSS, decimal.NewFromInt(150))
 
 	epoch = &mining.Schedule{
@@ -394,7 +394,7 @@ func (t *SyncerTestSuite) TestGetEstimatedStakeScore() {
 	// remainProportion = 1 - (1/2/2) = 0.75
 	// remainEpochMinutes ceil((87400-125)/60) = 1455
 	// estimatedSS 0.75 * 20 * 1455
-	estimatedSS = t.syncer.getEstimatedStakeScore(125, epoch, 90000, decimal.NewFromInt(20))
+	estimatedSS = getEstimatedStakeScore(125, epoch, 90000, decimal.NewFromInt(20))
 	t.Require().Equal(estimatedSS.String(), decimal.NewFromInt(21825).String())
 
 	// endTime == nowTS
@@ -402,7 +402,7 @@ func (t *SyncerTestSuite) TestGetEstimatedStakeScore() {
 		StartTime: 10,
 		EndTime:   250,
 	}
-	estimatedSS = t.syncer.getEstimatedStakeScore(250, epoch, 300, decimal.NewFromInt(50))
+	estimatedSS = getEstimatedStakeScore(250, epoch, 300, decimal.NewFromInt(50))
 	t.Require().Equal(estimatedSS, decimal.Zero)
 
 	// endTime < nowTS
@@ -410,7 +410,7 @@ func (t *SyncerTestSuite) TestGetEstimatedStakeScore() {
 		StartTime: 10,
 		EndTime:   250,
 	}
-	estimatedSS = t.syncer.getEstimatedStakeScore(255, epoch, 300, decimal.NewFromInt(50))
+	estimatedSS = getEstimatedStakeScore(255, epoch, 300, decimal.NewFromInt(50))
 	t.Require().Equal(estimatedSS, decimal.Zero)
 
 	// unlockTime < nowTS
@@ -418,7 +418,7 @@ func (t *SyncerTestSuite) TestGetEstimatedStakeScore() {
 		StartTime: 10,
 		EndTime:   87400,
 	}
-	estimatedSS = t.syncer.getEstimatedStakeScore(85000, epoch, 80000, decimal.NewFromInt(20))
+	estimatedSS = getEstimatedStakeScore(85000, epoch, 80000, decimal.NewFromInt(20))
 	t.Require().Equal(estimatedSS, decimal.Zero)
 
 	// unlockTime == nowTS
@@ -426,7 +426,7 @@ func (t *SyncerTestSuite) TestGetEstimatedStakeScore() {
 		StartTime: 10,
 		EndTime:   87400,
 	}
-	estimatedSS = t.syncer.getEstimatedStakeScore(80000, epoch, 80000, decimal.NewFromInt(20))
+	estimatedSS = getEstimatedStakeScore(80000, epoch, 80000, decimal.NewFromInt(20))
 	t.Require().Equal(estimatedSS, decimal.Zero)
 
 	// nowTS < unlockTime < endTime
@@ -438,7 +438,7 @@ func (t *SyncerTestSuite) TestGetEstimatedStakeScore() {
 	// remainProportion = 1 - (0/1/2) = 1
 	// remainEpochMinutes ceil((87400-9999)/60) = 1291
 	// estimatedSS 1 * 125 * 1291
-	estimatedSS = t.syncer.getEstimatedStakeScore(9999, epoch, 80000, decimal.NewFromInt(125))
+	estimatedSS = getEstimatedStakeScore(9999, epoch, 80000, decimal.NewFromInt(125))
 	t.Require().Equal(estimatedSS.String(), decimal.NewFromInt(161375).String())
 }
 
@@ -463,7 +463,7 @@ func (t *SyncerTestSuite) TestGetScore() {
 		AccStakeScore: decimal.NewFromFloat(3.5),
 		CurStakeScore: decimal.NewFromFloat(3),
 	}
-	actual := t.syncer.getScore(epoch, &ui, remains)
+	actual := getScore(epoch, &ui, remains)
 	t.Require().Equal(actual, decimal.Zero)
 
 	ui = mining.UserInfo{
@@ -474,7 +474,7 @@ func (t *SyncerTestSuite) TestGetScore() {
 		AccStakeScore: decimal.NewFromFloat(3.5),
 		CurStakeScore: decimal.NewFromFloat(3),
 	}
-	actual = t.syncer.getScore(epoch, &ui, remains)
+	actual = getScore(epoch, &ui, remains)
 	t.Require().Equal(actual, decimal.Zero)
 
 	ui = mining.UserInfo{
@@ -485,11 +485,11 @@ func (t *SyncerTestSuite) TestGetScore() {
 		AccStakeScore: decimal.NewFromFloat(0),
 		CurStakeScore: decimal.NewFromFloat(0),
 	}
-	actual = t.syncer.getScore(epoch, &ui, remains)
+	actual = getScore(epoch, &ui, remains)
 	t.Require().Equal(actual, decimal.Zero)
 
 	currentStakeReward := decimal.NewFromFloat(3)
-	estimatedStakeScore := t.syncer.getEstimatedStakeScore(100, epoch, 60*60*24*100, currentStakeReward)
+	estimatedStakeScore := getEstimatedStakeScore(100, epoch, 60*60*24*100, currentStakeReward)
 	ui = mining.UserInfo{
 		InitTotalFee:        decimal.NewFromFloat(2.5),
 		AccTotalFee:         decimal.NewFromFloat(5),
@@ -499,7 +499,7 @@ func (t *SyncerTestSuite) TestGetScore() {
 		EstimatedStakeScore: estimatedStakeScore,
 		CurStakeScore:       currentStakeReward,
 	}
-	actual = t.syncer.getScore(epoch, &ui, remains)
+	actual = getScore(epoch, &ui, remains)
 	// pow((5-2.5), 0.7) = 1.8991444823309347
 	// pow(((3.5+3+9)/4), 0.3) = 1.5013484918805586
 	// pow((4.5+4*1)/4, 0.3) = 1.2537405723606492
