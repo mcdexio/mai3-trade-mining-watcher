@@ -5,6 +5,7 @@ import (
 	"github.com/mcdexio/mai3-trade-mining-watcher/database/models/mining"
 	"github.com/mcdexio/mai3-trade-mining-watcher/graph/block"
 	"github.com/mcdexio/mai3-trade-mining-watcher/graph/mai3"
+	"github.com/mcdexio/mai3-trade-mining-watcher/whitelist"
 	"gorm.io/gorm"
 	"os"
 	"os/signal"
@@ -53,15 +54,66 @@ func main() {
 	group.Go(func() error {
 		return internalServer.Run()
 	})
+
+	mai3GraphClients := make([]mai3.GraphInterface, 0)
+	blockGraphClients := make([]block.BlockInterface, 0)
+	if env.BSCChainInclude() {
+		// for bsc mai3 graph client
+		bscBTCWhiteList := whitelist.NewWhiteList(
+			logger,
+			config.GetString("BSC_BTC_INVERSE_CONTRACT_WHITELIST0", ""),
+		)
+		bscETHWhiteList := whitelist.NewWhiteList(
+			logger,
+			config.GetString("BSC_ETH_INVERSE_CONTRACT_WHITELIST0", ""),
+			config.GetString("BSC_ETH_INVERSE_CONTRACT_WHITELIST1", ""),
+		)
+		bscMAI3GraphClient := mai3.NewClient(
+			logger,
+			config.GetString("BSC_MAI3_GRAPH_URL"),
+			bscBTCWhiteList,
+			bscETHWhiteList,
+			config.GetString("BSC_BTC_USD_PERP_ID", ""),
+			config.GetString("BSC_ETH_USD_PERP_ID", ""),
+		)
+		mai3GraphClients = append(mai3GraphClients, bscMAI3GraphClient)
+
+		// for bsc block graph client
+		bscBlockGraphClient := block.NewClient(logger, config.GetString("BSC_BLOCK_GRAPH_URL"))
+		blockGraphClients = append(blockGraphClients, bscBlockGraphClient)
+	}
+	if env.ArbRinkebyChainInclude() {
+		// for arb-rinkeby mai3 graph client
+		arbRinkebyBTCWhiteList := whitelist.NewWhiteList(
+			logger,
+			config.GetString("ARB_RINKEBY_BTC_INVERSE_CONTRACT_WHITELIST0", ""),
+		)
+		arbRinkebyETHWhiteList := whitelist.NewWhiteList(
+			logger,
+			config.GetString("ARB_RINKEBY_ETH_INVERSE_CONTRACT_WHITELIST0", ""),
+		)
+		arbRinkebyMAI3GraphClient := mai3.NewClient(
+			logger,
+			config.GetString("ARB_RINKEBY_MAI3_GRAPH_URL"),
+			arbRinkebyBTCWhiteList,
+			arbRinkebyETHWhiteList,
+			config.GetString("ARB_RINKEBY_BTC_USD_PERP_ID", ""),
+			config.GetString("ARB_RINKEBY_ETH_USD_PERP_ID", ""),
+		)
+		mai3GraphClients = append(mai3GraphClients, arbRinkebyMAI3GraphClient)
+
+		// for arb-rinkeby block graph client
+		arbRinkebyBlockGraphClient := block.NewClient(logger, config.GetString("ARB_RINKEBY_BLOCK_GRAPH_URL"))
+		blockGraphClients = append(blockGraphClients, arbRinkebyBlockGraphClient)
+	}
+
 	multiMai3Graphs := mai3.NewMultiClient(
 		logger,
-		config.GetString("MAI3_TRADE_MINING_GRAPH_BSC_URL"),
-		config.GetString("MAI3_TRADE_MINING_GRAPH_ARB_URL"),
+		mai3GraphClients,
 	)
 	multiBlockGraphs := block.NewMultiClient(
 		logger,
-		config.GetString("BLOCKS_GRAPH_BSC_URL"),
-		config.GetString("BLOCKS_GRAPH_ARB_URL"),
+		blockGraphClients,
 	)
 	syn := syncer.NewSyncer(
 		ctx,

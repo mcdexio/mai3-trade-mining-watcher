@@ -13,6 +13,7 @@ import (
 	"github.com/mcdexio/mai3-trade-mining-watcher/syncer"
 	"github.com/mcdexio/mai3-trade-mining-watcher/types"
 	"github.com/mcdexio/mai3-trade-mining-watcher/validator"
+	"github.com/mcdexio/mai3-trade-mining-watcher/whitelist"
 	"github.com/shopspring/decimal"
 	"golang.org/x/sync/errgroup"
 	"gorm.io/gorm"
@@ -63,14 +64,41 @@ func main() {
 	})
 	go WaitExitSignalWithServer(stop, logger, tmServer, internalServer)
 
+	mai3GraphClients := make([]mai3.GraphInterface, 0)
+	blockGraphClients := make([]block.BlockInterface, 0)
+
+	// for arb-rinkeby mai3 graph client
+	arbRinkebyBTCWhiteList := whitelist.NewWhiteList(
+		logger,
+		config.GetString("ARB_RINKEBY_BTC_INVERSE_CONTRACT_WHITELIST0", ""),
+	)
+	arbRinkebyETHWhiteList := whitelist.NewWhiteList(
+		logger,
+		config.GetString("ARB_RINKEBY_ETH_INVERSE_CONTRACT_WHITELIST0", ""),
+	)
+	arbRinkebyMAI3GraphClient := mai3.NewClient(
+		logger,
+		config.GetString("ARB_RINKEBY_MAI3_GRAPH_URL"),
+		arbRinkebyBTCWhiteList,
+		arbRinkebyETHWhiteList,
+		config.GetString("ARB_RINKEBY_BTC_USD_PERP_ID", ""),
+		config.GetString("ARB_RINKEBY_ETH_USD_PERP_ID", ""),
+	)
+	mai3GraphClients = append(mai3GraphClients, arbRinkebyMAI3GraphClient)
+
+	// for arb-rinkeby block graph client
+	arbRinkebyBlockGraphClient := block.NewClient(logger, config.GetString("ARB_RINKEBY_BLOCK_GRAPH_URL"))
+	blockGraphClients = append(blockGraphClients, arbRinkebyBlockGraphClient)
+
 	multiMai3Graphs := mai3.NewMultiClient(
 		logger,
-		config.GetString("MAI3_TRADE_MINING_GRAPH_ARB_URL"),
+		mai3GraphClients,
 	)
 	multiBlockGraphs := block.NewMultiClient(
 		logger,
-		config.GetString("BLOCKS_GRAPH_ARB_URL"),
+		blockGraphClients,
 	)
+
 	syn := syncer.NewSyncer(
 		ctx,
 		logger,
