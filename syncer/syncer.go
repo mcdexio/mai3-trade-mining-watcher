@@ -366,22 +366,35 @@ func (s *Syncer) getEstimatedStakeScore(
 	nowTimestamp int64, epoch *mining.Schedule, unlockTime int64,
 	currentStakingReward decimal.Decimal,
 ) decimal.Decimal {
+	// s.logger.Debug("nowTS %d, epochEndTime %d, unlockTime %d", nowTimestamp, epoch.EndTime, unlockTime)
 	// A = (1 - Floor(RemainEpochSeconds / 86400) / UnlockTimeInDays / 2) * CurrentStakingReward * RemainEpochMinutes
 	// EstimatedAverageStakingScore  = (CumulativeStakingScore + A) / TotalEpochMinutes
 
 	// floor to 0 if less than 1 day
-	remainEpochDays := math.Floor(float64(epoch.EndTime-nowTimestamp) / 86400)
-	// fmt.Printf("remainEpochDays %v\n", remainEpochDays)
+	endTimeMinusNowTS := float64(epoch.EndTime-nowTimestamp)
+	if endTimeMinusNowTS <= 0 {
+		// there is no remainTime in this epoch
+		return decimal.Zero
+	}
+	remainEpochDays := math.Floor(endTimeMinusNowTS / 86400)
+	// s.logger.Debug("remainEpochDays %v", remainEpochDays)
 	// ceil to 1 if less than 1 day
 	unlockTimeInDays := math.Ceil(float64(unlockTime-nowTimestamp) / 86400)
-	// fmt.Printf("unlockTimeInDays %v\n", unlockTimeInDays)
-	remainProportion := decimal.NewFromFloat(1.0 - (remainEpochDays / unlockTimeInDays / 2.0))
-	// fmt.Printf("remainProportion %v\n", remainProportion)
+	// s.logger.Debug("unlockTimeInDays %v", unlockTimeInDays)
+	var remainProportion decimal.Decimal
+	if unlockTimeInDays <= 0 {
+		// there is no stake time
+		return decimal.Zero
+	} else {
+		remainProportion = decimal.NewFromFloat(1.0 - (remainEpochDays / unlockTimeInDays / 2.0))
+	}
+	// s.logger.Debug("remainProportion %v", remainProportion)
 	// ceil to 1 if less than 1 minute
-	remainEpochMinutes := decimal.NewFromFloat(math.Ceil(float64(epoch.EndTime-nowTimestamp) / 60))
-	// fmt.Printf("remainEpochMinutes %v\n", remainEpochMinutes)
-
-	return remainProportion.Mul(currentStakingReward).Mul(remainEpochMinutes)
+	remainEpochMinutes := decimal.NewFromFloat(math.Ceil(endTimeMinusNowTS / 60))
+	// s.logger.Debug("remainEpochMinutes %v", remainEpochMinutes)
+	estimatedSS := remainProportion.Mul(currentStakingReward).Mul(remainEpochMinutes)
+	// s.logger.Debug("estimatedStakeScore %v", estimatedSS)
+	return estimatedSS
 }
 
 func (s *Syncer) accumulateCurValues(db *gorm.DB, epoch int64) error {

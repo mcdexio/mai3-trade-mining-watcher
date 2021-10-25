@@ -354,7 +354,7 @@ func (t *SyncerTestSuite) TestState() {
 	}
 }
 
-func (t *SyncerTestSuite) TestStakeGetScore() {
+func (t *SyncerTestSuite) TestGetStakeScore() {
 	// one day
 	stakeScore := t.syncer.getStakeScore(0, 86400, decimal.NewFromInt(1))
 	t.Require().Equal(stakeScore, decimal.NewFromInt(1))
@@ -373,6 +373,73 @@ func (t *SyncerTestSuite) TestStakeGetScore() {
 
 	stakeScore = t.syncer.getStakeScore(0, 86400*2, decimal.NewFromFloat(1.5))
 	t.Require().Equal(stakeScore.String(), decimal.NewFromInt(3).String())
+}
+
+func (t *SyncerTestSuite) TestGetEstimatedStakeScore() {
+	epoch := &mining.Schedule{
+		StartTime: 0,
+		EndTime:   250,
+	}
+	// remainEpochDays floor((250 - 125) / 86400) = 0, unlockTimeInDays ceil((300-250)/ 86400) = 1
+	// remainEpochMinutes ceil((250-125)/60) = 3
+	// estimatedSS 1 * 50 * 3 = 150
+	estimatedSS := t.syncer.getEstimatedStakeScore(125, epoch, 300, decimal.NewFromInt(50))
+	t.Require().Equal(estimatedSS, decimal.NewFromInt(150))
+
+	epoch = &mining.Schedule{
+		StartTime: 10,
+		EndTime:   87400,
+	}
+	// remainEpochDays floor((87400 - 125) / 86400) = 1, unlockTimeInDays ceil((90000-125)/ 86400) = 2
+	// remainProportion = 1 - (1/2/2) = 0.75
+	// remainEpochMinutes ceil((87400-125)/60) = 1455
+	// estimatedSS 0.75 * 20 * 1455
+	estimatedSS = t.syncer.getEstimatedStakeScore(125, epoch, 90000, decimal.NewFromInt(20))
+	t.Require().Equal(estimatedSS.String(), decimal.NewFromInt(21825).String())
+
+	// endTime == nowTS
+	epoch = &mining.Schedule{
+		StartTime: 10,
+		EndTime:   250,
+	}
+	estimatedSS = t.syncer.getEstimatedStakeScore(250, epoch, 300, decimal.NewFromInt(50))
+	t.Require().Equal(estimatedSS, decimal.Zero)
+
+	// endTime < nowTS
+	epoch = &mining.Schedule{
+		StartTime: 10,
+		EndTime:   250,
+	}
+	estimatedSS = t.syncer.getEstimatedStakeScore(255, epoch, 300, decimal.NewFromInt(50))
+	t.Require().Equal(estimatedSS, decimal.Zero)
+
+	// unlockTime < nowTS
+	epoch = &mining.Schedule{
+		StartTime: 10,
+		EndTime:   87400,
+	}
+	estimatedSS = t.syncer.getEstimatedStakeScore(85000, epoch, 80000, decimal.NewFromInt(20))
+	t.Require().Equal(estimatedSS, decimal.Zero)
+
+	// unlockTime == nowTS
+	epoch = &mining.Schedule{
+		StartTime: 10,
+		EndTime:   87400,
+	}
+	estimatedSS = t.syncer.getEstimatedStakeScore(80000, epoch, 80000, decimal.NewFromInt(20))
+	t.Require().Equal(estimatedSS, decimal.Zero)
+
+	// nowTS < unlockTime < endTime
+	epoch = &mining.Schedule{
+		StartTime: 10,
+		EndTime:   87400,
+	}
+	// remainEpochDays floor((87400 - 9999) / 86400) = 0, unlockTimeInDays ceil((80000-9999)/ 86400) = 1
+	// remainProportion = 1 - (0/1/2) = 1
+	// remainEpochMinutes ceil((87400-9999)/60) = 1291
+	// estimatedSS 1 * 125 * 1291
+	estimatedSS = t.syncer.getEstimatedStakeScore(9999, epoch, 80000, decimal.NewFromInt(125))
+	t.Require().Equal(estimatedSS.String(), decimal.NewFromInt(161375).String())
 }
 
 func (t *SyncerTestSuite) TestGetScore() {
