@@ -16,7 +16,6 @@ import (
 	"github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
 	database "github.com/mcdexio/mai3-trade-mining-watcher/database/db"
 	"github.com/mcdexio/mai3-trade-mining-watcher/database/models/mining"
-	"github.com/mcdexio/mai3-trade-mining-watcher/env"
 	"github.com/mcdexio/mai3-trade-mining-watcher/graph/block"
 	"github.com/mcdexio/mai3-trade-mining-watcher/graph/mai3"
 	"github.com/mcdexio/mai3-trade-mining-watcher/types"
@@ -545,11 +544,11 @@ func (s *Syncer) getOIFeeValue(
 		match := false
 		quote := ""
 		// is BTC inverse contract
-		match, quote = env.InBTCInverseContractWhiteList(perpId)
+		match, quote = mai3Graph.InBTCInverseContractWhiteList(perpId)
 		if match {
 			var btcPerpetualID, quotePerpetualID string
 
-			btcPerpetualID, err = env.GetPerpIDWithUSDBased("BTC", mai3GraphIndex)
+			btcPerpetualID, err = mai3Graph.GetPerpIDWithUSDBased("BTC")
 			if err != nil {
 				return
 			}
@@ -562,7 +561,7 @@ func (s *Syncer) getOIFeeValue(
 				continue
 			}
 			// quote not USD
-			quotePerpetualID, err = env.GetPerpIDWithUSDBased(quote, mai3GraphIndex)
+			quotePerpetualID, err = mai3Graph.GetPerpIDWithUSDBased(quote)
 			if err != nil {
 				return
 			}
@@ -570,11 +569,11 @@ func (s *Syncer) getOIFeeValue(
 			continue
 		}
 		// is ETH inverse contract
-		match, quote = env.InETHInverseContractWhiteList(perpId)
+		match, quote = mai3Graph.InETHInverseContractWhiteList(perpId)
 		if match {
 			var ethPerpetualID, quotePerpetualID string
 
-			ethPerpetualID, err = env.GetPerpIDWithUSDBased("ETH", mai3GraphIndex)
+			ethPerpetualID, err = mai3Graph.GetPerpIDWithUSDBased("ETH")
 			if err != nil {
 				return
 			}
@@ -587,7 +586,7 @@ func (s *Syncer) getOIFeeValue(
 				continue
 			}
 			// quote not USD
-			quotePerpetualID, err = env.GetPerpIDWithUSDBased(quote, mai3GraphIndex)
+			quotePerpetualID, err = mai3Graph.GetPerpIDWithUSDBased(quote)
 			if err != nil {
 				return
 			}

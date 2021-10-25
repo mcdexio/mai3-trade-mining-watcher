@@ -39,6 +39,18 @@ type MockMAI3Graph1 struct {
 	delay time.Duration
 }
 
+func (mockMAI3 *MockMAI3Graph1) InBTCInverseContractWhiteList(perpID string) (bool, string) {
+	return false, ""
+}
+
+func (mockMAI3 *MockMAI3Graph1) InETHInverseContractWhiteList(perpID string) (bool, string) {
+	return false, ""
+}
+
+func (mockMAI3 *MockMAI3Graph1) GetPerpIDWithUSDBased(symbol string) (string, error) {
+	return "", nil
+}
+
 func (mockMAI3 *MockMAI3Graph1) GetUsersBasedOnBlockNumber(blockNumber int64) ([]mai3.User, error) {
 	if mockMAI3.delay > 0 {
 		time.Sleep(mockMAI3.delay)
@@ -234,6 +246,18 @@ func NewMockMAI3Graph1() *MockMAI3Graph1 {
 }
 
 type MockMAI3Graph2 struct{}
+
+func (mockMAI3 *MockMAI3Graph2) InBTCInverseContractWhiteList(perpID string) (bool, string) {
+	return false, ""
+}
+
+func (mockMAI3 *MockMAI3Graph2) InETHInverseContractWhiteList(perpID string) (bool, string) {
+	return false, ""
+}
+
+func (mockMAI3 *MockMAI3Graph2) GetPerpIDWithUSDBased(symbol string) (string, error) {
+	return "", nil
+}
 
 func (mockMAI3 *MockMAI3Graph2) GetUsersBasedOnBlockNumber(blockNumber int64) ([]mai3.User, error) {
 	if blockNumber <= 0 {

@@ -6,13 +6,10 @@ import (
 	"fmt"
 	"github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
 	utils "github.com/mcdexio/mai3-trade-mining-watcher/utils/http"
+	"github.com/mcdexio/mai3-trade-mining-watcher/whitelist"
 	"github.com/shopspring/decimal"
+	"strings"
 )
-
-type Client struct {
-	logger logging.Logger
-	client *utils.Client
-}
 
 type User struct {
 	ID             string          `json:"id"`
@@ -34,19 +31,70 @@ type MarkPrice struct {
 	Price decimal.Decimal `json:"price"`
 }
 
+type Client struct {
+	logger       logging.Logger
+	client       *utils.Client
+	btcWhiteList *whitelist.Whitelist
+	ethWhiteList *whitelist.Whitelist
+	btcUsdPerpID string
+	ethUsdPerpID string
+}
+
 type GraphInterface interface {
 	GetUsersBasedOnBlockNumber(blockNumber int64) ([]User, error)
 	GetMarkPrices(blockNumber int64) (map[string]decimal.Decimal, error)
 	GetMarkPriceWithBlockNumberAddrIndex(
 		blockNumber int64, poolAddr string, perpIndex int) (decimal.Decimal, error)
+
+	// InBTCInverseContractWhiteList return (true, quote) if this contract is inverse white list
+	InBTCInverseContractWhiteList(perpID string) (bool, string)
+	// InETHInverseContractWhiteList return (true, quote) if this contract is inverse white list
+	InETHInverseContractWhiteList(perpID string) (bool, string)
+
+	// GetPerpIDWithUSDBased get perpetual id depend on symbol.
+	GetPerpIDWithUSDBased(symbol string) (string, error)
 }
 
-func NewClient(logger logging.Logger, url string) *Client {
+func NewClient(logger logging.Logger, url string, btcWhiteList *whitelist.Whitelist,
+	ethWhiteList *whitelist.Whitelist, perpIDsUSDBased ...string) *Client {
 	logger.Info("New MAI3 graph client with url %s", url)
-	return &Client{
-		logger: logger,
-		client: utils.NewHttpClient(utils.DefaultTransport, logger, url),
+	c := &Client{
+		logger:       logger,
+		client:       utils.NewHttpClient(utils.DefaultTransport, logger, url),
+		btcWhiteList: btcWhiteList,
+		ethWhiteList: ethWhiteList,
 	}
+	for i, perpID := range perpIDsUSDBased {
+		if perpID == "" {
+			logger.Error("index %d of perpIDsUSDBased is empty", i)
+			return nil
+		}
+		logger.Debug("index %d perpID USD based %s", i, perpID)
+		if i == 0 {
+			c.btcUsdPerpID = perpID
+		} else if i == 1 {
+			c.ethUsdPerpID = perpID
+		}
+	}
+	return c
+}
+
+func (m *Client) GetPerpIDWithUSDBased(symbol string) (string, error) {
+	symbol = strings.ToLower(symbol)
+	if symbol == "btc" {
+		return m.btcUsdPerpID, nil
+	} else if symbol == "eth" {
+		return m.ethUsdPerpID, nil
+	}
+	return "", fmt.Errorf("fail to get perpetualID of symbol %s", symbol)
+}
+
+func (m *Client) InBTCInverseContractWhiteList(perpID string) (bool, string) {
+	return m.btcWhiteList.InInverseContractWhiteList(perpID)
+}
+
+func (m *Client) InETHInverseContractWhiteList(perpID string) (bool, string) {
+	return m.ethWhiteList.InInverseContractWhiteList(perpID)
 }
 
 // GetMarkPrices get mark prices with block number. return map[markPriceID]price

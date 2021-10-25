@@ -22,14 +22,11 @@ type MultiGraphInterface interface {
 	GetMai3GraphInterface(index int) (GraphInterface, error)
 }
 
-func NewMultiClient(logger logging.Logger, urls ...string) *MultiClient {
+func NewMultiClient(logger logging.Logger, clients []GraphInterface) *MultiClient {
 	multiClient := &MultiClient{
-		clients: make([]GraphInterface, 0),
+		clients: clients,
 	}
 	logger.Warn("make sure the order of MAI3 graphs is match block graphs")
-	for _, url := range urls {
-		multiClient.clients = append(multiClient.clients, NewClient(logger, url))
-	}
 	return multiClient
 }
 
