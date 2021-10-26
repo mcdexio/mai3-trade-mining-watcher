@@ -115,3 +115,9 @@ func getScore(epoch *mining.Schedule, ui *mining.UserInfo, remains decimal.Decim
 	}
 	return decimal.NewFromFloat(score)
 }
+
+func GetRemainMinutes(timestamp int64, epoch *mining.Schedule) decimal.Decimal {
+	minuteCeil := int64(math.Floor((float64(timestamp) - float64(epoch.StartTime)) / 60.0))
+	remains    := decimal.NewFromInt((epoch.EndTime-epoch.StartTime)/60.0 - minuteCeil) // total epoch in minutes
+	return remains
+}

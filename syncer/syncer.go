@@ -9,7 +9,6 @@ import (
 	"go.uber.org/atomic"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
-	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -462,10 +461,8 @@ func (s *Syncer) updateUserScores(db *gorm.DB, epoch *mining.Schedule, timestamp
 	if len(users) == 0 {
 		return nil
 	}
-	var (
-		minuteCeil = int64(math.Floor((float64(timestamp) - float64(epoch.StartTime)) / 60.0))
-		remains    = decimal.NewFromInt((epoch.EndTime-epoch.StartTime)/60.0 - minuteCeil) // total epoch in minutes
-	)
+	remains := GetRemainMinutes(timestamp, epoch)
+
 	for _, ui := range users {
 		ui.Score = getScore(epoch, ui, remains)
 	}
