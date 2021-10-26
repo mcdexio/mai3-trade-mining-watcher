@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/mcdexio/mai3-trade-mining-watcher/syncer"
 	"math"
 	"net/http"
 	"strings"
@@ -47,12 +48,12 @@ type TMServer struct {
 }
 
 type EpochScoreResp struct {
-	TotalFee     string `json:"totalFee"`
-	DaoFee       string `json:"daoFee"`
-	AverageOI    string `json:"averageOI"`
-	AverageStake string `json:"averageStake"`
-	Score        string `json:"score"`
-	Proportion   string `json:"proportion"`
+	TotalFee     map[string]string `json:"totalFee"`
+	DaoFee       map[string]string `json:"daoFee"`
+	AverageOI    map[string]string `json:"averageOI"`
+	AverageStake map[string]string `json:"averageStake"`
+	Score        string            `json:"score"`
+	Proportion   string            `json:"proportion"`
 }
 
 func NewTMServer(ctx context.Context, logger logging.Logger) *TMServer {
@@ -136,7 +137,6 @@ func (s *TMServer) getScheduleWithEpoch(db *gorm.DB, epoch int) (sch *mining.Sch
 }
 
 func (s *TMServer) getLatestSchedule(db *gorm.DB) (*mining.Schedule, error) {
-	// start from default epoch start time
 	var ss *mining.Schedule
 	if err := db.Where("start_time < ?", time.Now().Unix()).Order("epoch desc").First(&ss).Error; err != nil {
 		return nil, fmt.Errorf("fail to found epoch config %w", err)
@@ -148,15 +148,18 @@ func (s *TMServer) calculateStat(info *mining.UserInfo, schedule *mining.Schedul
 	if info == nil || schedule == nil {
 		return
 	}
-	minuteCeil := int64(math.Floor((float64(info.Timestamp) - float64(schedule.StartTime)) / 60.0))
-	elapsed := decimal.NewFromInt(minuteCeil) // Minutes
-	totalEpochMinutes := decimal.NewFromFloat(math.Ceil(float64(schedule.EndTime-schedule.StartTime) / 60))
-	remains := totalEpochMinutes.Sub(elapsed)
+
+	remains := syncer.GetRemainMinutes(info.Timestamp, schedule)
+
+	totalEpochMinutes := math.Ceil(float64(schedule.EndTime-schedule.StartTime) / 60)
+	totalEpochMinutesDecimal := decimal.NewFromFloat(totalEpochMinutes)
 
 	// oi
-	oi = info.AccPosValue.Add(info.CurPosValue.Mul(remains)).Div(totalEpochMinutes)
+	future := info.CurPosValue.Mul(remains)
+	oi = (info.AccPosValue.Add(future)).Div(totalEpochMinutesDecimal)
 	// stake
-	stake = info.AccStakeScore.Add(info.EstimatedStakeScore).Div(totalEpochMinutes)
+	stake = (info.AccStakeScore.Add(info.CurStakeScore).Add(info.EstimatedStakeScore)).Div(
+		totalEpochMinutesDecimal)
 	// fee
 	daoFee = info.AccFee.Sub(info.InitFee)
 	totalFee = info.AccTotalFee.Sub(info.InitTotalFee)
@@ -164,8 +167,6 @@ func (s *TMServer) calculateStat(info *mining.UserInfo, schedule *mining.Schedul
 }
 
 func (s *TMServer) calculateTotalStats() (err error) {
-	s.logger.Info("calculateTotalStats.....")
-
 	var schedule *mining.Schedule
 	for {
 		if schedule, err = s.getLatestSchedule(s.db); err == nil {
@@ -181,12 +182,11 @@ func (s *TMServer) calculateTotalStats() (err error) {
 	s.logger.Info("calculate total status from 0 to this epoch %d", s.nowEpoch)
 	for i := int64(0); i <= s.nowEpoch; i++ {
 		var traders []*mining.UserInfo
-		err = s.db.Model(&mining.UserInfo{}).Where("epoch = ?", i).Scan(&traders).Error
+		err = s.db.Model(&mining.UserInfo{}).Where("epoch = ? and chain = 'total'", i).Scan(&traders).Error
 		if err != nil {
 			return
 		}
 		count := len(traders)
-		s.logger.Info("Epoch %d has %d traders", i, count)
 		epochStat := epochStats{}
 		if count == 0 {
 			s.history[int(i)] = epochStat
@@ -211,8 +211,8 @@ func (s *TMServer) calculateTotalStats() (err error) {
 			epochStat.totalScore = epochStat.totalScore.Add(t.Score)
 		}
 		s.history[int(i)] = epochStat
-		s.logger.Info("Epoch %d: totalFee %s, totalStakeScore %s, totalOpenInterest %s, totalScore %s",
-			i, epochStat.totalFee.String(), epochStat.totalStakeScore.String(), epochStat.totalOI.String(), epochStat.totalScore.String(),
+		s.logger.Info("Epoch %d: traders %d, totalFee %s, totalStakeScore %s, totalOpenInterest %s, totalScore %s",
+			i, count, epochStat.totalFee.String(), epochStat.totalStakeScore.String(), epochStat.totalOI.String(), epochStat.totalScore.String(),
 		)
 	}
 	err = nil
@@ -285,9 +285,9 @@ func (s *TMServer) OnQueryScore(w http.ResponseWriter, r *http.Request) {
 	s.logger.Info("OnQueryScore user id %s", traderID)
 	queryTradingMiningResp := make(map[int]*EpochScoreResp)
 	for i := 0; i <= int(s.nowEpoch); i++ {
-		var rsp mining.UserInfo
+		var rsps []*mining.UserInfo
 		err := s.db.Model(mining.UserInfo{}).Where(
-			"trader = ? and epoch = ?", traderID, i).First(&rsp).Error
+			"trader = ? and epoch = ?", traderID, i).Scan(&rsps).Error
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				s.logger.Info("user %s not found in db epoch %d", traderID, i)
@@ -303,7 +303,6 @@ func (s *TMServer) OnQueryScore(w http.ResponseWriter, r *http.Request) {
 			s.jsonError(w, "internal error", 400)
 			return
 		}
-		s.logger.Debug("Epoch %d: user info %+v, totalScore %s", i, rsp, s.history[i].totalScore.String())
 
 		sch, err := s.getScheduleWithEpoch(s.db, i)
 		if err != nil {
@@ -312,33 +311,45 @@ func (s *TMServer) OnQueryScore(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		var proportion string
-		totalScore := stats.totalScore
-		if totalScore.IsZero() {
-			proportion = "0"
-		} else {
-			if rsp.Score.GreaterThanOrEqual(totalScore) {
-				proportion = "1"
+		resp := EpochScoreResp{
+			TotalFee:     make(map[string]string, 0),
+			DaoFee:       make(map[string]string, 0),
+			AverageStake: make(map[string]string, 0),
+			AverageOI:    make(map[string]string, 0),
+		}
+
+		for _, rsp := range rsps {
+			s.logger.Debug("user info %+v", rsp)
+			if rsp.Chain == "total" {
+				resp.Score = rsp.Score.String()
+
+				var proportion string
+				totalScore := stats.totalScore
+				if totalScore.IsZero() {
+					proportion = "0"
+				} else {
+					if rsp.Score.GreaterThanOrEqual(totalScore) {
+						proportion = "1"
+					} else {
+						proportion = (rsp.Score.Div(totalScore)).String()
+					}
+				}
+				resp.Proportion = proportion
+
+				totalFee, daoFee, oi, stake := s.calculateStat(rsp, sch)
+				resp.TotalFee["all"] = totalFee.String()
+				resp.DaoFee["all"] = daoFee.String()
+				resp.AverageOI["all"] = oi.String()
+				resp.AverageStake["all"] = stake.String()
 			} else {
-				proportion = (rsp.Score.Div(totalScore)).String()
+				totalFee, daoFee, oi, stake := s.calculateStat(rsp, sch)
+				resp.TotalFee[rsp.Chain] = totalFee.String()
+				resp.DaoFee[rsp.Chain] = daoFee.String()
+				resp.AverageOI[rsp.Chain] = oi.String()
+				resp.AverageStake[rsp.Chain] = stake.String()
 			}
 		}
-
-		totalFee, daoFee, oi, stake := s.calculateStat(&rsp, sch)
-
-		resp := EpochScoreResp{
-			TotalFee:     totalFee.String(),
-			DaoFee:       daoFee.String(),
-			AverageOI:    oi.String(),
-			AverageStake: stake.String(),
-			Score:        rsp.Score.String(),
-			Proportion:   proportion,
-		}
 		queryTradingMiningResp[i] = &resp
-	}
-
-	for i, resp := range queryTradingMiningResp {
-		s.logger.Debug("epoch %d, resp %+v", i, resp)
 	}
 	json.NewEncoder(w).Encode(queryTradingMiningResp)
 }
