@@ -283,11 +283,11 @@ func (s *Syncer) initUserStates(db *gorm.DB, epoch *mining.Schedule) error {
 				}
 			}
 			saveUser[j] = &mining.UserInfo{
-				Trader:      userId,
-				Epoch:       epoch.Epoch,
+				Trader:       userId,
+				Epoch:        epoch.Epoch,
 				InitFee:      daoFee,
 				InitTotalFee: totalFee,
-				Chain:       strconv.Itoa(i),
+				Chain:        strconv.Itoa(i),
 			}
 		}
 		saveUsers[i] = saveUser
