@@ -37,10 +37,9 @@ func main() {
 	}
 
 	db := database.GetDB()
-	migrationAddUserInfoColumn(db, "AccTotalFee", logger)
-	migrationAddUserInfoColumn(db, "InitTotalFee", logger)
-	migrationAddSnapshotColumn(db, "AccTotalFee", logger)
-	migrationAddSnapshotColumn(db, "InitTotalFee", logger)
+	migrationAddColumn(db, "AccTotalFee", logger)
+	migrationAddColumn(db, "InitTotalFee", logger)
+	migrationAddColumn(db, "Chain", logger)
 
 	backgroundCtx, stop := context.WithCancel(context.Background())
 	group, ctx := errgroup.WithContext(backgroundCtx)
@@ -209,4 +208,9 @@ func migrationAddSnapshotColumn(db *gorm.DB, columnName string, logger logging.L
 	}
 	logger.Info("migration: add new column %s in snapshot table", columnName)
 	return
+}
+
+func migrationAddColumn(db *gorm.DB, columnName string, logger logging.Logger) {
+	migrationAddUserInfoColumn(db, columnName, logger)
+	migrationAddSnapshotColumn(db, columnName, logger)
 }

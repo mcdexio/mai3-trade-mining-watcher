@@ -109,21 +109,25 @@ func (s *Syncer) restoreFromSnapshot(db *gorm.DB, checkpoint int64) error {
 	if err := db.Where("epoch=? and timestamp=?", epoch.Epoch, checkpoint).Find(&snapshots).Error; err != nil {
 		return err
 	}
+	// TODO(champFu): find a way to iterate all fields
 	users := make([]*mining.UserInfo, len(snapshots))
 	for i, s := range snapshots {
 		users[i] = &mining.UserInfo{
-			Trader:        s.Trader,
-			Epoch:         s.Epoch,
-			InitFee:       s.InitFee,
-			AccFee:        s.AccFee,
-			InitTotalFee:  s.InitTotalFee,
-			AccTotalFee:   s.AccTotalFee,
-			AccPosValue:   s.AccPosValue,
-			CurPosValue:   s.CurPosValue,
-			AccStakeScore: s.AccStakeScore,
-			CurStakeScore: s.CurStakeScore,
-			Score:         s.Score,
-			Timestamp:     s.Timestamp,
+			// 13
+			Trader:              s.Trader,
+			Epoch:               s.Epoch,
+			Timestamp:           s.Timestamp,
+			InitFee:             s.InitFee,
+			AccFee:              s.AccFee,
+			InitTotalFee:        s.InitTotalFee,
+			AccTotalFee:         s.AccTotalFee,
+			AccPosValue:         s.AccPosValue,
+			CurPosValue:         s.CurPosValue,
+			AccStakeScore:       s.AccStakeScore,
+			CurStakeScore:       s.CurStakeScore,
+			EstimatedStakeScore: s.EstimatedStakeScore,
+			Score:               s.Score,
+			Chain:               s.Chain,
 		}
 	}
 	if err := db.Save(users).Error; err != nil {
@@ -449,18 +453,21 @@ func (s *Syncer) makeSnapshot(db *gorm.DB, timestamp int64, users []*mining.User
 	snapshot := make([]*mining.Snapshot, len(users))
 	for i, u := range users {
 		snapshot[i] = &mining.Snapshot{
-			Trader:        u.Trader,
-			Epoch:         u.Epoch,
-			Timestamp:     timestamp,
-			InitFee:       u.InitFee,
-			AccFee:        u.AccFee,
-			InitTotalFee:  u.InitTotalFee,
-			AccTotalFee:   u.AccTotalFee,
-			AccPosValue:   u.AccPosValue,
-			CurPosValue:   u.CurPosValue,
-			AccStakeScore: u.AccStakeScore,
-			CurStakeScore: u.CurStakeScore,
-			Score:         u.Score,
+			// 13
+			Trader:              u.Trader,
+			Epoch:               u.Epoch,
+			Timestamp:           timestamp,
+			InitFee:             u.InitFee,
+			AccFee:              u.AccFee,
+			InitTotalFee:        u.InitTotalFee,
+			AccTotalFee:         u.AccTotalFee,
+			AccPosValue:         u.AccPosValue,
+			CurPosValue:         u.CurPosValue,
+			AccStakeScore:       u.AccStakeScore,
+			CurStakeScore:       u.CurStakeScore,
+			EstimatedStakeScore: u.EstimatedStakeScore,
+			Score:               u.Score,
+			Chain:               u.Chain,
 		}
 	}
 	if err := db.Model(&mining.Snapshot{}).Save(&snapshot).Error; err != nil {

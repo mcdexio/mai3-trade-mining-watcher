@@ -22,6 +22,8 @@ type Snapshot struct {
 	EstimatedStakeScore decimal.Decimal `gorm:"column:estimated_stake_score;type:decimal(38,18);not null" json:"estimated_stake_score"`
 	Score               decimal.Decimal `gorm:"column:score;type:decimal(38,18);not null" json:"score"`
 
+	Chain string `gorm:"column:chain;type:varchar(128);" json:"chain"`
+
 	models.Base
 }
 

@@ -7,8 +7,10 @@ import (
 
 // UserInfo defines struct to contain information of a user info
 type UserInfo struct {
-	Trader              string          `gorm:"column:trader;primary_key;type:varchar(128);not null" json:"trader"`
-	Epoch               int64           `gorm:"column:epoch;primary_key;type:bigint;not null" json:"epoch"`
+	Trader    string `gorm:"column:trader;primary_key;type:varchar(128);not null" json:"trader"`
+	Epoch     int64  `gorm:"column:epoch;primary_key;type:bigint;not null" json:"epoch"`
+	Timestamp int64  `gorm:"column:timestamp;type:bigint;not null" json:"timestamp"`
+
 	InitFee             decimal.Decimal `gorm:"column:init_fee;type:decimal(38,18);not null" json:"init_fee"`
 	AccFee              decimal.Decimal `gorm:"column:acc_fee;type:decimal(38,18);not null" json:"acc_fee"`
 	InitTotalFee        decimal.Decimal `gorm:"column:init_total_fee;type:decimal(38,18);not null;default:0" json:"init_total_fee"`
@@ -20,7 +22,7 @@ type UserInfo struct {
 	EstimatedStakeScore decimal.Decimal `gorm:"column:estimated_stake_score;type:decimal(38,18);not null" json:"estimated_stake_score"`
 	Score               decimal.Decimal `gorm:"column:score;type:decimal(38,18);not null" json:"score"`
 
-	Timestamp int64 `gorm:"column:timestamp;type:bigint;not null" json:"timestamp"`
+	Chain string `gorm:"column:chain;type:varchar(128);" json:"chain"`
 
 	models.Base
 }
