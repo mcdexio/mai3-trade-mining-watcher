@@ -211,8 +211,11 @@ func (s *TMServer) calculateTotalStats() (err error) {
 			epochStat.totalScore = epochStat.totalScore.Add(t.Score)
 		}
 		s.history[int(i)] = epochStat
-		s.logger.Info("Epoch %d: traders %d, totalFee %s, totalStakeScore %s, totalOpenInterest %s, totalScore %s",
-			i, count, epochStat.totalFee.String(), epochStat.totalStakeScore.String(), epochStat.totalOI.String(), epochStat.totalScore.String(),
+		s.logger.Info("Epoch %d: traders %d, totalFee %s, totalDaoFee %s, " +
+			"totalStakeScore %s, totalOpenInterest %s, totalScore %s", i, count,
+			epochStat.totalFee.String(), epochStat.totalDaoFee.String(),
+			epochStat.totalStakeScore.String(), epochStat.totalOI.String(),
+			epochStat.totalScore.String(),
 		)
 	}
 	err = nil
