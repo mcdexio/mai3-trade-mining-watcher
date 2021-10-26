@@ -10,6 +10,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 	"math"
+	"strconv"
 	"strings"
 	"time"
 
@@ -29,6 +30,7 @@ var (
 	PROGRESS_SYNC_STATE = "user_info" // compatible
 	PROGRESS_INIT_FEE   = "user_info.init_fee"
 	PROGRESS_SNAPSHOT   = "user_info.snapshot"
+	conflictColumns     = []clause.Column{{Name: "trader"}, {Name: "epoch"}, {Name: "chain"}}
 )
 
 type Syncer struct {
@@ -256,10 +258,12 @@ func (s *Syncer) initUserStates(db *gorm.DB, epoch *mining.Schedule) error {
 		return err
 	}
 
-	summaryUser := make(map[string]*mining.UserInfo)
 	// handle multi-chain
+	summaryUser := make(map[string]*mining.UserInfo)
+	saveUsers := make([][]*mining.UserInfo, len(multiUsers))
 	for i, users := range multiUsers {
-		for _, u := range users {
+		saveUser := make([]*mining.UserInfo, len(users))
+		for j, u := range users {
 			_, totalFee, daoFee, err := s.getOIFeeValue(u.MarginAccounts, multiBNs[i], multiPrices, i)
 			if err != nil {
 				return fmt.Errorf("fail to get initial fee %s", err)
@@ -276,33 +280,56 @@ func (s *Syncer) initUserStates(db *gorm.DB, epoch *mining.Schedule) error {
 					Epoch:        epoch.Epoch,
 					InitFee:      daoFee,
 					InitTotalFee: totalFee,
+					Chain:        "total",
 				}
 			}
+			saveUser[j] = &mining.UserInfo{
+				Trader:      userId,
+				Epoch:       epoch.Epoch,
+				AccFee:      daoFee,
+				AccTotalFee: totalFee,
+				Chain:       strconv.Itoa(i),
+			}
 		}
+		saveUsers[i] = saveUser
 	}
 
 	var uis []*mining.UserInfo
 	for _, u := range summaryUser {
 		uis = append(uis, u)
 	}
-	for i, u := range multiUsers {
-		s.logger.Info("Network (%d/%d): %d users @BN=%d", i, len(multiUsers), len(u), multiBNs[i])
+	for i, u := range saveUsers {
+		s.logger.Info("Network (%d/%d): %d users @BN=%d", i+1, len(saveUsers), len(u), multiBNs[i])
 	}
 	s.logger.Info("Total users %d @TS=%d", len(uis), epoch.StartTime)
 
 	// update columns if conflict
 	updatedColumns := []string{"epoch", "init_fee", "init_total_fee"}
 	err = db.Transaction(func(tx *gorm.DB) error {
-		lengthUis := len(uis)
-		if lengthUis > 0 {
+		// total
+		if len(uis) > 0 {
 			// len(uis) > 0, because of limitation of postgresql (65535 parameters), do batch
 			if err = db.Clauses(clause.OnConflict{
-				Columns:   []clause.Column{{Name: "trader"}, {Name: "epoch"}},
+				Columns:   conflictColumns,
 				DoUpdates: clause.AssignmentColumns(updatedColumns),
 			}).CreateInBatches(&uis, 500).Error; err != nil {
 				return fmt.Errorf("fail to create init user info %w", err)
 			}
 		}
+
+		// handle multi-chain
+		for _, u := range saveUsers {
+			if len(u) > 0 {
+				// because of limitation of postgresql (65535 parameters), do batch
+				if err = db.Clauses(clause.OnConflict{
+					Columns:   conflictColumns,
+					DoUpdates: clause.AssignmentColumns(updatedColumns),
+				}).CreateInBatches(&u, 500).Error; err != nil {
+					return fmt.Errorf("fail to create init user info %w", err)
+				}
+			}
+		}
+
 		if err = s.setProgress(db, PROGRESS_INIT_FEE, epoch.StartTime, epoch.Epoch); err != nil {
 			return fmt.Errorf("fail to save sync progress %w", err)
 		}
@@ -314,18 +341,21 @@ func (s *Syncer) initUserStates(db *gorm.DB, epoch *mining.Schedule) error {
 	return nil
 }
 
-func (s *Syncer) getUserStateBasedOnBlockNumber(epoch *mining.Schedule, timestamp int64) ([]*mining.UserInfo, error) {
+func (s *Syncer) getUserStateBasedOnBlockNumber(epoch *mining.Schedule, timestamp int64) ([]*mining.UserInfo, [][]*mining.UserInfo, error) {
 	multiBNs, multiUsers, multiPrices, err := s.getMultiChainInfo(timestamp)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	summaryUser := make(map[string]*mining.UserInfo)
+
 	// handle multi-chain
+	summaryUser := make(map[string]*mining.UserInfo)
+	saveUsers := make([][]*mining.UserInfo, len(multiUsers))
 	for i, users := range multiUsers {
-		for _, u := range users {
+		saveUser := make([]*mining.UserInfo, len(users))
+		for j, u := range users {
 			pv, totalFee, daoFee, err := s.getOIFeeValue(u.MarginAccounts, multiBNs[i], multiPrices, i)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			ss := getStakeScore(timestamp, u.UnlockMCBTime, u.StakedMCB)
 			estimatedStakeScore := getEstimatedStakeScore(timestamp, epoch, u.UnlockMCBTime, ss)
@@ -347,23 +377,36 @@ func (s *Syncer) getUserStateBasedOnBlockNumber(epoch *mining.Schedule, timestam
 					EstimatedStakeScore: estimatedStakeScore,
 					AccFee:              daoFee,
 					AccTotalFee:         totalFee,
+					Chain:               "total",
 				}
 			}
+
+			saveUser[j] = &mining.UserInfo{
+				Trader:              userId,
+				Epoch:               epoch.Epoch,
+				CurPosValue:         pv,
+				CurStakeScore:       ss,
+				EstimatedStakeScore: estimatedStakeScore,
+				AccFee:              daoFee,
+				AccTotalFee:         totalFee,
+				Chain:               strconv.Itoa(i),
+			}
 		}
+		saveUsers[i] = saveUser
 	}
 
 	var uis []*mining.UserInfo
 	for _, u := range summaryUser {
 		uis = append(uis, u)
 	}
-	for i, u := range multiUsers {
-		s.logger.Info("Network (%d/%d): %d users @BN=%d", i, len(multiUsers), len(u), multiBNs[i])
+	for i, u := range saveUsers {
+		s.logger.Info("Network (%d/%d): %d users @BN=%d", i+1, len(saveUsers), len(u), multiBNs[i])
 	}
 	s.logger.Info("Total users %d @TS=%d", len(uis), timestamp)
-	return uis, nil
+	return uis, saveUsers, nil
 }
 
-func (s *Syncer) accumulateCurValues(db *gorm.DB, epoch int64) error {
+func (s *Syncer) accumulateCurValuesAllChains(db *gorm.DB, epoch int64) error {
 	if err := db.Model(mining.UserInfo{}).
 		Where("epoch=? and cur_pos_value <> 0", epoch).
 		UpdateColumn("acc_pos_value", gorm.Expr("acc_pos_value + cur_pos_value")).
@@ -379,7 +422,7 @@ func (s *Syncer) accumulateCurValues(db *gorm.DB, epoch int64) error {
 	return nil
 }
 
-func (s *Syncer) resetCurValues(db *gorm.DB, epoch int64, timestamp int64) error {
+func (s *Syncer) resetCurValuesAllChains(db *gorm.DB, epoch int64, timestamp int64) error {
 	if err := db.Model(mining.UserInfo{}).Where("epoch=?", epoch).
 		Updates(mining.UserInfo{CurPosValue: decimal.Zero, CurStakeScore: decimal.Zero, Timestamp: timestamp}).
 		Error; err != nil {
@@ -388,25 +431,15 @@ func (s *Syncer) resetCurValues(db *gorm.DB, epoch int64, timestamp int64) error
 	return nil
 }
 
-func (s *Syncer) updateUserStates(db *gorm.DB, epoch *mining.Schedule, timestamp int64, users []*mining.UserInfo) error {
+func (s *Syncer) updateUserStates(db *gorm.DB, users []*mining.UserInfo) error {
 	if len(users) == 0 {
 		return nil
 	}
-	// acc_pos_value += cur_pos_value if cur_pos_value != 0
-	// acc_stake_score += cur_stake_score if cur_stake_score != 0
-	if err := s.accumulateCurValues(db, epoch.Epoch); err != nil {
-		return fmt.Errorf("failed to accumulate current state %w", err)
-	}
-	// cur_stake_score <= 0 and cur_pos_value <= 0
-	if err := s.resetCurValues(db, epoch.Epoch, timestamp); err != nil {
-		return fmt.Errorf("failed to accumulate current state %w", err)
-	}
-
 	// update columns if conflict
 	updatedColumns := []string{"cur_pos_value", "cur_stake_score", "acc_fee", "acc_total_fee", "estimated_stake_score"}
 	// because of limitation of postgresql (65535 parameters), do batch
 	if err := db.Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "trader"}, {Name: "epoch"}},
+		Columns:   conflictColumns,
 		DoUpdates: clause.AssignmentColumns(updatedColumns),
 	}).CreateInBatches(&users, 500).Error; err != nil {
 		return fmt.Errorf("failed to create user_info: size=%v %w", len(users), err)
@@ -414,7 +447,7 @@ func (s *Syncer) updateUserStates(db *gorm.DB, epoch *mining.Schedule, timestamp
 
 	// make sure acc_fee >= init_fee, acc_total_fee >= init_total_fee
 	if err := db.Clauses(clause.OnConflict{
-		Columns: []clause.Column{{Name: "trader"}, {Name: "epoch"}},
+		Columns: conflictColumns,
 		DoUpdates: clause.Assignments(map[string]interface{}{
 			"acc_fee":       gorm.Expr("GREATEST(user_info.acc_fee, user_info.init_fee)"),
 			"acc_total_fee": gorm.Expr("GREATEST(user_info.acc_total_fee, user_info.init_total_fee)"),
@@ -440,7 +473,7 @@ func (s *Syncer) updateUserScores(db *gorm.DB, epoch *mining.Schedule, timestamp
 	updatedColumns := []string{"score"}
 	// because of limitation of postgresql (65535 parameters), do batch
 	if err := db.Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "trader"}, {Name: "epoch"}},
+		Columns:   conflictColumns,
 		DoUpdates: clause.AssignmentColumns(updatedColumns),
 	}).CreateInBatches(&users, 500).Error; err != nil {
 		return fmt.Errorf("failed to create user_info: size=%v %w", len(users), err)
@@ -494,21 +527,53 @@ func (s *Syncer) syncState(db *gorm.DB, epoch *mining.Schedule) (int64, error) {
 	} else {
 		np = norm(p + 60)
 	}
-	newStates, err := s.getUserStateBasedOnBlockNumber(epoch, np)
+	newStates, saveUsers, err := s.getUserStateBasedOnBlockNumber(epoch, np)
 	if err != nil {
 		return 0, fmt.Errorf("fail to get new user states: timestamp=%v %w", np, err)
 	}
 	err = db.Transaction(func(tx *gorm.DB) error {
-		if err := s.updateUserStates(tx, epoch, np, newStates); err != nil {
-			return fmt.Errorf("fail to updateUserStates: timestamp=%v %w", np, err)
+		// acc_pos_value += cur_pos_value if cur_pos_value != 0
+		// acc_stake_score += cur_stake_score if cur_stake_score != 0
+		if err := s.accumulateCurValuesAllChains(db, epoch.Epoch); err != nil {
+			return fmt.Errorf("failed to accumulate current state %w", err)
 		}
+		// cur_stake_score <= 0 and cur_pos_value <= 0
+		if err := s.resetCurValuesAllChains(db, epoch.Epoch, np); err != nil {
+			return fmt.Errorf("failed to accumulate current state %w", err)
+		}
+
+		// update total
+		if err := s.updateUserStates(tx, newStates); err != nil {
+			return fmt.Errorf("fail to updateUserStates for all: ts=%v, err=%w", np, err)
+		}
+		// update multi-chains
+		countChains := len(saveUsers)
+		for chainID := 0; chainID < countChains; chainID++ {
+			if err := s.updateUserStates(tx, saveUsers[chainID]); err != nil {
+				return fmt.Errorf("fail to updateUserStates for chain %d: ts=%v err=%s", chainID, np, err)
+			}
+		}
+
+		// calculate for total
 		var allStates []*mining.UserInfo
-		if err := tx.Where("epoch=?", epoch.Epoch).Find(&allStates).Error; err != nil {
-			return fmt.Errorf("fail to fetch all users in this epoch %w", err)
+		if err := tx.Where("epoch=? and chain=?", epoch.Epoch, "total").Find(&allStates).Error; err != nil {
+			return fmt.Errorf("fail to fetch all users in this epoch err=%s", err)
 		}
 		if err := s.updateUserScores(tx, epoch, np, allStates); err != nil {
-			return fmt.Errorf("fail to updateUserScores: timestamp=%v %w", np, err)
+			return fmt.Errorf("fail to updateUserScores for all: ts=%v err=%s", np, err)
 		}
+
+		// calculate for multi-chains
+		for chainID := 0; chainID < countChains; chainID++ {
+			var states []*mining.UserInfo
+			if err := tx.Where("epoch=? and chain=?", epoch.Epoch, strconv.Itoa(chainID)).Find(&states).Error; err != nil {
+				return fmt.Errorf("fail to fetch users for chain %d in this epoch err=%s", chainID, err)
+			}
+			if err := s.updateUserScores(tx, epoch, np, states); err != nil {
+				return fmt.Errorf("fail to updateUserScores for chain %d: ts=%v err=%s", chainID, np, err)
+			}
+		}
+
 		if err := s.setProgress(tx, PROGRESS_SYNC_STATE, np, epoch.Epoch); err != nil {
 			return fmt.Errorf("fail to save sync progress %w", err)
 		}
