@@ -286,8 +286,8 @@ func (s *Syncer) initUserStates(db *gorm.DB, epoch *mining.Schedule) error {
 			saveUser[j] = &mining.UserInfo{
 				Trader:      userId,
 				Epoch:       epoch.Epoch,
-				AccFee:      daoFee,
-				AccTotalFee: totalFee,
+				InitFee:      daoFee,
+				InitTotalFee: totalFee,
 				Chain:       strconv.Itoa(i),
 			}
 		}
