@@ -9,6 +9,7 @@ import (
 type UserInfo struct {
 	Trader    string `gorm:"column:trader;primary_key;type:varchar(128);not null" json:"trader"`
 	Epoch     int64  `gorm:"column:epoch;primary_key;type:bigint;not null" json:"epoch"`
+	Chain     string `gorm:"column:chain;primary_key;type:varchar(128);" json:"chain"`
 	Timestamp int64  `gorm:"column:timestamp;type:bigint;not null" json:"timestamp"`
 
 	InitFee             decimal.Decimal `gorm:"column:init_fee;type:decimal(38,18);not null" json:"init_fee"`
@@ -21,8 +22,6 @@ type UserInfo struct {
 	CurStakeScore       decimal.Decimal `gorm:"column:cur_stake_score;type:decimal(38,18);not null" json:"cur_stake_score"`
 	EstimatedStakeScore decimal.Decimal `gorm:"column:estimated_stake_score;type:decimal(38,18);not null" json:"estimated_stake_score"`
 	Score               decimal.Decimal `gorm:"column:score;type:decimal(38,18);not null" json:"score"`
-
-	Chain string `gorm:"column:chain;type:varchar(128);" json:"chain"`
 
 	models.Base
 }

@@ -30,7 +30,8 @@ export ARB_RINKEBY_ETH_USD_PERP_ID="0xc32a2dfee97e2babc90a2b5e6aef41e789ef2e13-0
 
 # BSC graph url & inverse white list
 export BSC_CHAIN=true
-export BSC_MAI3_GRAPH_URL=https://api.thegraph.com/subgraphs/name/mcdexio/mcdex3-bsc-trade-mining
+# export BSC_MAI3_GRAPH_URL=https://api.thegraph.com/subgraphs/name/mcdexio/mcdex3-bsc-trade-mining
+export BSC_MAI3_GRAPH_URL=https://api.thegraph.com/subgraphs/name/champfu-mcdex/bsc-mining-fee
 export BSC_BLOCK_GRAPH_URL=https://api.thegraph.com/subgraphs/name/generatefinance/bsc-blocks
 export BSC_BTC_INVERSE_CONTRACT_WHITELIST0='0x2ea001032b0eb424120b4dec51bf02db0df46c78-0' # bsc USD-BTC
 export BSC_ETH_INVERSE_CONTRACT_WHITELIST0='0xf6b2d76c248af20009188139660a516e5c4e0532-0' # bsc USD-ETH
