@@ -9,7 +9,7 @@ import (
 type Snapshot struct {
 	Trader    string `gorm:"column:trader;primary_key;type:varchar(128);not null" json:"trader"`
 	Epoch     int64  `gorm:"column:epoch;primary_key;type:bigint;not null" json:"epoch"`
-	Chain     string `gorm:"column:chain;type:varchar(128);" json:"chain"`
+	Chain     string `gorm:"column:chain;primary_key;type:varchar(128);not null;default:total" json:"chain"`
 	Timestamp int64  `gorm:"column:timestamp;primary_key;type:bigint;not null" json:"timestamp"`
 
 	InitFee             decimal.Decimal `gorm:"column:init_fee;type:decimal(38,18);not null" json:"init_fee"`

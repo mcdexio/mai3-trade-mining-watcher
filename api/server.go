@@ -192,11 +192,7 @@ func (s *TMServer) calculateTotalStats() (err error) {
 	s.logger.Info("calculate total status from 0 to this epoch %d", s.nowEpoch)
 	for i := int64(0); i <= s.nowEpoch; i++ {
 		var traders []*mining.UserInfo
-		if i <= 0 {
-			err = s.db.Model(&mining.UserInfo{}).Where("epoch = 0").Scan(&traders).Error
-		} else {
-			err = s.db.Model(&mining.UserInfo{}).Where("epoch = ? and chain = 'total'", i).Scan(&traders).Error
-		}
+		err = s.db.Model(&mining.UserInfo{}).Where("epoch = ? and chain = 'total'", i).Scan(&traders).Error
 		if err != nil {
 			return
 		}
@@ -304,7 +300,7 @@ func (s *TMServer) OnQueryScore(w http.ResponseWriter, r *http.Request) {
 	for i := 0; i <= int(s.nowEpoch); i++ {
 		var rsp mining.UserInfo
 		err := s.db.Model(mining.UserInfo{}).Where(
-			"trader = ? and epoch = ?", traderID, i).First(&rsp).Error
+			"trader = ? and epoch = ? and chain = 'total'", traderID, i).First(&rsp).Error
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				s.logger.Info("user %s not found in db epoch %d", traderID, i)
@@ -404,6 +400,7 @@ func (s *TMServer) OnQueryMultiScore(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
+
 		stats, match := s.history[i]
 		if !match {
 			s.logger.Error("failed to get stats %+v", s.history)
@@ -441,25 +438,16 @@ func (s *TMServer) OnQueryMultiScore(w http.ResponseWriter, r *http.Request) {
 			},
 		}
 
-		if i <= 0 && len(rsps) != 1 {
-			s.logger.Warn("Epoch 0 has multi chain %d", len(rsps))
-		} else if i <= 0 && len(rsps) == 1 {
-			// TODO(champFu): for mainnet need include epoch 0 and 1
-			rsp := rsps[0]
-			s.logger.Debug("epoch %d: user info %+v", i, rsp)
-			s.marshalEpochAllScoreResp(stats.totalScore, sch, rsp, &resp)
-		} else {
-			for _, rsp := range rsps {
-				s.logger.Debug("epoch %d: chain: %s, user info %+v", i, rsp.Chain, rsp)
-				if rsp.Chain == "total" {
-					s.marshalEpochAllScoreResp(stats.totalScore, sch, rsp, &resp)
-				} else {
-					totalFee, daoFee, oi, stake := s.calculateStat(rsp, sch)
-					resp.TotalFee[rsp.Chain] = totalFee.String()
-					resp.DaoFee[rsp.Chain] = daoFee.String()
-					resp.AverageOI[rsp.Chain] = oi.String()
-					resp.AverageStake[rsp.Chain] = stake.String()
-				}
+		for _, rsp := range rsps {
+			s.logger.Debug("epoch %d: chain: %s, user info %+v", i, rsp.Chain, rsp)
+			if rsp.Chain == "total" {
+				s.marshalEpochAllScoreResp(stats.totalScore, sch, rsp, &resp)
+			} else {
+				totalFee, daoFee, oi, stake := s.calculateStat(rsp, sch)
+				resp.TotalFee[rsp.Chain] = totalFee.String()
+				resp.DaoFee[rsp.Chain] = daoFee.String()
+				resp.AverageOI[rsp.Chain] = oi.String()
+				resp.AverageStake[rsp.Chain] = stake.String()
 			}
 		}
 		queryTradingMiningResp[i] = &resp
