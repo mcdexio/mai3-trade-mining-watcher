@@ -437,56 +437,18 @@ func (s *TMServer) OnQueryMultiScore(w http.ResponseWriter, r *http.Request) {
 			},
 		}
 
-		if i == 0 && len(rsps) != 1 {
+		if i < 0 && len(rsps) != 1 {
 			s.logger.Warn("Epoch 0 has multi chain %d", len(rsps))
-		} else if i == 0 && len(rsps) == 1 {
+		} else if i < 0 && len(rsps) == 1 {
 			// TODO(champFu): for mainnet need include epoch 0 and 1
 			rsp := rsps[0]
 			s.logger.Debug("epoch %d: user info %+v", i, rsp)
-			resp.Score = rsp.Score.String()
-
-			var proportion string
-			totalScore := stats.totalScore
-			if totalScore.IsZero() {
-				proportion = "0"
-			} else {
-				if rsp.Score.GreaterThanOrEqual(totalScore) {
-					proportion = "1"
-				} else {
-					proportion = (rsp.Score.Div(totalScore)).String()
-				}
-			}
-			resp.Proportion = proportion
-
-			totalFee, daoFee, oi, stake := s.calculateStat(rsp, sch)
-			resp.TotalFee["all"] = totalFee.String()
-			resp.DaoFee["all"] = daoFee.String()
-			resp.AverageOI["all"] = oi.String()
-			resp.AverageStake["all"] = stake.String()
+			s.marshalEpochAllScoreResp(stats.totalScore, sch, rsp, &resp)
 		} else {
 			for _, rsp := range rsps {
 				s.logger.Debug("epoch %d: chain: %s, user info %+v", i, rsp.Chain, rsp)
 				if rsp.Chain == "total" {
-					resp.Score = rsp.Score.String()
-
-					var proportion string
-					totalScore := stats.totalScore
-					if totalScore.IsZero() {
-						proportion = "0"
-					} else {
-						if rsp.Score.GreaterThanOrEqual(totalScore) {
-							proportion = "1"
-						} else {
-							proportion = (rsp.Score.Div(totalScore)).String()
-						}
-					}
-					resp.Proportion = proportion
-
-					totalFee, daoFee, oi, stake := s.calculateStat(rsp, sch)
-					resp.TotalFee["all"] = totalFee.String()
-					resp.DaoFee["all"] = daoFee.String()
-					resp.AverageOI["all"] = oi.String()
-					resp.AverageStake["all"] = stake.String()
+					s.marshalEpochAllScoreResp(stats.totalScore, sch, rsp, &resp)
 				} else {
 					totalFee, daoFee, oi, stake := s.calculateStat(rsp, sch)
 					resp.TotalFee[rsp.Chain] = totalFee.String()
@@ -510,4 +472,28 @@ func (s *TMServer) jsonError(w http.ResponseWriter, err interface{}, code int) {
 	}
 	msg.Error = err.(string)
 	json.NewEncoder(w).Encode(msg)
+}
+
+func (s *TMServer) marshalEpochAllScoreResp(
+	totalScore decimal.Decimal, sch *mining.Schedule, rsp *mining.UserInfo,
+	resp *MultiEpochScoreResp) {
+
+	resp.Score = rsp.Score.String()
+	var proportion string
+	if totalScore.IsZero() {
+		proportion = "0"
+	} else {
+		if rsp.Score.GreaterThanOrEqual(totalScore) {
+			proportion = "1"
+		} else {
+			proportion = (rsp.Score.Div(totalScore)).String()
+		}
+	}
+	resp.Proportion = proportion
+
+	totalFee, daoFee, oi, stake := s.calculateStat(rsp, sch)
+	resp.TotalFee["all"] = totalFee.String()
+	resp.DaoFee["all"] = daoFee.String()
+	resp.AverageOI["all"] = oi.String()
+	resp.AverageStake["all"] = stake.String()
 }
