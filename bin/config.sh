@@ -18,7 +18,7 @@ export DB_ARGS=postgres://mcdex@localhost:5432/mcdex?sslmode=disable # Disable s
 export DEFAULT_EPOCH_0_START_TIME=1634058000
 export RESET_DATABASE=false
 export SYNC_DELAY=0
-export SNAPSHOT_INTERVAL=3600
+export SNAPSHOT_INTERVAL=60
 
 # Arb-rinkeby graph url & inverse white list
 export ARB_RINKEBY_CHAIN=true
