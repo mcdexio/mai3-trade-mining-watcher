@@ -577,7 +577,10 @@ func (s *Syncer) syncState(db *gorm.DB, epoch *mining.Schedule) (int64, error) {
 		h := normN(np, s.snapshotInterval)
 		if np-60 < h && np >= h && len(allStates) > 0 {
 			s.logger.Info("making snapshot for %v", h)
-			s.makeSnapshot(tx, np, allStates)
+			err := s.makeSnapshot(tx, np, allStates)
+			if err != nil {
+				s.logger.Error("err=%s", err)
+			}
 		}
 		return nil
 	}, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
