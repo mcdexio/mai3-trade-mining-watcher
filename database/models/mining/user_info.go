@@ -33,5 +33,13 @@ func (*UserInfo) ForeignKeyConstraints() []models.ForeignKeyConstraint {
 
 // Indexes returns information to create index.
 func (*UserInfo) Indexes() []models.CustomIndex {
-	return nil
+	return []models.CustomIndex{
+		{
+			Name: "trader_epoch_chain_unique_idx",
+			Unique: true,
+			Fields: []string{"trader", "epoch", "chain"},
+			Type: "",
+			Condition: "",
+		},
+	}
 }
