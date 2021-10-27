@@ -415,14 +415,55 @@ func (s *TMServer) OnQueryMultiScore(w http.ResponseWriter, r *http.Request) {
 		}
 
 		resp := MultiEpochScoreResp{
-			TotalFee:     make(map[string]string, 0),
-			DaoFee:       make(map[string]string, 0),
-			AverageStake: make(map[string]string, 0),
-			AverageOI:    make(map[string]string, 0),
+			TotalFee: map[string]string{
+				"all": "0",
+				"0":     "0",
+				"1":     "0",
+			},
+			DaoFee: map[string]string{
+				"all": "0",
+				"0":     "0",
+				"1":     "0",
+			},
+			AverageStake: map[string]string{
+				"all": "0",
+				"0":     "0",
+				"1":     "0",
+			},
+			AverageOI: map[string]string{
+				"all": "0",
+				"0":     "0",
+				"1":     "0",
+			},
 		}
 
 		for _, rsp := range rsps {
 			s.logger.Debug("user info %+v", rsp)
+			if i == 0 && rsp.Chain == "" {
+				// TODO(champFu): for mainnet need include epoch 0 and 1
+				resp.Score = rsp.Score.String()
+
+				var proportion string
+				totalScore := stats.totalScore
+				if totalScore.IsZero() {
+					proportion = "0"
+				} else {
+					if rsp.Score.GreaterThanOrEqual(totalScore) {
+						proportion = "1"
+					} else {
+						proportion = (rsp.Score.Div(totalScore)).String()
+					}
+				}
+				resp.Proportion = proportion
+
+				totalFee, daoFee, oi, stake := s.calculateStat(rsp, sch)
+				resp.TotalFee["all"] = totalFee.String()
+				resp.DaoFee["all"] = daoFee.String()
+				resp.AverageOI["all"] = oi.String()
+				resp.AverageStake["all"] = stake.String()
+				break
+			}
+
 			if rsp.Chain == "total" {
 				resp.Score = rsp.Score.String()
 
