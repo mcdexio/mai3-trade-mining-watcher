@@ -134,6 +134,7 @@ func main() {
 		multiBlockGraphs,
 		config.GetInt64("DEFAULT_EPOCH_0_START_TIME"),
 		config.GetInt64("SYNC_DELAY", 0),
+		config.GetInt64("SNAPSHOT_INTERVAL", 3600),
 	)
 	go WaitExitSignalWithServer(stop, logger, tmServer, internalServer)
 

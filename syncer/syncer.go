@@ -52,6 +52,7 @@ type Syncer struct {
 func NewSyncer(
 	ctx context.Context, logger logging.Logger, multiMAI3GraphClient *mai3.MultiClient,
 	multiBlockGraphClient *block.MultiClient, defaultEpochStartTime int64, syncDelaySeconds int64,
+	snapshotInterval int64,
 ) *Syncer {
 	return &Syncer{
 		ctx:                   ctx,
@@ -61,7 +62,7 @@ func NewSyncer(
 		db:                    database.GetDB(),
 		defaultEpochStartTime: defaultEpochStartTime,
 		syncDelaySeconds:      syncDelaySeconds,
-		snapshotInterval:      3600,
+		snapshotInterval:      snapshotInterval,
 	}
 }
 
