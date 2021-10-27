@@ -35,10 +35,10 @@ func (*UserInfo) ForeignKeyConstraints() []models.ForeignKeyConstraint {
 func (*UserInfo) Indexes() []models.CustomIndex {
 	return []models.CustomIndex{
 		{
-			Name: "trader_epoch_chain_unique_idx",
-			Unique: true,
-			Fields: []string{"trader", "epoch", "chain"},
-			Type: "",
+			Name:      "trader_epoch_chain_unique_idx",
+			Unique:    true,
+			Fields:    []string{"trader", "epoch", "chain"},
+			Type:      "",
 			Condition: "",
 		},
 	}

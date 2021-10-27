@@ -7,10 +7,10 @@ import (
 
 // Snapshot defines struct to contain information of a user info
 type Snapshot struct {
-	Trader    string `gorm:"column:trader;primary_key;type:varchar(128);not null" json:"trader"`
-	Epoch     int64  `gorm:"column:epoch;primary_key;type:bigint;not null" json:"epoch"`
-	Chain     string `gorm:"column:chain;primary_key;type:varchar(128);" json:"chain"`
-	Timestamp int64  `gorm:"column:timestamp;primary_key;type:bigint;not null" json:"timestamp"`
+	Trader    string `gorm:"column:trader;type:varchar(128);not null" json:"trader"`
+	Epoch     int64  `gorm:"column:epoch;type:bigint;not null" json:"epoch"`
+	Chain     string `gorm:"column:chain;type:varchar(128);" json:"chain"`
+	Timestamp int64  `gorm:"column:timestamp;type:bigint;not null" json:"timestamp"`
 
 	InitFee             decimal.Decimal `gorm:"column:init_fee;type:decimal(38,18);not null" json:"init_fee"`
 	AccFee              decimal.Decimal `gorm:"column:acc_fee;type:decimal(38,18);not null" json:"acc_fee"`
