@@ -111,11 +111,11 @@ func (s *Syncer) restoreFromSnapshot(db *gorm.DB, checkpoint int64) error {
 	if err := db.Where("epoch=? and timestamp=?", epoch.Epoch, checkpoint).Find(&snapshots).Error; err != nil {
 		return err
 	}
+	length := len(snapshots)
 	// TODO(champFu): find a way to iterate all fields
-	users := make([]*mining.UserInfo, len(snapshots))
+	users := make([]*mining.UserInfo, length)
 	for i, s := range snapshots {
 		users[i] = &mining.UserInfo{
-			// 13
 			Trader:              s.Trader,
 			Epoch:               s.Epoch,
 			Timestamp:           s.Timestamp,
@@ -132,8 +132,17 @@ func (s *Syncer) restoreFromSnapshot(db *gorm.DB, checkpoint int64) error {
 			Chain:               s.Chain,
 		}
 	}
-	if err := db.Save(users).Error; err != nil {
-		return err
+	for i := 0; i*500 < length; i++ {
+		fromIndex := i * 500
+		toIndex := (i + 1) * 500
+		if toIndex >= length {
+			toIndex = length
+		}
+		uBatch := make([]*mining.UserInfo, 500)
+		uBatch = users[fromIndex:toIndex]
+		if err := db.Model(&mining.UserInfo{}).Save(&uBatch).Error; err != nil {
+			return fmt.Errorf("failed to create user_info: checkpoint=%v, size=%v err=%s", checkpoint, len(uBatch), err)
+		}
 	}
 	if err := s.setProgress(db, PROGRESS_INIT_FEE, epoch.StartTime, epoch.Epoch); err != nil {
 		return err
@@ -141,6 +150,7 @@ func (s *Syncer) restoreFromSnapshot(db *gorm.DB, checkpoint int64) error {
 	if err := s.setProgress(db, PROGRESS_SYNC_STATE, checkpoint, epoch.Epoch); err != nil {
 		return err
 	}
+	s.logger.Info("success restoreFromSnapshot checkpoint=%d", checkpoint)
 	return nil
 }
 
@@ -480,8 +490,8 @@ func (s *Syncer) updateUserScores(db *gorm.DB, epoch *mining.Schedule, timestamp
 }
 
 func (s *Syncer) makeSnapshot(db *gorm.DB, timestamp int64, users []*mining.UserInfo) error {
-	s.logger.Info("making snapshot for %v", timestamp)
-	snapshot := make([]*mining.Snapshot, len(users))
+	length := len(users)
+	snapshot := make([]*mining.Snapshot, length)
 	for i, u := range users {
 		snapshot[i] = &mining.Snapshot{
 			// 13
@@ -501,9 +511,19 @@ func (s *Syncer) makeSnapshot(db *gorm.DB, timestamp int64, users []*mining.User
 			Chain:               u.Chain,
 		}
 	}
-	if err := db.Model(&mining.Snapshot{}).Save(&snapshot).Error; err != nil {
-		return fmt.Errorf("failed to create snapshot: timestamp=%v, size=%v %w", timestamp, len(users), err)
+	for i := 0; i*500 < length; i++ {
+		fromIndex := i * 500
+		toIndex := (i + 1) * 500
+		if toIndex >= length {
+			toIndex = length
+		}
+		uBatch := make([]*mining.Snapshot, 500)
+		uBatch = snapshot[fromIndex:toIndex]
+		if err := db.Model(&mining.Snapshot{}).Save(&uBatch).Error; err != nil {
+			return fmt.Errorf("fail to create snapshot: ts=%v, size=%v err=%s", timestamp, len(uBatch), err)
+		}
 	}
+	s.logger.Info("success makeSnapshot ts=%v", timestamp)
 	return nil
 }
 

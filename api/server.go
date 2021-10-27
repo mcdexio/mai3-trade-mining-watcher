@@ -421,23 +421,23 @@ func (s *TMServer) OnQueryMultiScore(w http.ResponseWriter, r *http.Request) {
 		resp := MultiEpochScoreResp{
 			TotalFee: map[string]string{
 				"all": "0",
-				"0":     "0",
-				"1":     "0",
+				"0":   "0",
+				"1":   "0",
 			},
 			DaoFee: map[string]string{
 				"all": "0",
-				"0":     "0",
-				"1":     "0",
+				"0":   "0",
+				"1":   "0",
 			},
 			AverageStake: map[string]string{
 				"all": "0",
-				"0":     "0",
-				"1":     "0",
+				"0":   "0",
+				"1":   "0",
 			},
 			AverageOI: map[string]string{
 				"all": "0",
-				"0":     "0",
-				"1":     "0",
+				"0":   "0",
+				"1":   "0",
 			},
 		}
 
