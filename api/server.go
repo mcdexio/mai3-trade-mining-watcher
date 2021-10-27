@@ -192,7 +192,11 @@ func (s *TMServer) calculateTotalStats() (err error) {
 	s.logger.Info("calculate total status from 0 to this epoch %d", s.nowEpoch)
 	for i := int64(0); i <= s.nowEpoch; i++ {
 		var traders []*mining.UserInfo
-		err = s.db.Model(&mining.UserInfo{}).Where("epoch = ? and chain = 'total'", i).Scan(&traders).Error
+		if i <= 0 {
+			err = s.db.Model(&mining.UserInfo{}).Where("epoch = 0").Scan(&traders).Error
+		} else {
+			err = s.db.Model(&mining.UserInfo{}).Where("epoch = ? and chain = 'total'", i).Scan(&traders).Error
+		}
 		if err != nil {
 			return
 		}
