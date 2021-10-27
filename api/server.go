@@ -439,7 +439,9 @@ func (s *TMServer) OnQueryMultiScore(w http.ResponseWriter, r *http.Request) {
 
 		for _, rsp := range rsps {
 			s.logger.Debug("user info %+v", rsp)
-			if i == 0 && rsp.Chain == "" {
+			if i == 0 && len(rsps) != 1 {
+				s.logger.Warn("Epoch 0 has multi chain %d", len(rsps))
+			} else if i == 0 && len(rsps) == 1 {
 				// TODO(champFu): for mainnet need include epoch 0 and 1
 				resp.Score = rsp.Score.String()
 
