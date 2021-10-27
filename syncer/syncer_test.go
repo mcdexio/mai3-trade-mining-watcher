@@ -77,7 +77,7 @@ func (t *SyncerTestSuite) TestStateOnlyOneChain() {
 		t.Require().Equal(progress.From, p)
 
 		// check calculation result
-		err = t.syncer.db.Model(&mining.UserInfo{}).Where("epoch = 0").Scan(&users).Error
+		err = t.syncer.db.Model(&mining.UserInfo{}).Where("epoch = 0 and chain = 'total'").Scan(&users).Error
 		t.Require().Equal(err, nil)
 		if p == 60 {
 			// p == 60 -> block == 1
@@ -373,9 +373,12 @@ func (t *SyncerTestSuite) TestRestoreFromSnapshot() {
 	}()
 	// before
 	{
-		t.syncer.syncState(t.syncer.db, epoch)         // 60, 100
-		t.syncer.syncState(t.syncer.db, epoch)         // 120, 99
-		p, _ := t.syncer.syncState(t.syncer.db, epoch) // 180, 98
+		p, err := t.syncer.syncState(t.syncer.db, epoch) // 60, 100
+		t.Require().Equal(err, nil)
+		p, err = t.syncer.syncState(t.syncer.db, epoch) // 120, 99
+		t.Require().Equal(err, nil)
+		p, _ = t.syncer.syncState(t.syncer.db, epoch) // 180, 98
+		t.Require().Equal(err, nil)
 		t.Require().Equal(int64(180), p)
 	}
 	// block == 3
@@ -439,9 +442,12 @@ func (t *SyncerTestSuite) TestRestoreTransaction() {
 	}()
 	// before
 	{
-		t.syncer.syncState(t.syncer.db, epoch)         // 60, 100
-		t.syncer.syncState(t.syncer.db, epoch)         // 120, 99
-		p, _ := t.syncer.syncState(t.syncer.db, epoch) // 180, 98
+		p, err := t.syncer.syncState(t.syncer.db, epoch) // 60, 100
+		t.Require().Equal(err, nil)
+		p, err = t.syncer.syncState(t.syncer.db, epoch) // 120, 99
+		t.Require().Equal(err, nil)
+		p, _ = t.syncer.syncState(t.syncer.db, epoch) // 180, 98
+		t.Require().Equal(err, nil)
 		t.Require().Equal(int64(180), p)
 	}
 
@@ -519,7 +525,7 @@ func (t *SyncerTestSuite) TestStateMultiChain() {
 		t.Require().Equal(progress.From, p)
 
 		// check calculation result
-		err = t.syncer.db.Model(&mining.UserInfo{}).Where("epoch = 0").Scan(&users).Error
+		err = t.syncer.db.Model(&mining.UserInfo{}).Where("epoch = 0 and chain = 'total'").Scan(&users).Error
 		t.Require().Equal(err, nil)
 		if p == 60 {
 			// p == 60 -> block == 1
