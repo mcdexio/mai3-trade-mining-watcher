@@ -33,5 +33,13 @@ func (*Snapshot) ForeignKeyConstraints() []models.ForeignKeyConstraint {
 
 // Indexes returns information to create index.
 func (*Snapshot) Indexes() []models.CustomIndex {
-	return nil
+	return []models.CustomIndex{
+		{
+			Name:      "trader_epoch_chain_timestamp_unique_idx",
+			Unique:    true,
+			Fields:    []string{"trader", "epoch", "chain", "timestamp"},
+			Type:      "",
+			Condition: "",
+		},
+	}
 }
