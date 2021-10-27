@@ -439,7 +439,7 @@ func (s *TMServer) OnQueryMultiScore(w http.ResponseWriter, r *http.Request) {
 		}
 
 		for _, rsp := range rsps {
-			s.logger.Debug("epoch %d: chain: %s, user info %+v", i, rsp.Chain, rsp)
+			s.logger.Debug("userInfo %+v", rsp)
 			if rsp.Chain == "total" {
 				s.marshalEpochAllScoreResp(stats.totalScore, sch, rsp, &resp)
 			} else {
