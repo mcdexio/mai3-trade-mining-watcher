@@ -54,6 +54,19 @@ func main() {
 		logger.Info("create new index for user_info")
 	}
 
+	AllModels = []interface{}{
+		&mining.Snapshot{},
+	}
+	for _, model := range AllModels {
+		logger.Info("model %+v", model)
+		err := database.CreateCustomIndices(db, model, "snapshot")
+		if err != nil {
+			logger.Warn("err=%s", err)
+			return
+		}
+		logger.Info("create new index for snapshot")
+	}
+
 	backgroundCtx, stop := context.WithCancel(context.Background())
 	group, ctx := errgroup.WithContext(backgroundCtx)
 
