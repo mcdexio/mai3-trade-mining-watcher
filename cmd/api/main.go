@@ -41,6 +41,19 @@ func main() {
 	migrationAddColumn(db, "InitTotalFee", logger)
 	migrationAddColumn(db, "Chain", logger)
 
+	var AllModels = []interface{}{
+		&mining.UserInfo{},
+	}
+	for _, model := range AllModels {
+		logger.Info("model %+v", model)
+		err := database.CreateCustomIndices(db, model, "user_info")
+		if err != nil {
+			logger.Warn("err=%s", err)
+			return
+		}
+		logger.Info("create new index for user_info")
+	}
+
 	backgroundCtx, stop := context.WithCancel(context.Background())
 	group, ctx := errgroup.WithContext(backgroundCtx)
 
