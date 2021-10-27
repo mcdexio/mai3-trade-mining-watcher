@@ -3,6 +3,7 @@ package syncer
 import (
 	"fmt"
 	"github.com/mcdexio/mai3-trade-mining-watcher/database/models/mining"
+	"github.com/mcdexio/mai3-trade-mining-watcher/graph/mai3"
 	"github.com/shopspring/decimal"
 	"math"
 	"strconv"
@@ -120,4 +121,97 @@ func GetRemainMinutes(timestamp int64, epoch *mining.Schedule) decimal.Decimal {
 	minuteCeil := int64(math.Floor((float64(timestamp) - float64(epoch.StartTime)) / 60.0))
 	remains := decimal.NewFromInt((epoch.EndTime-epoch.StartTime)/60.0 - minuteCeil) // total epoch in minutes
 	return remains
+}
+
+func GetOIFeeValue(
+	accounts []*mai3.MarginAccount, blockNumbers int64, cache map[string]decimal.Decimal,
+	mai3Graph mai3.GraphInterface) (oi, totalFee, daoFee decimal.Decimal, err error) {
+	oi = decimal.Zero
+	totalFee = decimal.Zero
+	daoFee = decimal.Zero
+	for _, a := range accounts {
+		var price decimal.Decimal
+		var poolAddr string
+		var perpIndex int
+
+		// 0xc32a2dfee97e2babc90a2b5e6aef41e789ef2e13-0-0x00233150044aec4cba478d0bf0ecda0baaf5ad19
+		// perpId := strings.Join(strings.Split(a.ID, "-")[:2], "-")
+		poolAddr, _, perpIndex, err = splitMarginAccountID(a.ID)
+		if err != nil {
+			return
+		}
+		perpId := fmt.Sprintf("%s-%d", poolAddr, perpIndex) // 0xc32a2dfee97e2babc90a2b5e6aef41e789ef2e13-0
+
+		match := false
+		base := ""
+		// is BTC inverse contract
+		match, base = mai3Graph.InBTCInverseContractWhiteList(perpId)
+		if match {
+			var btcPerpetualID, basePerpetualID string
+
+			btcPerpetualID, err = mai3Graph.GetPerpIDWithUSDBased("BTC")
+			if err != nil {
+				return
+			}
+			totalFee = totalFee.Add(a.TotalFee.Mul(cache[btcPerpetualID]))
+			dFee := a.OperatorFee.Add(a.VaultFee)
+			daoFee = daoFee.Add(dFee.Mul(cache[btcPerpetualID]))
+
+			if base == "USD" {
+				oi = oi.Add(a.Position.Abs())
+				continue
+			}
+			// base not USD
+			basePerpetualID, err = mai3Graph.GetPerpIDWithUSDBased(base)
+			if err != nil {
+				return
+			}
+			oi = oi.Add(a.Position.Abs().Mul(cache[basePerpetualID]))
+			continue
+		}
+		// is ETH inverse contract
+		match, base = mai3Graph.InETHInverseContractWhiteList(perpId)
+		if match {
+			var ethPerpetualID, basePerpetualID string
+
+			ethPerpetualID, err = mai3Graph.GetPerpIDWithUSDBased("ETH")
+			if err != nil {
+				return
+			}
+			totalFee = totalFee.Add(a.TotalFee.Mul(cache[ethPerpetualID]))
+			dFee := a.OperatorFee.Add(a.VaultFee)
+			daoFee = daoFee.Add(dFee.Mul(cache[ethPerpetualID]))
+
+			if base == "USD" {
+				oi = oi.Add(a.Position.Abs())
+				continue
+			}
+			// quote not USD
+			basePerpetualID, err = mai3Graph.GetPerpIDWithUSDBased(base)
+			if err != nil {
+				return
+			}
+			oi = oi.Add(a.Position.Abs().Mul(cache[basePerpetualID]))
+			continue
+		}
+
+		// normal contract
+		if v, ok := cache[perpId]; ok {
+			price = v
+		} else {
+			var p decimal.Decimal
+			p, err = mai3Graph.GetMarkPriceWithBlockNumberAddrIndex(blockNumbers, poolAddr, perpIndex)
+			if err != nil {
+				return
+			}
+			price = p
+			cache[perpId] = p
+		}
+		oi = oi.Add(price.Mul(a.Position).Abs())
+		totalFee = totalFee.Add(a.TotalFee)
+		dFee := a.OperatorFee.Add(a.VaultFee)
+		daoFee = daoFee.Add(dFee)
+	}
+	err = nil
+	return
 }

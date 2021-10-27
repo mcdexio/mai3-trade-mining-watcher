@@ -58,7 +58,6 @@ func main() {
 		&mining.Snapshot{},
 	}
 	for _, model := range AllModels {
-		logger.Info("model %+v", model)
 		err := database.CreateCustomIndices(db, model, "snapshot")
 		if err != nil {
 			logger.Warn("err=%s", err)

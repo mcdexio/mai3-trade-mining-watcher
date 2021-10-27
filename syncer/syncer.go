@@ -270,11 +270,15 @@ func (s *Syncer) initUserStates(db *gorm.DB, epoch *mining.Schedule) error {
 
 	// handle multi-chain
 	summaryUser := make(map[string]*mining.UserInfo)
-	saveUsers := make([][]*mining.UserInfo, len(multiUsers))
+	saveUsers := make([][]*mining.UserInfo, 0)
 	for i, users := range multiUsers {
 		saveUser := make([]*mining.UserInfo, len(users))
 		for j, u := range users {
-			_, totalFee, daoFee, err := s.getOIFeeValue(u.MarginAccounts, multiBNs[i], multiPrices, i)
+			mai3Graph, err := s.mai3Graphs.GetMai3GraphInterface(i)
+			if err != nil {
+				return err
+			}
+			_, totalFee, daoFee, err := GetOIFeeValue(u.MarginAccounts, multiBNs[i], multiPrices, mai3Graph)
 			if err != nil {
 				return fmt.Errorf("fail to get initial fee %s", err)
 			}
@@ -301,7 +305,11 @@ func (s *Syncer) initUserStates(db *gorm.DB, epoch *mining.Schedule) error {
 				Chain:        strconv.Itoa(i),
 			}
 		}
-		saveUsers[i] = saveUser
+		saveUsers = append(saveUsers, saveUser)
+		if epoch.Epoch < 2 {
+			// epoch 0 and 1 don't execute multi-chain. only for chain 1.
+			break
+		}
 	}
 
 	var uis []*mining.UserInfo
@@ -359,11 +367,15 @@ func (s *Syncer) getUserStateBasedOnBlockNumber(epoch *mining.Schedule, timestam
 
 	// handle multi-chain
 	summaryUser := make(map[string]*mining.UserInfo)
-	saveUsers := make([][]*mining.UserInfo, len(multiUsers))
+	saveUsers := make([][]*mining.UserInfo, 0)
 	for i, users := range multiUsers {
 		saveUser := make([]*mining.UserInfo, len(users))
 		for j, u := range users {
-			pv, totalFee, daoFee, err := s.getOIFeeValue(u.MarginAccounts, multiBNs[i], multiPrices, i)
+			mai3Graph, err := s.mai3Graphs.GetMai3GraphInterface(i)
+			if err != nil {
+				return nil, nil, err
+			}
+			pv, totalFee, daoFee, err := GetOIFeeValue(u.MarginAccounts, multiBNs[i], multiPrices, mai3Graph)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -402,7 +414,10 @@ func (s *Syncer) getUserStateBasedOnBlockNumber(epoch *mining.Schedule, timestam
 				Chain:               strconv.Itoa(i),
 			}
 		}
-		saveUsers[i] = saveUser
+		saveUsers = append(saveUsers, saveUser)
+		if epoch.Epoch < 2 {
+			break
+		}
 	}
 
 	var uis []*mining.UserInfo
@@ -574,7 +589,7 @@ func (s *Syncer) syncState(db *gorm.DB, epoch *mining.Schedule) (int64, error) {
 
 		// calculate for total
 		var allStates []*mining.UserInfo
-		if err := tx.Where("epoch=? and chain=?", epoch.Epoch, "total").Find(&allStates).Error; err != nil {
+		if err := tx.Where("epoch=? and chain= 'total'", epoch.Epoch).Find(&allStates).Error; err != nil {
 			return fmt.Errorf("fail to fetch all users in this epoch err=%s", err)
 		}
 		if err := s.updateUserScores(tx, epoch, np, allStates); err != nil {
@@ -609,103 +624,6 @@ func (s *Syncer) syncState(db *gorm.DB, epoch *mining.Schedule) (int64, error) {
 		return 0, fmt.Errorf("fail to update user states: timestamp=%v %w", np, err)
 	}
 	return np, nil
-}
-
-func (s *Syncer) getOIFeeValue(
-	accounts []*mai3.MarginAccount, blockNumbers int64, cache map[string]decimal.Decimal,
-	mai3GraphIndex int) (oi, totalFee, daoFee decimal.Decimal, err error) {
-	mai3Graph, err := s.mai3Graphs.GetMai3GraphInterface(mai3GraphIndex)
-	if err != nil {
-		return
-	}
-	oi = decimal.Zero
-	totalFee = decimal.Zero
-	daoFee = decimal.Zero
-	for _, a := range accounts {
-		var price decimal.Decimal
-		var poolAddr string
-		var perpIndex int
-
-		// 0xc32a2dfee97e2babc90a2b5e6aef41e789ef2e13-0-0x00233150044aec4cba478d0bf0ecda0baaf5ad19
-		// perpId := strings.Join(strings.Split(a.ID, "-")[:2], "-")
-		poolAddr, _, perpIndex, err = splitMarginAccountID(a.ID)
-		if err != nil {
-			return
-		}
-		perpId := fmt.Sprintf("%s-%d", poolAddr, perpIndex) // 0xc32a2dfee97e2babc90a2b5e6aef41e789ef2e13-0
-
-		match := false
-		base := ""
-		// is BTC inverse contract
-		match, base = mai3Graph.InBTCInverseContractWhiteList(perpId)
-		if match {
-			var btcPerpetualID, basePerpetualID string
-
-			btcPerpetualID, err = mai3Graph.GetPerpIDWithUSDBased("BTC")
-			if err != nil {
-				return
-			}
-			totalFee = totalFee.Add(a.TotalFee.Mul(cache[btcPerpetualID]))
-			dFee := a.OperatorFee.Add(a.VaultFee)
-			daoFee = daoFee.Add(dFee.Mul(cache[btcPerpetualID]))
-
-			if base == "USD" {
-				oi = oi.Add(a.Position.Abs())
-				continue
-			}
-			// base not USD
-			basePerpetualID, err = mai3Graph.GetPerpIDWithUSDBased(base)
-			if err != nil {
-				return
-			}
-			oi = oi.Add(a.Position.Abs().Mul(cache[basePerpetualID]))
-			continue
-		}
-		// is ETH inverse contract
-		match, base = mai3Graph.InETHInverseContractWhiteList(perpId)
-		if match {
-			var ethPerpetualID, basePerpetualID string
-
-			ethPerpetualID, err = mai3Graph.GetPerpIDWithUSDBased("ETH")
-			if err != nil {
-				return
-			}
-			totalFee = totalFee.Add(a.TotalFee.Mul(cache[ethPerpetualID]))
-			dFee := a.OperatorFee.Add(a.VaultFee)
-			daoFee = daoFee.Add(dFee.Mul(cache[ethPerpetualID]))
-
-			if base == "USD" {
-				oi = oi.Add(a.Position.Abs())
-				continue
-			}
-			// quote not USD
-			basePerpetualID, err = mai3Graph.GetPerpIDWithUSDBased(base)
-			if err != nil {
-				return
-			}
-			oi = oi.Add(a.Position.Abs().Mul(cache[basePerpetualID]))
-			continue
-		}
-
-		// normal contract
-		if v, ok := cache[perpId]; ok {
-			price = v
-		} else {
-			var p decimal.Decimal
-			p, err = s.getMarkPriceWithBlockNumberAddrIndex(blockNumbers, poolAddr, perpIndex, mai3Graph)
-			if err != nil {
-				return
-			}
-			price = p
-			cache[perpId] = p
-		}
-		oi = oi.Add(price.Mul(a.Position).Abs())
-		totalFee = totalFee.Add(a.TotalFee)
-		dFee := a.OperatorFee.Add(a.VaultFee)
-		daoFee = daoFee.Add(dFee)
-	}
-	err = nil
-	return
 }
 
 func (s *Syncer) detectEpoch(db *gorm.DB, lastTimestamp int64) (*mining.Schedule, error) {
