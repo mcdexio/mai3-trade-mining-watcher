@@ -44,12 +44,12 @@ func main() {
 	backgroundCtx, stop := context.WithCancel(context.Background())
 	group, ctx := errgroup.WithContext(backgroundCtx)
 
-	tmServer := api.NewTMServer(ctx, logger)
+	tmServer := api.NewTMServer(ctx, logging.NewLoggerTag("server"))
 	group.Go(func() error {
 		return tmServer.Run()
 	})
 
-	internalServer := api.NewInternalServer(ctx, logger)
+	internalServer := api.NewInternalServer(ctx, logging.NewLoggerTag("server"))
 	group.Go(func() error {
 		return internalServer.Run()
 	})
@@ -129,7 +129,7 @@ func main() {
 			RoundInterval: mustParseDuration(config.GetString("VALIDATOR_ROUND_INTERVAL", "1m")),
 			DatabaseURLs:  optional("DB_ARGS", "BACKUP_DB_ARGS"),
 		},
-		logger,
+		logging.NewLoggerTag("validator"),
 	)
 	if err != nil {
 		logger.Warn("fail to start validate service, ignored: %s", err)
