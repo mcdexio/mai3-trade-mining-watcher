@@ -614,11 +614,11 @@ func (s *Syncer) getOIFeeValue(
 		perpId := fmt.Sprintf("%s-%d", poolAddr, perpIndex) // 0xc32a2dfee97e2babc90a2b5e6aef41e789ef2e13-0
 
 		match := false
-		quote := ""
+		base := ""
 		// is BTC inverse contract
-		match, quote = mai3Graph.InBTCInverseContractWhiteList(perpId)
+		match, base = mai3Graph.InBTCInverseContractWhiteList(perpId)
 		if match {
-			var btcPerpetualID, quotePerpetualID string
+			var btcPerpetualID, basePerpetualID string
 
 			btcPerpetualID, err = mai3Graph.GetPerpIDWithUSDBased("BTC")
 			if err != nil {
@@ -628,22 +628,22 @@ func (s *Syncer) getOIFeeValue(
 			dFee := a.OperatorFee.Add(a.VaultFee)
 			daoFee = daoFee.Add(dFee.Mul(cache[btcPerpetualID]))
 
-			if quote == "USD" {
+			if base == "USD" {
 				oi = oi.Add(a.Position.Abs())
 				continue
 			}
-			// quote not USD
-			quotePerpetualID, err = mai3Graph.GetPerpIDWithUSDBased(quote)
+			// base not USD
+			basePerpetualID, err = mai3Graph.GetPerpIDWithUSDBased(base)
 			if err != nil {
 				return
 			}
-			oi = oi.Add(a.Position.Abs().Mul(cache[quotePerpetualID]))
+			oi = oi.Add(a.Position.Abs().Mul(cache[basePerpetualID]))
 			continue
 		}
 		// is ETH inverse contract
-		match, quote = mai3Graph.InETHInverseContractWhiteList(perpId)
+		match, base = mai3Graph.InETHInverseContractWhiteList(perpId)
 		if match {
-			var ethPerpetualID, quotePerpetualID string
+			var ethPerpetualID, basePerpetualID string
 
 			ethPerpetualID, err = mai3Graph.GetPerpIDWithUSDBased("ETH")
 			if err != nil {
@@ -653,16 +653,16 @@ func (s *Syncer) getOIFeeValue(
 			dFee := a.OperatorFee.Add(a.VaultFee)
 			daoFee = daoFee.Add(dFee.Mul(cache[ethPerpetualID]))
 
-			if quote == "USD" {
+			if base == "USD" {
 				oi = oi.Add(a.Position.Abs())
 				continue
 			}
 			// quote not USD
-			quotePerpetualID, err = mai3Graph.GetPerpIDWithUSDBased(quote)
+			basePerpetualID, err = mai3Graph.GetPerpIDWithUSDBased(base)
 			if err != nil {
 				return
 			}
-			oi = oi.Add(a.Position.Abs().Mul(cache[quotePerpetualID]))
+			oi = oi.Add(a.Position.Abs().Mul(cache[basePerpetualID]))
 			continue
 		}
 
