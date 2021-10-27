@@ -46,9 +46,9 @@ type GraphInterface interface {
 	GetMarkPriceWithBlockNumberAddrIndex(
 		blockNumber int64, poolAddr string, perpIndex int) (decimal.Decimal, error)
 
-	// InBTCInverseContractWhiteList return (true, quote) if this contract is inverse white list
+	// InBTCInverseContractWhiteList return (true, base) if this contract is inverse white list
 	InBTCInverseContractWhiteList(perpID string) (bool, string)
-	// InETHInverseContractWhiteList return (true, quote) if this contract is inverse white list
+	// InETHInverseContractWhiteList return (true, base) if this contract is inverse white list
 	InETHInverseContractWhiteList(perpID string) (bool, string)
 
 	// GetPerpIDWithUSDBased get perpetual id depend on symbol.

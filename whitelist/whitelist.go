@@ -30,8 +30,8 @@ func NewWhiteList(logger logging.Logger, contractAddr ...string) *Whitelist {
 }
 
 func (w *Whitelist) InInverseContractWhiteList(perpID string) (bool, string) {
-	if quote, match := w.list[perpID]; match {
-		return true, quote
+	if base, match := w.list[perpID]; match {
+		return true, base
 	} else {
 		return false, ""
 	}
