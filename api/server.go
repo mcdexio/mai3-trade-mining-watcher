@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/mcdexio/mai3-trade-mining-watcher/syncer"
+	"gorm.io/gorm"
 	"math"
 	"net/http"
 	"strings"
@@ -14,8 +14,8 @@ import (
 	"github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
 	database "github.com/mcdexio/mai3-trade-mining-watcher/database/db"
 	"github.com/mcdexio/mai3-trade-mining-watcher/database/models/mining"
+	"github.com/mcdexio/mai3-trade-mining-watcher/syncer"
 	"github.com/shopspring/decimal"
-	"gorm.io/gorm"
 )
 
 type epochStats struct {
@@ -47,13 +47,22 @@ type TMServer struct {
 	history  map[int]epochStats
 }
 
-type EpochScoreResp struct {
+type MultiEpochScoreResp struct {
 	TotalFee     map[string]string `json:"totalFee"`
 	DaoFee       map[string]string `json:"daoFee"`
 	AverageOI    map[string]string `json:"averageOI"`
 	AverageStake map[string]string `json:"averageStake"`
 	Score        string            `json:"score"`
 	Proportion   string            `json:"proportion"`
+}
+
+type EpochScoreResp struct {
+	TotalFee     string `json:"totalFee"`
+	DaoFee       string `json:"daoFee"`
+	AverageOI    string `json:"averageOI"`
+	AverageStake string `json:"averageStake"`
+	Score        string `json:"score"`
+	Proportion   string `json:"proportion"`
 }
 
 func NewTMServer(ctx context.Context, logger logging.Logger) *TMServer {
@@ -73,6 +82,7 @@ func NewTMServer(ctx context.Context, logger logging.Logger) *TMServer {
 		totalScore:      decimal.Zero,
 	}
 	mux := http.NewServeMux()
+	mux.HandleFunc("/multiScore", tmServer.OnQueryMultiScore)
 	mux.HandleFunc("/score", tmServer.OnQueryScore)
 	mux.HandleFunc("/totalStats", tmServer.OnQueryTotalStats)
 	tmServer.server = &http.Server{
@@ -211,7 +221,7 @@ func (s *TMServer) calculateTotalStats() (err error) {
 			epochStat.totalScore = epochStat.totalScore.Add(t.Score)
 		}
 		s.history[int(i)] = epochStat
-		s.logger.Info("Epoch %d: traders %d, totalFee %s, totalDaoFee %s, " +
+		s.logger.Info("Epoch %d: traders %d, totalFee %s, totalDaoFee %s, "+
 			"totalStakeScore %s, totalOpenInterest %s, totalScore %s", i, count,
 			epochStat.totalFee.String(), epochStat.totalDaoFee.String(),
 			epochStat.totalStakeScore.String(), epochStat.totalOI.String(),
@@ -288,6 +298,96 @@ func (s *TMServer) OnQueryScore(w http.ResponseWriter, r *http.Request) {
 	s.logger.Info("OnQueryScore user id %s", traderID)
 	queryTradingMiningResp := make(map[int]*EpochScoreResp)
 	for i := 0; i <= int(s.nowEpoch); i++ {
+		var rsp mining.UserInfo
+		err := s.db.Model(mining.UserInfo{}).Where(
+			"trader = ? and epoch = ?", traderID, i).First(&rsp).Error
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				s.logger.Info("user %s not found in db epoch %d", traderID, i)
+			} else {
+				s.logger.Error("failed to get value from user info table err=%s", err)
+				s.jsonError(w, "internal error", 400)
+				return
+			}
+		}
+		stats, match := s.history[i]
+		if !match {
+			s.logger.Error("failed to get stats %+v", s.history)
+			s.jsonError(w, "internal error", 400)
+			return
+		}
+
+		s.logger.Debug("Epoch %d: user info %+v, totalScore %s", i, rsp, s.history[i].totalScore.String())
+
+		sch, err := s.getScheduleWithEpoch(s.db, i)
+		if err != nil {
+			s.logger.Error("failed to get epoch %d from schedule table err=%s", i, err)
+			s.jsonError(w, "internal error", 400)
+			return
+		}
+
+		var proportion string
+		totalScore := stats.totalScore
+		if totalScore.IsZero() {
+			proportion = "0"
+		} else {
+			if rsp.Score.GreaterThanOrEqual(totalScore) {
+				proportion = "1"
+			} else {
+				proportion = (rsp.Score.Div(totalScore)).String()
+			}
+		}
+
+		totalFee, daoFee, oi, stake := s.calculateStat(&rsp, sch)
+		resp := EpochScoreResp{
+			TotalFee:     totalFee.String(),
+			DaoFee:       daoFee.String(),
+			AverageOI:    oi.String(),
+			AverageStake: stake.String(),
+			Score:        rsp.Score.String(),
+			Proportion:   proportion,
+		}
+		queryTradingMiningResp[i] = &resp
+	}
+
+	for i, resp := range queryTradingMiningResp {
+		s.logger.Debug("epoch %d, resp %+v", i, resp)
+	}
+	json.NewEncoder(w).Encode(queryTradingMiningResp)
+}
+
+func (s *TMServer) OnQueryMultiScore(w http.ResponseWriter, r *http.Request) {
+	defer func() {
+		if r := recover(); r != nil {
+			_, ok := r.(error)
+			if !ok {
+				err := fmt.Errorf("%v", r)
+				s.logger.Error("recover err:%s", err)
+				http.Error(w, "internal error.", 400)
+				return
+			}
+		}
+	}()
+
+	if r.Method != "GET" {
+		s.jsonError(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	// request
+	query := r.URL.Query()
+	trader := query["trader"]
+	if len(trader) != 1 || trader[0] == "" {
+		s.logger.Info("invalid or empty parameter:%#v", query)
+		s.jsonError(w, "invalid or empty parameter", 400)
+		return
+	}
+	traderID := strings.ToLower(trader[0])
+	s.logger.Info("OnQueryScore user id %s", traderID)
+	queryTradingMiningResp := make(map[int]*MultiEpochScoreResp)
+	for i := 0; i <= int(s.nowEpoch); i++ {
 		var rsps []*mining.UserInfo
 		err := s.db.Model(mining.UserInfo{}).Where(
 			"trader = ? and epoch = ?", traderID, i).Scan(&rsps).Error
@@ -314,7 +414,7 @@ func (s *TMServer) OnQueryScore(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		resp := EpochScoreResp{
+		resp := MultiEpochScoreResp{
 			TotalFee:     make(map[string]string, 0),
 			DaoFee:       make(map[string]string, 0),
 			AverageStake: make(map[string]string, 0),
