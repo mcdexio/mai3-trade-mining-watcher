@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/mcdexio/mai3-trade-mining-watcher/env"
 	"gorm.io/gorm"
 	"math"
 	"net/http"
@@ -416,8 +417,7 @@ func (s *TMServer) OnQueryMultiScore(w http.ResponseWriter, r *http.Request) {
 		}
 
 		var resp = MultiEpochScoreResp{}
-		if i <= 1 {
-			// epoch 0, 1
+		if i < int(env.MultiChainEpochStart()) {
 			resp = MultiEpochScoreResp{
 				TotalFee: map[string]string{
 					"total": "0",
@@ -457,7 +457,7 @@ func (s *TMServer) OnQueryMultiScore(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		if i <= 1 {
+		if i < int(env.MultiChainEpochStart()) {
 			// epoch 0, 1
 			for _, rsp := range rsps {
 				if rsp.Chain == "total" {
