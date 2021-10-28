@@ -2,35 +2,27 @@ package main
 
 import (
 	"context"
-	"github.com/mcdexio/mai3-trade-mining-watcher/api"
-	"github.com/mcdexio/mai3-trade-mining-watcher/common/config"
-	"github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
-	database "github.com/mcdexio/mai3-trade-mining-watcher/database/db"
 	"github.com/mcdexio/mai3-trade-mining-watcher/database/models/mining"
-	"github.com/mcdexio/mai3-trade-mining-watcher/env"
 	"github.com/mcdexio/mai3-trade-mining-watcher/graph/block"
 	"github.com/mcdexio/mai3-trade-mining-watcher/graph/mai3"
-	"github.com/mcdexio/mai3-trade-mining-watcher/syncer"
-	"github.com/mcdexio/mai3-trade-mining-watcher/types"
-	"github.com/mcdexio/mai3-trade-mining-watcher/validator"
 	"github.com/mcdexio/mai3-trade-mining-watcher/whitelist"
-	"github.com/shopspring/decimal"
-	"golang.org/x/sync/errgroup"
 	"gorm.io/gorm"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
-)
 
-type epochStats struct {
-	epoch         int64
-	totalTrader   int64
-	totalFee      decimal.Decimal
-	totalMCBScore decimal.Decimal
-	totalOI       decimal.Decimal
-	totalScore    decimal.Decimal
-}
+	"github.com/mcdexio/mai3-trade-mining-watcher/env"
+	"github.com/mcdexio/mai3-trade-mining-watcher/types"
+	"github.com/mcdexio/mai3-trade-mining-watcher/validator"
+
+	"github.com/mcdexio/mai3-trade-mining-watcher/api"
+	"github.com/mcdexio/mai3-trade-mining-watcher/common/config"
+	"github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
+	database "github.com/mcdexio/mai3-trade-mining-watcher/database/db"
+	"github.com/mcdexio/mai3-trade-mining-watcher/syncer"
+	"golang.org/x/sync/errgroup"
+)
 
 func main() {
 	name := "trading-mining"
@@ -45,50 +37,105 @@ func main() {
 	}
 
 	db := database.GetDB()
-	migrationAddUserInfoColumn(db, "AccTotalFee", logger)
-	migrationAddUserInfoColumn(db, "InitTotalFee", logger)
-	migrationAddSnapshotColumn(db, "AccTotalFee", logger)
-	migrationAddSnapshotColumn(db, "InitTotalFee", logger)
+	migrationAddColumn(db, "AccTotalFee", logger)
+	migrationAddColumn(db, "InitTotalFee", logger)
+	migrationAddColumn(db, "Chain", logger)
+
+	var AllModels = []interface{}{
+		&mining.UserInfo{},
+	}
+	for _, model := range AllModels {
+		logger.Info("model %+v", model)
+		err := database.CreateCustomIndices(db, model, "user_info")
+		if err != nil {
+			logger.Warn("err=%s", err)
+			return
+		}
+		logger.Info("create new index for user_info")
+	}
+
+	AllModels = []interface{}{
+		&mining.Snapshot{},
+	}
+	for _, model := range AllModels {
+		err := database.CreateCustomIndices(db, model, "snapshot")
+		if err != nil {
+			logger.Warn("err=%s", err)
+			return
+		}
+		logger.Info("create new index for snapshot")
+	}
 
 	backgroundCtx, stop := context.WithCancel(context.Background())
 	group, ctx := errgroup.WithContext(backgroundCtx)
 
-	tmServer := api.NewTMServer(ctx, logger)
+	tmServer := api.NewTMServer(ctx, logging.NewLoggerTag("server"))
 	group.Go(func() error {
 		return tmServer.Run()
 	})
 
-	internalServer := api.NewInternalServer(ctx, logger)
+	internalServer := api.NewInternalServer(ctx, logging.NewLoggerTag("server"))
 	group.Go(func() error {
 		return internalServer.Run()
 	})
-	go WaitExitSignalWithServer(stop, logger, tmServer, internalServer)
 
 	mai3GraphClients := make([]mai3.GraphInterface, 0)
 	blockGraphClients := make([]block.BlockInterface, 0)
+	if env.BSCChainInclude() {
+		// for bsc mai3 graph client
+		bscBTCWhiteList := whitelist.NewWhiteList(
+			logger,
+			config.GetString("BSC_BTC_INVERSE_CONTRACT_WHITELIST0", ""),
+		)
+		bscETHWhiteList := whitelist.NewWhiteList(
+			logger,
+			config.GetString("BSC_ETH_INVERSE_CONTRACT_WHITELIST0", ""),
+			config.GetString("BSC_ETH_INVERSE_CONTRACT_WHITELIST1", ""),
+		)
+		bscSatsWhiteList := whitelist.NewWhiteList(
+			logger,
+			config.GetString("BSC_SATS_INVERSE_CONTRACT_WHITELIST0", ""),
+		)
+		bscMAI3GraphClient := mai3.NewClient(
+			logger,
+			config.GetString("BSC_MAI3_GRAPH_URL"),
+			bscBTCWhiteList,
+			bscETHWhiteList,
+			bscSatsWhiteList,
+			config.GetString("BSC_BTC_USD_PERP_ID", ""),
+			config.GetString("BSC_ETH_USD_PERP_ID", ""),
+		)
+		mai3GraphClients = append(mai3GraphClients, bscMAI3GraphClient)
 
-	// for arb-rinkeby mai3 graph client
-	arbRinkebyBTCWhiteList := whitelist.NewWhiteList(
-		logger,
-		config.GetString("ARB_RINKEBY_BTC_INVERSE_CONTRACT_WHITELIST0", ""),
-	)
-	arbRinkebyETHWhiteList := whitelist.NewWhiteList(
-		logger,
-		config.GetString("ARB_RINKEBY_ETH_INVERSE_CONTRACT_WHITELIST0", ""),
-	)
-	arbRinkebyMAI3GraphClient := mai3.NewClient(
-		logger,
-		config.GetString("ARB_RINKEBY_MAI3_GRAPH_URL"),
-		arbRinkebyBTCWhiteList,
-		arbRinkebyETHWhiteList,
-		config.GetString("ARB_RINKEBY_BTC_USD_PERP_ID", ""),
-		config.GetString("ARB_RINKEBY_ETH_USD_PERP_ID", ""),
-	)
-	mai3GraphClients = append(mai3GraphClients, arbRinkebyMAI3GraphClient)
+		// for bsc block graph client
+		bscBlockGraphClient := block.NewClient(logger, config.GetString("BSC_BLOCK_GRAPH_URL"))
+		blockGraphClients = append(blockGraphClients, bscBlockGraphClient)
+	}
+	if env.ArbRinkebyChainInclude() {
+		// for arb-rinkeby mai3 graph client
+		arbRinkebyBTCWhiteList := whitelist.NewWhiteList(
+			logger,
+			config.GetString("ARB_RINKEBY_BTC_INVERSE_CONTRACT_WHITELIST0", ""),
+		)
+		arbRinkebyETHWhiteList := whitelist.NewWhiteList(
+			logger,
+			config.GetString("ARB_RINKEBY_ETH_INVERSE_CONTRACT_WHITELIST0", ""),
+		)
+		arbRinkebyMAI3GraphClient := mai3.NewClient(
+			logger,
+			config.GetString("ARB_RINKEBY_MAI3_GRAPH_URL"),
+			arbRinkebyBTCWhiteList,
+			arbRinkebyETHWhiteList,
+			nil,
+			config.GetString("ARB_RINKEBY_BTC_USD_PERP_ID", ""),
+			config.GetString("ARB_RINKEBY_ETH_USD_PERP_ID", ""),
+		)
+		mai3GraphClients = append(mai3GraphClients, arbRinkebyMAI3GraphClient)
 
-	// for arb-rinkeby block graph client
-	arbRinkebyBlockGraphClient := block.NewClient(logger, config.GetString("ARB_RINKEBY_BLOCK_GRAPH_URL"))
-	blockGraphClients = append(blockGraphClients, arbRinkebyBlockGraphClient)
+		// for arb-rinkeby block graph client
+		arbRinkebyBlockGraphClient := block.NewClient(logger, config.GetString("ARB_RINKEBY_BLOCK_GRAPH_URL"))
+		blockGraphClients = append(blockGraphClients, arbRinkebyBlockGraphClient)
+	}
 
 	multiMai3Graphs := mai3.NewMultiClient(
 		logger,
@@ -98,7 +145,6 @@ func main() {
 		logger,
 		blockGraphClients,
 	)
-
 	syn := syncer.NewSyncer(
 		ctx,
 		logger,
@@ -108,16 +154,14 @@ func main() {
 		config.GetInt64("SYNC_DELAY", 0),
 		config.GetInt64("SNAPSHOT_INTERVAL", 3600),
 	)
-	group.Go(func() error {
-		return syn.Run()
-	})
+	go WaitExitSignalWithServer(stop, logger, tmServer, internalServer)
 
 	vld, err := validator.NewValidator(
 		&validator.Config{
 			RoundInterval: mustParseDuration(config.GetString("VALIDATOR_ROUND_INTERVAL", "1m")),
 			DatabaseURLs:  optional("DB_ARGS", "BACKUP_DB_ARGS"),
 		},
-		logger,
+		logging.NewLoggerTag("validator"),
 	)
 	if err != nil {
 		logger.Warn("fail to start validate service, ignored: %s", err)
@@ -127,19 +171,13 @@ func main() {
 		})
 	}
 
+	group.Go(func() error {
+		return syn.Run()
+	})
+
 	if err := group.Wait(); err != nil {
 		logger.Critical("service stopped: %s", err)
 	}
-}
-
-func WaitExitSignal(ctxStop context.CancelFunc, logger logging.Logger) {
-	var exitSignal = make(chan os.Signal, 1)
-	signal.Notify(exitSignal, syscall.SIGTERM)
-	signal.Notify(exitSignal, syscall.SIGINT)
-
-	sig := <-exitSignal
-	logger.Info("caught sig: %+v, Stopping...\n", sig)
-	ctxStop()
 }
 
 func WaitExitSignalWithServer(
@@ -160,6 +198,22 @@ func WaitExitSignalWithServer(
 	ctxStop()
 }
 
+func optional(names ...string) []string {
+	var res []string
+	for _, n := range names {
+		s := config.GetString(n, "__NO_VALUE__")
+		if s != "__NO_VALUE__" {
+			res = append(res, s)
+		}
+	}
+	return res
+}
+
+func mustParseDuration(s string) time.Duration {
+	d, _ := time.ParseDuration(s)
+	return d
+}
+
 func migrationAddUserInfoColumn(db *gorm.DB, columnName string, logger logging.Logger) {
 	isExist := db.Migrator().HasColumn(&mining.UserInfo{}, columnName)
 	if isExist {
@@ -170,6 +224,7 @@ func migrationAddUserInfoColumn(db *gorm.DB, columnName string, logger logging.L
 	if err != nil {
 		logger.Warn("failed to add column %s in user_info table", columnName)
 	}
+	logger.Info("migration: add new column %s in user_info table", columnName)
 	return
 }
 
@@ -183,21 +238,11 @@ func migrationAddSnapshotColumn(db *gorm.DB, columnName string, logger logging.L
 	if err != nil {
 		logger.Warn("failed to add column %s in snapshot table", columnName)
 	}
+	logger.Info("migration: add new column %s in snapshot table", columnName)
 	return
 }
 
-func mustParseDuration(s string) time.Duration {
-	d, _ := time.ParseDuration(s)
-	return d
-}
-
-func optional(names ...string) []string {
-	var res []string
-	for _, n := range names {
-		s := config.GetString(n, "__NO_VALUE__")
-		if s != "__NO_VALUE__" {
-			res = append(res, s)
-		}
-	}
-	return res
+func migrationAddColumn(db *gorm.DB, columnName string, logger logging.Logger) {
+	migrationAddUserInfoColumn(db, columnName, logger)
+	migrationAddSnapshotColumn(db, columnName, logger)
 }

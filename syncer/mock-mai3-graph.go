@@ -47,6 +47,10 @@ func (mockMAI3 *MockMAI3Graph1) InETHInverseContractWhiteList(perpID string) (bo
 	return false, ""
 }
 
+func (mockMAI3 *MockMAI3Graph1) InSATSInverseContractWhiteList(perpID string) (bool, string) {
+	return false, ""
+}
+
 func (mockMAI3 *MockMAI3Graph1) GetPerpIDWithUSDBased(symbol string) (string, error) {
 	return "", nil
 }
@@ -252,6 +256,10 @@ func (mockMAI3 *MockMAI3Graph2) InBTCInverseContractWhiteList(perpID string) (bo
 }
 
 func (mockMAI3 *MockMAI3Graph2) InETHInverseContractWhiteList(perpID string) (bool, string) {
+	return false, ""
+}
+
+func (mockMAI3 *MockMAI3Graph2) InSATSInverseContractWhiteList(perpID string) (bool, string) {
 	return false, ""
 }
 

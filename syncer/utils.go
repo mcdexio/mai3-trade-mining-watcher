@@ -186,7 +186,34 @@ func GetOIFeeValue(
 				oi = oi.Add(a.Position.Abs())
 				continue
 			}
-			// quote not USD
+			// base not USD
+			basePerpetualID, err = mai3Graph.GetPerpIDWithUSDBased(base)
+			if err != nil {
+				return
+			}
+			oi = oi.Add(a.Position.Abs().Mul(cache[basePerpetualID]))
+			continue
+		}
+		// is SATS inverse contract
+		match, base = mai3Graph.InSATSInverseContractWhiteList(perpId)
+		if match {
+			// 1SATS = 1BTC / 1e8
+			var btcPerpetualID, basePerpetualID string
+
+			btcPerpetualID, err = mai3Graph.GetPerpIDWithUSDBased("BTC")
+			if err != nil {
+				return
+			}
+			satsPrice := cache[btcPerpetualID].Div(decimal.NewFromInt(10 * 8))
+			totalFee = totalFee.Add(a.TotalFee.Mul(satsPrice))
+			dFee := a.OperatorFee.Add(a.VaultFee)
+			daoFee = daoFee.Add(dFee.Mul(satsPrice))
+
+			if base == "USD" {
+				oi = oi.Add(a.Position.Abs())
+				continue
+			}
+			// base not USD
 			basePerpetualID, err = mai3Graph.GetPerpIDWithUSDBased(base)
 			if err != nil {
 				return
