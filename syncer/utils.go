@@ -204,7 +204,7 @@ func GetOIFeeValue(
 			if err != nil {
 				return
 			}
-			satsPrice := cache[btcPerpetualID].Div(decimal.NewFromInt(10 * 8))
+			satsPrice := cache[btcPerpetualID].Div(decimal.NewFromInt(100000000))
 			totalFee = totalFee.Add(a.TotalFee.Mul(satsPrice))
 			dFee := a.OperatorFee.Add(a.VaultFee)
 			daoFee = daoFee.Add(dFee.Mul(satsPrice))
