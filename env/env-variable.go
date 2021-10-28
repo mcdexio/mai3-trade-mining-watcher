@@ -33,3 +33,9 @@ func ArbRinkebyChainInclude() bool {
 	reset := config.GetString("ARB_RINKEBY_CHAIN", "false")
 	return reset == "true"
 }
+
+// ArbOneChainInclude returns true when include arbitrum chain into trading mining.
+func ArbOneChainInclude() bool {
+	reset := config.GetString("ARB_ONE_CHAIN", "false")
+	return reset == "true"
+}
