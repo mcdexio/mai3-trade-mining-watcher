@@ -32,12 +32,13 @@ type MarkPrice struct {
 }
 
 type Client struct {
-	logger       logging.Logger
-	client       *utils.Client
-	btcWhiteList *whitelist.Whitelist
-	ethWhiteList *whitelist.Whitelist
-	btcUsdPerpID string
-	ethUsdPerpID string
+	logger        logging.Logger
+	client        *utils.Client
+	btcWhiteList  *whitelist.Whitelist
+	ethWhiteList  *whitelist.Whitelist
+	satsWhiteList *whitelist.Whitelist
+	btcUsdPerpID  string
+	ethUsdPerpID  string
 }
 
 type GraphInterface interface {
@@ -50,19 +51,23 @@ type GraphInterface interface {
 	InBTCInverseContractWhiteList(perpID string) (bool, string)
 	// InETHInverseContractWhiteList return (true, base) if this contract is inverse white list
 	InETHInverseContractWhiteList(perpID string) (bool, string)
+	// InSATSInverseContractWhiteList return (true, base) if this contract is inverse white list
+	InSATSInverseContractWhiteList(perpID string) (bool, string)
 
 	// GetPerpIDWithUSDBased get perpetual id depend on symbol.
 	GetPerpIDWithUSDBased(symbol string) (string, error)
 }
 
 func NewClient(logger logging.Logger, url string, btcWhiteList *whitelist.Whitelist,
-	ethWhiteList *whitelist.Whitelist, perpIDsUSDBased ...string) *Client {
+	ethWhiteList *whitelist.Whitelist, satsWhiteList *whitelist.Whitelist,
+	perpIDsUSDBased ...string) *Client {
 	logger.Info("New MAI3 graph client with url %s", url)
 	c := &Client{
-		logger:       logger,
-		client:       utils.NewHttpClient(utils.DefaultTransport, logger, url),
-		btcWhiteList: btcWhiteList,
-		ethWhiteList: ethWhiteList,
+		logger:        logger,
+		client:        utils.NewHttpClient(utils.DefaultTransport, logger, url),
+		btcWhiteList:  btcWhiteList,
+		ethWhiteList:  ethWhiteList,
+		satsWhiteList: satsWhiteList,
 	}
 	for i, perpID := range perpIDsUSDBased {
 		if perpID == "" {
@@ -90,11 +95,24 @@ func (m *Client) GetPerpIDWithUSDBased(symbol string) (string, error) {
 }
 
 func (m *Client) InBTCInverseContractWhiteList(perpID string) (bool, string) {
+	if m.btcWhiteList == nil {
+		return false, ""
+	}
 	return m.btcWhiteList.InInverseContractWhiteList(perpID)
 }
 
 func (m *Client) InETHInverseContractWhiteList(perpID string) (bool, string) {
+	if m.ethWhiteList == nil {
+		return false, ""
+	}
 	return m.ethWhiteList.InInverseContractWhiteList(perpID)
+}
+
+func (m *Client) InSATSInverseContractWhiteList(perpID string) (bool, string) {
+	if m.satsWhiteList == nil {
+		return false, ""
+	}
+	return m.satsWhiteList.InInverseContractWhiteList(perpID)
 }
 
 // GetMarkPrices get mark prices with block number. return map[markPriceID]price

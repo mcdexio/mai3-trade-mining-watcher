@@ -92,11 +92,16 @@ func main() {
 			config.GetString("BSC_ETH_INVERSE_CONTRACT_WHITELIST0", ""),
 			config.GetString("BSC_ETH_INVERSE_CONTRACT_WHITELIST1", ""),
 		)
+		bscSatsWhiteList := whitelist.NewWhiteList(
+			logger,
+			config.GetString("BSC_SATS_INVERSE_CONTRACT_WHITELIST0", ""),
+		)
 		bscMAI3GraphClient := mai3.NewClient(
 			logger,
 			config.GetString("BSC_MAI3_GRAPH_URL"),
 			bscBTCWhiteList,
 			bscETHWhiteList,
+			bscSatsWhiteList,
 			config.GetString("BSC_BTC_USD_PERP_ID", ""),
 			config.GetString("BSC_ETH_USD_PERP_ID", ""),
 		)
@@ -121,6 +126,7 @@ func main() {
 			config.GetString("ARB_RINKEBY_MAI3_GRAPH_URL"),
 			arbRinkebyBTCWhiteList,
 			arbRinkebyETHWhiteList,
+			nil,
 			config.GetString("ARB_RINKEBY_BTC_USD_PERP_ID", ""),
 			config.GetString("ARB_RINKEBY_ETH_USD_PERP_ID", ""),
 		)
