@@ -498,7 +498,7 @@ func (t *SyncerTestSuite) TestStateMultiChain() {
 	np := int64(0)
 
 	epoch := &mining.Schedule{
-		Epoch:     0,
+		Epoch:     2,
 		StartTime: 0,
 		EndTime:   350,
 		WeightFee: decimal.NewFromFloat(0.7),
@@ -520,12 +520,12 @@ func (t *SyncerTestSuite) TestStateMultiChain() {
 		t.Require().Equal(err, nil)
 
 		// check progress
-		err = t.syncer.db.Model(&mining.Progress{}).Where("table_name = 'user_info' and epoch = 0").First(&progress).Error
+		err = t.syncer.db.Model(&mining.Progress{}).Where("table_name = 'user_info' and epoch = 2").First(&progress).Error
 		t.Require().Equal(err, nil)
 		t.Require().Equal(progress.From, p)
 
 		// check calculation result
-		err = t.syncer.db.Model(&mining.UserInfo{}).Where("epoch = 0 and chain = 'total'").Scan(&users).Error
+		err = t.syncer.db.Model(&mining.UserInfo{}).Where("epoch = 2 and chain = 'total'").Scan(&users).Error
 		t.Require().Equal(err, nil)
 		if p == 60 {
 			// p == 60 -> block == 1
@@ -561,14 +561,14 @@ func (t *SyncerTestSuite) TestStateMultiChain() {
 			t.Require().Equal(users[0].AccPosValue.String(), decimal.NewFromInt(4620).String())
 			t.Require().Equal(users[0].CurPosValue.String(), decimal.NewFromInt(3780).String())
 			t.Require().Equal(users[0].AccTotalFee.String(), decimal.NewFromInt(10).String())
+			t.Require().Equal(users[0].AccFee.String(), decimal.NewFromInt(6).String())
 			// remainEpochDays 0, remainProportion 1, remainEpochMinutes 3, A = (1 - 0) * 98*3 * 3 = 882
 			t.Require().Equal(users[0].EstimatedStakeScore.String(), decimal.NewFromInt(882).String())
 
-			minuteCeil := int64(math.Floor((float64(users[0].Timestamp) - float64(epoch.StartTime)) / 60.0))
-			remains := decimal.NewFromInt((epoch.EndTime-epoch.StartTime)/60.0 - minuteCeil) // total epoch in minutes
+			remains := GetRemainMinutes(180, epoch)
 			remainsFloat, _ := remains.Float64()
 
-			score := math.Pow(10.0, 0.7) * math.Pow((300.0+99.0*3.0+98.0*3.0+882)/totalEpochMinutes, 0.3) * math.Pow((4620.0+3780.0*remainsFloat)/totalEpochMinutes, 0.3)
+			score := math.Pow(6.0, 0.7) * math.Pow((300.0+99.0*3.0+98.0*3.0+882)/totalEpochMinutes, 0.3) * math.Pow((4620.0+3780.0*remainsFloat)/totalEpochMinutes, 0.3)
 			actualScore, _ := users[0].Score.Float64()
 			t.Require().Equal(actualScore, score)
 		}
@@ -584,6 +584,7 @@ func (t *SyncerTestSuite) TestStateMultiChain() {
 			t.Require().Equal(users[0].AccPosValue.String(), decimal.NewFromInt(4620+3780).String())
 			t.Require().Equal(users[0].CurPosValue.String(), decimal.NewFromInt(9700).String())
 			t.Require().Equal(users[0].AccTotalFee.String(), decimal.NewFromInt(15).String())
+			t.Require().Equal(users[0].AccFee.String(), decimal.NewFromInt(10).String())
 			// remainEpochDays 0, remainProportion 1, remainEpochMinutes 2, A = (1 - 0) * 100*10 * 2 = 2000
 			t.Require().Equal(users[0].EstimatedStakeScore.String(), decimal.NewFromInt(2000).String())
 
@@ -591,7 +592,7 @@ func (t *SyncerTestSuite) TestStateMultiChain() {
 			remains := decimal.NewFromInt((epoch.EndTime-epoch.StartTime)/60.0 - minuteCeil) // total epoch in minutes
 			remainsFloat, _ := remains.Float64()
 
-			score := math.Pow(15.0, 0.7) * math.Pow(
+			score := math.Pow(10.0, 0.7) * math.Pow(
 				(300.0+99.0*3.0+98.0*3.0+1000+2000)/totalEpochMinutes, 0.3) * math.Pow(
 				(4620.0+3780.0+9700.0*remainsFloat)/totalEpochMinutes, 0.3)
 			actualScore, _ := users[0].Score.Float64()
@@ -608,6 +609,7 @@ func (t *SyncerTestSuite) TestStateMultiChain() {
 			t.Require().Equal(users[0].AccPosValue.String(), decimal.NewFromInt(4620+3780+9700).String())
 			t.Require().Equal(users[0].CurPosValue.String(), decimal.NewFromInt(35200).String())
 			t.Require().Equal(users[0].AccTotalFee.String(), decimal.NewFromInt(58).String())
+			t.Require().Equal(users[0].AccFee.String(), decimal.NewFromInt(31).String())
 			// remainEpochDays 0, remainProportion 1, remainEpochMinutes 1, A = (1 - 0) * ((10*99)+(6*100)) * 1 = 1590
 			t.Require().Equal(users[0].EstimatedStakeScore.String(), decimal.NewFromInt(1590).String())
 
@@ -615,7 +617,7 @@ func (t *SyncerTestSuite) TestStateMultiChain() {
 			remains := decimal.NewFromInt((epoch.EndTime-epoch.StartTime)/60.0 - minuteCeil) // total epoch in minutes
 			remainsFloat, _ := remains.Float64()
 
-			score := math.Pow(58.0, 0.7) * math.Pow(
+			score := math.Pow(31.0, 0.7) * math.Pow(
 				(300.0+99.0*3.0+98.0*3.0+10*100+10*99+6*100+1590)/totalEpochMinutes, 0.3) * math.Pow(
 				(4620.0+3780.0+9700.0+35200*remainsFloat)/totalEpochMinutes, 0.3)
 			actualScore, _ := users[0].Score.Float64()
