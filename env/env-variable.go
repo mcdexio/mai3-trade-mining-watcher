@@ -16,6 +16,12 @@ func LogColor() bool {
 	return color == "true"
 }
 
+// MultiChainEpochStart return epoch number which multi-chain start
+func MultiChainEpochStart() int64 {
+	epoch := config.GetInt64("MULTI_CHAIN_EPOCH_START", 2)
+	return epoch
+}
+
 // ResetDatabase returns true when reset database.
 func ResetDatabase() bool {
 	reset := config.GetString("RESET_DATABASE", "false")

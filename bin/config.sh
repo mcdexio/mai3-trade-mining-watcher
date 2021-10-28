@@ -19,6 +19,7 @@ export DEFAULT_EPOCH_0_START_TIME=1634058000
 export RESET_DATABASE=false
 export SYNC_DELAY=0
 export SNAPSHOT_INTERVAL=60
+export MULTI_CHAIN_EPOCH_START=2
 
 # Arb-rinkeby graph url & inverse white list
 export ARB_RINKEBY_CHAIN=true

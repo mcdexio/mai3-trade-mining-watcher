@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/mcdexio/mai3-trade-mining-watcher/env"
 	"github.com/shopspring/decimal"
 	"go.uber.org/atomic"
 	"gorm.io/gorm"
@@ -306,8 +307,7 @@ func (s *Syncer) initUserStates(db *gorm.DB, epoch *mining.Schedule) error {
 			}
 		}
 		saveUsers = append(saveUsers, saveUser)
-		if epoch.Epoch < 2 {
-			// epoch 0 and 1 don't execute multi-chain. only for chain 1.
+		if epoch.Epoch < env.MultiChainEpochStart() {
 			break
 		}
 	}
@@ -415,7 +415,7 @@ func (s *Syncer) getUserStateBasedOnBlockNumber(epoch *mining.Schedule, timestam
 			}
 		}
 		saveUsers = append(saveUsers, saveUser)
-		if epoch.Epoch < 2 {
+		if epoch.Epoch < env.MultiChainEpochStart() {
 			break
 		}
 	}
