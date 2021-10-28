@@ -45,7 +45,6 @@ func main() {
 		&mining.UserInfo{},
 	}
 	for _, model := range AllModels {
-		logger.Info("model %+v", model)
 		err := database.CreateCustomIndices(db, model, "user_info")
 		if err != nil {
 			logger.Warn("err=%s", err)
@@ -111,7 +110,27 @@ func main() {
 		bscBlockGraphClient := block.NewClient(logger, config.GetString("BSC_BLOCK_GRAPH_URL"))
 		blockGraphClients = append(blockGraphClients, bscBlockGraphClient)
 	}
-	if env.ArbRinkebyChainInclude() {
+	if env.ArbOneChainInclude() {
+		// for arb mai3 graph client
+		arbETHWhiteList := whitelist.NewWhiteList(
+			logger,
+			config.GetString("ARB_ONE_ETH_INVERSE_CONTRACT_WHITELIST0", ""),
+		)
+		arbRinkebyMAI3GraphClient := mai3.NewClient(
+			logger,
+			config.GetString("ARB_ONE_MAI3_GRAPH_URL"),
+			nil,
+			arbETHWhiteList,
+			nil,
+			config.GetString("ARB_ONE_BTC_USD_PERP_ID", ""),
+			config.GetString("ARB_ONE_ETH_USD_PERP_ID", ""),
+		)
+		mai3GraphClients = append(mai3GraphClients, arbRinkebyMAI3GraphClient)
+
+		// for arb block graph client
+		arbBlockGraphClient := block.NewClient(logger, config.GetString("ARB_ONE_BLOCK_GRAPH_URL"))
+		blockGraphClients = append(blockGraphClients, arbBlockGraphClient)
+	} else if env.ArbRinkebyChainInclude() {
 		// for arb-rinkeby mai3 graph client
 		arbRinkebyBTCWhiteList := whitelist.NewWhiteList(
 			logger,

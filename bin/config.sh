@@ -41,3 +41,11 @@ export BSC_SATS_INVERSE_CONTRACT_WHITELIST0='0xfdd10c021b43c4be1b9f0473bad686e54
 export BSC_BTC_USD_PERP_ID="0xdb282bbace4e375ff2901b84aceb33016d0d663d-0"
 export BSC_ETH_USD_PERP_ID="0xdb282bbace4e375ff2901b84aceb33016d0d663d-1"
 export BSC_BNB_USD_PERP_ID="0xdb282bbace4e375ff2901b84aceb33016d0d663d-2"
+
+# Arb1 graph url & inverse white list
+export ARB_ONE_CHAIN=true
+export ARB_ONE_MAI3_GRAPH_URL=https://api.thegraph.com/subgraphs/name/mcdexio/mcdex3-arb-trade-mining2
+export ARB_ONE_BLOCK_GRAPH_URL=https://api.thegraph.com/subgraphs/name/ianlapham/arbitrum-one-blocks
+export ARB_ONE_ETH_INVERSE_CONTRACT_WHITELIST0='0xc7b2ad78fded2bbc74b50dc1881ce0f81a7a0cca-0' # USD-ETH
+export ARB_ONE_BTC_USD_PERP_ID="0xab324146c49b23658e5b3930e641bdbdf089cbac-1"
+export ARB_ONE_ETH_USD_PERP_ID="0xab324146c49b23658e5b3930e641bdbdf089cbac-0"

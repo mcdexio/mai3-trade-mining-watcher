@@ -242,7 +242,7 @@ func (s *InternalServer) upsertSchedule(schedule *mining.Schedule) error {
 				UpdateAll: true,
 			}).Create(schedule).Error
 		if e != nil {
-			return e
+			return fmt.Errorf("fail to upsertSchedule err=%s", e)
 		} else {
 			return nil
 		}
