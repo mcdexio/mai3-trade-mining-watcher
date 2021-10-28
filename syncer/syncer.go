@@ -70,7 +70,7 @@ func (s *Syncer) Run() error {
 		case true:
 			err = s.runRestore(s.ctx, s.restoreTimestamp)
 			if err == nil {
-				s.needRestore.Store(true)
+				s.needRestore.Store(false)
 			}
 		default:
 			err = s.runSync(s.ctx, s.db)

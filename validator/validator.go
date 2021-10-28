@@ -106,7 +106,7 @@ func (v *Validator) onOK(ctx context.Context, timestamp int64) error {
 
 func (v *Validator) onConflict(ctx context.Context, timestamp int64) error {
 	if v.OnConflict != nil {
-		v.onConflict(ctx, timestamp)
+		v.OnConflict(ctx, timestamp)
 	}
 	v.logger.Warn("found conflict snapshot score checksum. timestamp=%v", timestamp)
 	return nil
