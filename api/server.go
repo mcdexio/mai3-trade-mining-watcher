@@ -434,6 +434,8 @@ func (s *TMServer) OnQueryMultiScore(w http.ResponseWriter, r *http.Request) {
 					"total": "0",
 				},
 			}
+			resp.Proportion = "0"
+			resp.Score = "0"
 		} else {
 			resp = MultiEpochScoreResp{
 				TotalFee: map[string]string{
@@ -457,6 +459,8 @@ func (s *TMServer) OnQueryMultiScore(w http.ResponseWriter, r *http.Request) {
 					"1":     "0",
 				},
 			}
+			resp.Proportion = "0"
+			resp.Score = "0"
 		}
 
 		if i < int(env.MultiChainEpochStart()) {
