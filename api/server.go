@@ -420,67 +420,51 @@ func (s *TMServer) OnQueryMultiScore(w http.ResponseWriter, r *http.Request) {
 		resp.Proportion = "0"
 		resp.Score = "0"
 		if i < int(env.MultiChainEpochStart()) {
-			resp = MultiEpochScoreResp{
-				TotalFee: map[string]string{
-					"total": "0",
-				},
-				DaoFee: map[string]string{
-					"total": "0",
-				},
-				AverageStake: map[string]string{
-					"total": "0",
-				},
-				AverageOI: map[string]string{
-					"total": "0",
-				},
+			resp.TotalFee = map[string]string{
+				"total": "0",
 			}
-			resp.Proportion = "0"
-			resp.Score = "0"
+			resp.DaoFee = map[string]string{
+				"total": "0",
+			}
+			resp.AverageStake = map[string]string{
+				"total": "0",
+			}
+			resp.AverageOI = map[string]string{
+				"total": "0",
+			}
 		} else {
-			resp = MultiEpochScoreResp{
-				TotalFee: map[string]string{
-					"total": "0",
-					"0":     "0",
-					"1":     "0",
-				},
-				DaoFee: map[string]string{
-					"total": "0",
-					"0":     "0",
-					"1":     "0",
-				},
-				AverageStake: map[string]string{
-					"total": "0",
-					"0":     "0",
-					"1":     "0",
-				},
-				AverageOI: map[string]string{
-					"total": "0",
-					"0":     "0",
-					"1":     "0",
-				},
+			resp.TotalFee = map[string]string{
+				"total": "0",
+				"0":     "0",
+				"1":     "0",
 			}
-			resp.Proportion = "0"
-			resp.Score = "0"
+			resp.DaoFee = map[string]string{
+				"total": "0",
+				"0":     "0",
+				"1":     "0",
+			}
+			resp.AverageStake = map[string]string{
+				"total": "0",
+				"0":     "0",
+				"1":     "0",
+			}
+			resp.AverageOI = map[string]string{
+				"total": "0",
+				"0":     "0",
+				"1":     "0",
+			}
 		}
 
-		if i < int(env.MultiChainEpochStart()) {
-			for _, rsp := range rsps {
-				if rsp.Chain == "total" {
-					s.marshalEpochAllScoreResp(stats.totalScore, sch, rsp, &resp)
-				}
+		for _, rsp := range rsps {
+			if rsp.Chain == "total" {
+				s.marshalEpochAllScoreResp(stats.totalScore, sch, rsp, &resp)
 			}
-		} else {
-			for _, rsp := range rsps {
-				s.logger.Debug("userInfo %+v", rsp)
-				if rsp.Chain == "total" {
-					s.marshalEpochAllScoreResp(stats.totalScore, sch, rsp, &resp)
-				} else {
-					totalFee, daoFee, oi, stake := s.calculateStat(rsp, sch)
-					resp.TotalFee[rsp.Chain] = totalFee.String()
-					resp.DaoFee[rsp.Chain] = daoFee.String()
-					resp.AverageOI[rsp.Chain] = oi.String()
-					resp.AverageStake[rsp.Chain] = stake.String()
-				}
+			if i >= int(env.MultiChainEpochStart()) {
+				totalFee, daoFee, oi, stake := s.calculateStat(rsp, sch)
+				resp.TotalFee[rsp.Chain] = totalFee.String()
+				resp.DaoFee[rsp.Chain] = daoFee.String()
+				resp.AverageOI[rsp.Chain] = oi.String()
+				resp.AverageStake[rsp.Chain] = stake.String()
 			}
 		}
 		queryTradingMiningResp[i] = &resp
