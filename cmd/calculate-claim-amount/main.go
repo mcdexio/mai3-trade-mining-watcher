@@ -26,7 +26,7 @@ func main() {
 	defer rFile.Close()
 	defer w.Flush()
 
-	record, err :=  r.ReadAll()
+	record, err := r.ReadAll()
 
 	sum := decimal.Zero
 	for _, r := range record[1:] {
@@ -50,8 +50,8 @@ func main() {
 		}
 		proportion := one.Div(sum)
 		mcbAmountOne := mcbAmount.Mul(proportion)
-		x = append(x, one.String()) // score
-		x = append(x, proportion.String()) // proportion
+		x = append(x, one.String())          // score
+		x = append(x, proportion.String())   // proportion
 		x = append(x, mcbAmountOne.String()) // mcb
 		if err := w.Write(x); err != nil {
 			panic(err)
