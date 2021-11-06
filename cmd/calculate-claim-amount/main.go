@@ -9,9 +9,13 @@ import (
 
 var readCsvPath = "/Users/champ/Downloads/2021.11.1epoch1.csv"
 var writeCsvPath = "/Users/champ/Downloads/2021.11.1epoch1proportion.csv"
-var mcbAmount = decimal.NewFromInt(72000)
 
 func main() {
+	decimal.DivisionPrecision = 21
+	mcbAmount, err := decimal.NewFromString("72000000000000000000000")
+	if err != nil {
+		panic(err)
+	}
 	rFile, err := os.OpenFile(readCsvPath, os.O_RDONLY, 0777)
 	if err != nil {
 		panic(err)
@@ -49,10 +53,10 @@ func main() {
 			panic(err)
 		}
 		proportion := one.Div(sum)
-		mcbAmountOne := mcbAmount.Mul(proportion)
+		mcbAmountOne := one.Mul(mcbAmount).Div(sum)
 		x = append(x, one.String())          // score
 		x = append(x, proportion.String())   // proportion
-		x = append(x, mcbAmountOne.String()) // mcb
+		x = append(x, mcbAmountOne.RoundDown(0).String()) // mcb
 		if err := w.Write(x); err != nil {
 			panic(err)
 		}
