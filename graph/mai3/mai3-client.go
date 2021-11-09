@@ -62,6 +62,9 @@ func NewClient(logger logging.Logger, url string, btcWhiteList *whitelist.Whitel
 	ethWhiteList *whitelist.Whitelist, satsWhiteList *whitelist.Whitelist,
 	perpIDsUSDBased ...string) *Client {
 	logger.Info("New MAI3 graph client with url %s", url)
+	if url == "" {
+		return nil
+	}
 	c := &Client{
 		logger:        logger,
 		client:        utils.NewHttpClient(utils.DefaultTransport, logger, url),

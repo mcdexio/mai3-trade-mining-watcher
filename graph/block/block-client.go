@@ -11,6 +11,7 @@ import (
 
 type BlockInterface interface {
 	GetBlockNumberWithTS(timestamp int64) (int64, error)
+	GetLatestBlockNumber() (int64, error)
 }
 
 type Client struct {
@@ -20,6 +21,9 @@ type Client struct {
 
 func NewClient(logger logging.Logger, url string) *Client {
 	logger.Info("New block graph client with url %s", url)
+	if url == "" {
+		return nil
+	}
 	return &Client{
 		logger: logger,
 		client: utils.NewHttpClient(utils.DefaultTransport, logger, url),
@@ -91,4 +95,35 @@ func (b *Client) queryGraph(resp interface{}, query string, args ...interface{})
 		return nil
 	}
 	return errors.New("fail to query block graph in three times")
+}
+
+// GetLatestBlockNumber get the closest block number.
+func (b *Client) GetLatestBlockNumber() (int64, error) {
+	query := `{
+		blocks(first: 1, orderBy: number, orderDirection: desc) {
+    		id
+    		number
+    		timestamp
+  		}
+	}`
+	var response struct {
+		Data struct {
+			Blocks []*Block
+		}
+	}
+	// return err when can't get block number in three times
+	if err := b.queryGraph(&response, query); err != nil {
+		return -1, err
+	}
+
+	if len(response.Data.Blocks) != 1 {
+		return -1, fmt.Errorf("length of block response: expect=1, actual=%v",
+			len(response.Data.Blocks))
+	}
+	bn := response.Data.Blocks[0].Number
+	number, err := strconv.Atoi(bn)
+	if err != nil {
+		return -1, fmt.Errorf("fail to get block number %s from string err=%s", bn, err)
+	}
+	return int64(number - 1), nil
 }

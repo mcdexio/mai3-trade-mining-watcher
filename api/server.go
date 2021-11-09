@@ -125,7 +125,7 @@ func (s *TMServer) Run() error {
 		select {
 		case <-s.ctx.Done():
 			ticker1min.Stop()
-			s.logger.Info("Syncer receives shutdown signal.")
+			s.logger.Info("TMServer receives shutdown signal.")
 			return nil
 		case <-ticker1min.C:
 			for {
@@ -304,7 +304,7 @@ func (s *TMServer) OnQueryScore(w http.ResponseWriter, r *http.Request) {
 			"trader = ? and epoch = ? and chain = 'total'", traderID, i).First(&rsp).Error
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				s.logger.Info("user %s not found in db epoch %d", traderID, i)
+				s.logger.Info("trader %s not found in db epoch %d", traderID, i)
 			} else {
 				s.logger.Error("failed to get value from user info table err=%s", err)
 				s.jsonError(w, "internal error", 400)

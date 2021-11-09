@@ -54,8 +54,8 @@ func main() {
 		}
 		proportion := one.Div(sum)
 		mcbAmountOne := one.Mul(mcbAmount).Div(sum)
-		x = append(x, one.String())          // score
-		x = append(x, proportion.String())   // proportion
+		x = append(x, one.String())                       // score
+		x = append(x, proportion.String())                // proportion
 		x = append(x, mcbAmountOne.RoundDown(0).String()) // mcb
 		if err := w.Write(x); err != nil {
 			panic(err)

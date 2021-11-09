@@ -509,7 +509,6 @@ func (s *Syncer) makeSnapshot(db *gorm.DB, timestamp int64, users []*mining.User
 	snapshot := make([]*mining.Snapshot, length)
 	for i, u := range users {
 		snapshot[i] = &mining.Snapshot{
-			// 13
 			Trader:              u.Trader,
 			Epoch:               u.Epoch,
 			Timestamp:           timestamp,
