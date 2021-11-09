@@ -125,5 +125,5 @@ func (b *Client) GetLatestBlockNumber() (int64, error) {
 	if err != nil {
 		return -1, fmt.Errorf("fail to get block number %s from string err=%s", bn, err)
 	}
-	return int64(number - 1), nil
+	return int64(number), nil
 }
