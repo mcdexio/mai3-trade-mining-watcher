@@ -386,7 +386,7 @@ func (s *TMServer) OnQueryMultiScore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	traderID := strings.ToLower(trader[0])
-	s.logger.Info("OnQueryScore user id %s", traderID)
+	s.logger.Info("OnQueryMultiScore user id %s", traderID)
 	queryTradingMiningResp := make(map[int]*MultiEpochScoreResp)
 	for i := 0; i <= int(s.nowEpoch); i++ {
 		var rsps []*mining.UserInfo

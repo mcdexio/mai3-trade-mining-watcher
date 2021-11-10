@@ -134,7 +134,8 @@ func main() {
 		// for arb block graph client
 		arbBlockGraphClient := block.NewClient(logger, config.GetString("ARB_ONE_BLOCK_GRAPH_URL"))
 		blockGraphClients = append(blockGraphClients, arbBlockGraphClient)
-	} else if env.ArbRinkebyChainInclude() {
+	}
+	if env.ArbRinkebyChainInclude() {
 		// for arb-rinkeby mai3 graph client
 		arbRinkebyBTCWhiteList := whitelist.NewWhiteList(
 			logger,
