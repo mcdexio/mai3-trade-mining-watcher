@@ -107,48 +107,59 @@ func (s *Syncer) restoreFromSnapshot(db *gorm.DB, checkpoint int64) error {
 	if err != nil {
 		return err
 	}
-	// copy from snapshot
-	var snapshots []*mining.Snapshot
-	if err := db.Where("epoch=? and timestamp=?", epoch.Epoch, checkpoint).Find(&snapshots).Error; err != nil {
-		return err
-	}
-	length := len(snapshots)
-	// TODO(champFu): find a way to iterate all fields
-	users := make([]*mining.UserInfo, length)
-	for i, s := range snapshots {
-		users[i] = &mining.UserInfo{
-			Trader:              s.Trader,
-			Epoch:               s.Epoch,
-			Timestamp:           s.Timestamp,
-			InitFee:             s.InitFee,
-			AccFee:              s.AccFee,
-			InitTotalFee:        s.InitTotalFee,
-			AccTotalFee:         s.AccTotalFee,
-			AccPosValue:         s.AccPosValue,
-			CurPosValue:         s.CurPosValue,
-			AccStakeScore:       s.AccStakeScore,
-			CurStakeScore:       s.CurStakeScore,
-			EstimatedStakeScore: s.EstimatedStakeScore,
-			Score:               s.Score,
-			Chain:               s.Chain,
+
+	err = db.Transaction(func(tx *gorm.DB) error {
+		// copy from snapshot
+		var snapshots []*mining.Snapshot
+		if err := db.Where("epoch=? and timestamp=?", epoch.Epoch, checkpoint).Find(&snapshots).Error; err != nil {
+			return err
 		}
-	}
-	for i := 0; i*500 < length; i++ {
-		fromIndex := i * 500
-		toIndex := (i + 1) * 500
-		if toIndex >= length {
-			toIndex = length
+		length := len(snapshots)
+		// TODO(champFu): find a way to iterate all fields
+		users := make([]*mining.UserInfo, length)
+		for i, s := range snapshots {
+			users[i] = &mining.UserInfo{
+				Trader:              s.Trader,
+				Epoch:               s.Epoch,
+				Timestamp:           s.Timestamp,
+				InitFee:             s.InitFee,
+				AccFee:              s.AccFee,
+				InitTotalFee:        s.InitTotalFee,
+				AccTotalFee:         s.AccTotalFee,
+				InitFeeFactor:       s.InitFeeFactor,
+				AccFeeFactor:        s.AccFeeFactor,
+				InitTotalFeeFactor:  s.InitTotalFeeFactor,
+				AccTotalFeeFactor:   s.AccTotalFeeFactor,
+				AccPosValue:         s.AccPosValue,
+				CurPosValue:         s.CurPosValue,
+				AccStakeScore:       s.AccStakeScore,
+				CurStakeScore:       s.CurStakeScore,
+				EstimatedStakeScore: s.EstimatedStakeScore,
+				Score:               s.Score,
+				Chain:               s.Chain,
+			}
 		}
-		uBatch := make([]*mining.UserInfo, 500)
-		uBatch = users[fromIndex:toIndex]
-		if err := db.Model(&mining.UserInfo{}).Save(&uBatch).Error; err != nil {
-			return fmt.Errorf("failed to create user_info: checkpoint=%v, size=%v err=%s", checkpoint, len(uBatch), err)
+		for i := 0; i*500 < length; i++ {
+			fromIndex := i * 500
+			toIndex := (i + 1) * 500
+			if toIndex >= length {
+				toIndex = length
+			}
+			uBatch := make([]*mining.UserInfo, 500)
+			uBatch = users[fromIndex:toIndex]
+			if err := db.Model(&mining.UserInfo{}).Save(&uBatch).Error; err != nil {
+				return fmt.Errorf("failed to create user_info: checkpoint=%v, size=%v err=%s", checkpoint, len(uBatch), err)
+			}
 		}
-	}
-	if err := s.setProgress(db, PROGRESS_INIT_FEE, epoch.StartTime, epoch.Epoch); err != nil {
-		return err
-	}
-	if err := s.setProgress(db, PROGRESS_SYNC_STATE, checkpoint, epoch.Epoch); err != nil {
+		if err := s.setProgress(db, PROGRESS_INIT_FEE, epoch.StartTime, epoch.Epoch); err != nil {
+			return err
+		}
+		if err := s.setProgress(db, PROGRESS_SYNC_STATE, checkpoint, epoch.Epoch); err != nil {
+			return err
+		}
+		return nil
+	}, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
+	if err != nil {
 		return err
 	}
 	s.logger.Info("success restoreFromSnapshot checkpoint=%d", checkpoint)
@@ -279,7 +290,8 @@ func (s *Syncer) initUserStates(db *gorm.DB, epoch *mining.Schedule) error {
 			if err != nil {
 				return err
 			}
-			_, totalFee, daoFee, err := GetOIFeeValue(u.MarginAccounts, multiBNs[i], multiPrices, mai3Graph)
+			_, totalFee, daoFee, totalFeeFactor, daoFeeFactor, err := GetOIFeeValue(
+				u.MarginAccounts, multiBNs[i], multiPrices, mai3Graph)
 			if err != nil {
 				return fmt.Errorf("fail to get initial fee %s", err)
 			}
@@ -289,21 +301,27 @@ func (s *Syncer) initUserStates(db *gorm.DB, epoch *mining.Schedule) error {
 			if user, match := summaryUser[userId]; match {
 				summaryUser[userId].InitFee = user.InitFee.Add(daoFee)
 				summaryUser[userId].InitTotalFee = user.InitTotalFee.Add(totalFee)
+				summaryUser[userId].InitFeeFactor = user.InitFeeFactor.Add(daoFeeFactor)
+				summaryUser[userId].InitTotalFeeFactor = user.InitTotalFeeFactor.Add(totalFeeFactor)
 			} else {
 				summaryUser[userId] = &mining.UserInfo{
-					Trader:       userId,
-					Epoch:        epoch.Epoch,
-					InitFee:      daoFee,
-					InitTotalFee: totalFee,
-					Chain:        "total",
+					Trader:             userId,
+					Epoch:              epoch.Epoch,
+					InitFee:            daoFee,
+					InitTotalFee:       totalFee,
+					InitFeeFactor:      daoFeeFactor,
+					InitTotalFeeFactor: totalFeeFactor,
+					Chain:              "total",
 				}
 			}
 			saveUser[j] = &mining.UserInfo{
-				Trader:       userId,
-				Epoch:        epoch.Epoch,
-				InitFee:      daoFee,
-				InitTotalFee: totalFee,
-				Chain:        strconv.Itoa(i),
+				Trader:             userId,
+				Epoch:              epoch.Epoch,
+				InitFee:            daoFee,
+				InitTotalFee:       totalFee,
+				InitFeeFactor:      daoFeeFactor,
+				InitTotalFeeFactor: totalFeeFactor,
+				Chain:              strconv.Itoa(i),
 			}
 		}
 		saveUsers = append(saveUsers, saveUser)
@@ -322,7 +340,7 @@ func (s *Syncer) initUserStates(db *gorm.DB, epoch *mining.Schedule) error {
 	s.logger.Info("Total users %d @TS=%d", len(uis), epoch.StartTime)
 
 	// update columns if conflict
-	updatedColumns := []string{"epoch", "init_fee", "init_total_fee"}
+	updatedColumns := []string{"epoch", "init_fee", "init_total_fee", "init_fee_factor", "init_total_fee_factor"}
 	err = db.Transaction(func(tx *gorm.DB) error {
 		// total
 		if len(uis) > 0 {
@@ -375,7 +393,8 @@ func (s *Syncer) getUserStateBasedOnBlockNumber(epoch *mining.Schedule, timestam
 			if err != nil {
 				return nil, nil, err
 			}
-			pv, totalFee, daoFee, err := GetOIFeeValue(u.MarginAccounts, multiBNs[i], multiPrices, mai3Graph)
+			pv, totalFee, daoFee, totalFeeFactor, daoFeeFactor, err := GetOIFeeValue(
+				u.MarginAccounts, multiBNs[i], multiPrices, mai3Graph)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -389,7 +408,9 @@ func (s *Syncer) getUserStateBasedOnBlockNumber(epoch *mining.Schedule, timestam
 				summaryUser[userId].CurStakeScore = user.CurStakeScore.Add(ss)
 				summaryUser[userId].EstimatedStakeScore = user.EstimatedStakeScore.Add(estimatedStakeScore)
 				summaryUser[userId].AccFee = user.AccFee.Add(daoFee)
+				summaryUser[userId].AccFeeFactor = user.AccFeeFactor.Add(daoFeeFactor)
 				summaryUser[userId].AccTotalFee = user.AccTotalFee.Add(totalFee)
+				summaryUser[userId].AccTotalFeeFactor = user.AccTotalFeeFactor.Add(totalFeeFactor)
 			} else {
 				summaryUser[userId] = &mining.UserInfo{
 					Trader:              userId,
@@ -398,7 +419,9 @@ func (s *Syncer) getUserStateBasedOnBlockNumber(epoch *mining.Schedule, timestam
 					CurStakeScore:       ss,
 					EstimatedStakeScore: estimatedStakeScore,
 					AccFee:              daoFee,
+					AccFeeFactor:        daoFeeFactor,
 					AccTotalFee:         totalFee,
+					AccTotalFeeFactor:   totalFeeFactor,
 					Chain:               "total",
 				}
 			}
@@ -411,6 +434,8 @@ func (s *Syncer) getUserStateBasedOnBlockNumber(epoch *mining.Schedule, timestam
 				EstimatedStakeScore: estimatedStakeScore,
 				AccFee:              daoFee,
 				AccTotalFee:         totalFee,
+				AccFeeFactor:        daoFeeFactor,
+				AccTotalFeeFactor:   totalFeeFactor,
 				Chain:               strconv.Itoa(i),
 			}
 		}
@@ -461,7 +486,8 @@ func (s *Syncer) updateUserStates(db *gorm.DB, users []*mining.UserInfo) error {
 		return nil
 	}
 	// update columns if conflict
-	updatedColumns := []string{"cur_pos_value", "cur_stake_score", "acc_fee", "acc_total_fee", "estimated_stake_score"}
+	updatedColumns := []string{"cur_pos_value", "cur_stake_score", "acc_fee", "acc_total_fee",
+		"acc_fee_factor", "acc_total_fee_factor", "estimated_stake_score"}
 	// because of limitation of postgresql (65535 parameters), do batch
 	if err := db.Clauses(clause.OnConflict{
 		Columns:   conflictColumns,
@@ -474,8 +500,10 @@ func (s *Syncer) updateUserStates(db *gorm.DB, users []*mining.UserInfo) error {
 	if err := db.Clauses(clause.OnConflict{
 		Columns: conflictColumns,
 		DoUpdates: clause.Assignments(map[string]interface{}{
-			"acc_fee":       gorm.Expr("GREATEST(user_info.acc_fee, user_info.init_fee)"),
-			"acc_total_fee": gorm.Expr("GREATEST(user_info.acc_total_fee, user_info.init_total_fee)"),
+			"acc_fee":              gorm.Expr("GREATEST(user_info.acc_fee, user_info.init_fee)"),
+			"acc_total_fee":        gorm.Expr("GREATEST(user_info.acc_total_fee, user_info.init_total_fee)"),
+			"acc_fee_factor":       gorm.Expr("GREATEST(user_info.acc_fee_factor, user_info.init_fee_factor)"),
+			"acc_total_fee_factor": gorm.Expr("GREATEST(user_info.acc_total_fee_factor, user_info.init_total_fee_factor)"),
 		}),
 	}).CreateInBatches(&users, 1000).Error; err != nil {
 		return fmt.Errorf("failed to max(acc_fee, init_fee): size=%v %w", len(users), err)
@@ -516,6 +544,10 @@ func (s *Syncer) makeSnapshot(db *gorm.DB, timestamp int64, users []*mining.User
 			AccFee:              u.AccFee,
 			InitTotalFee:        u.InitTotalFee,
 			AccTotalFee:         u.AccTotalFee,
+			InitFeeFactor:       u.InitFeeFactor,
+			AccFeeFactor:        u.AccFeeFactor,
+			InitTotalFeeFactor:  u.InitTotalFeeFactor,
+			AccTotalFeeFactor:   u.AccTotalFeeFactor,
 			AccPosValue:         u.AccPosValue,
 			CurPosValue:         u.CurPosValue,
 			AccStakeScore:       u.AccStakeScore,
@@ -586,7 +618,7 @@ func (s *Syncer) syncState(db *gorm.DB, epoch *mining.Schedule) (int64, error) {
 			}
 		}
 
-		// calculate for total
+		// calculate score for total
 		var allStates []*mining.UserInfo
 		if err := tx.Where("epoch=? and chain= 'total'", epoch.Epoch).Find(&allStates).Error; err != nil {
 			return fmt.Errorf("fail to fetch all users in this epoch err=%s", err)
@@ -595,7 +627,7 @@ func (s *Syncer) syncState(db *gorm.DB, epoch *mining.Schedule) (int64, error) {
 			return fmt.Errorf("fail to updateUserScores for all: ts=%v err=%s", np, err)
 		}
 
-		// calculate for multi-chains
+		// calculate score for multi-chains
 		for chainID := 0; chainID < countChains; chainID++ {
 			var states []*mining.UserInfo
 			if err := tx.Where("epoch=? and chain=?", epoch.Epoch, strconv.Itoa(chainID)).Find(&states).Error; err != nil {

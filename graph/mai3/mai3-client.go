@@ -19,11 +19,14 @@ type User struct {
 }
 
 type MarginAccount struct {
-	ID          string          `json:"id"`
-	Position    decimal.Decimal `json:"position"`
-	TotalFee    decimal.Decimal `json:"totalFee"`
-	VaultFee    decimal.Decimal `json:"vaultFee"`
-	OperatorFee decimal.Decimal `json:"operatorFee"`
+	ID                string          `json:"id"`
+	Position          decimal.Decimal `json:"position"`
+	TotalFee          decimal.Decimal `json:"totalFee"`
+	VaultFee          decimal.Decimal `json:"vaultFee"`
+	OperatorFee       decimal.Decimal `json:"operatorFee"`
+	TotalFeeFactor    decimal.Decimal `json:"totalFeeFactor"`
+	VaultFeeFactor    decimal.Decimal `json:"vaultFeeFactor"`
+	OperatorFeeFactor decimal.Decimal `json:"operatorFeeFactor"`
 }
 
 type MarkPrice struct {
@@ -232,6 +235,9 @@ func (m *Client) getUserWithBlockNumberID(blockNumber int64, id string) ([]User,
 				totalFee
 				vaultFee
 				operatorFee
+				totalFeeFactor
+				vaultFeeFactor
+				operatorFeeFactor
 			}
 		}
 	}`

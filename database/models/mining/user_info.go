@@ -12,10 +12,16 @@ type UserInfo struct {
 	Chain     string `gorm:"column:chain;primary_key;type:varchar(128);not null;default:total" json:"chain"`
 	Timestamp int64  `gorm:"column:timestamp;type:bigint;not null" json:"timestamp"`
 
-	InitFee             decimal.Decimal `gorm:"column:init_fee;type:decimal(38,18);not null" json:"init_fee"`
-	AccFee              decimal.Decimal `gorm:"column:acc_fee;type:decimal(38,18);not null" json:"acc_fee"`
-	InitTotalFee        decimal.Decimal `gorm:"column:init_total_fee;type:decimal(38,18);not null;default:0" json:"init_total_fee"`
-	AccTotalFee         decimal.Decimal `gorm:"column:acc_total_fee;type:decimal(38,18);not null;default:0" json:"acc_total_fee"`
+	InitFee      decimal.Decimal `gorm:"column:init_fee;type:decimal(38,18);not null" json:"init_fee"`
+	AccFee       decimal.Decimal `gorm:"column:acc_fee;type:decimal(38,18);not null" json:"acc_fee"`
+	InitTotalFee decimal.Decimal `gorm:"column:init_total_fee;type:decimal(38,18);not null;default:0" json:"init_total_fee"`
+	AccTotalFee  decimal.Decimal `gorm:"column:acc_total_fee;type:decimal(38,18);not null;default:0" json:"acc_total_fee"`
+
+	InitFeeFactor      decimal.Decimal `gorm:"column:init_fee_factor;type:decimal(38,18);not null;default:0" json:"init_fee_factor"`
+	AccFeeFactor       decimal.Decimal `gorm:"column:acc_fee_factor;type:decimal(38,18);not null;default:0" json:"acc_fee_factor"`
+	InitTotalFeeFactor decimal.Decimal `gorm:"column:init_total_fee_factor;type:decimal(38,18);not null;default:0" json:"init_total_fee_factor"`
+	AccTotalFeeFactor  decimal.Decimal `gorm:"column:acc_total_fee_factor;type:decimal(38,18);not null;default:0" json:"acc_total_fee_factor"`
+
 	AccPosValue         decimal.Decimal `gorm:"column:acc_pos_value;type:decimal(38,18);not null" json:"acc_pos_value"`
 	CurPosValue         decimal.Decimal `gorm:"column:cur_pos_value;type:decimal(38,18);not null" json:"cur_pos_value"`
 	AccStakeScore       decimal.Decimal `gorm:"column:acc_stake_score;type:decimal(38,18);not null" json:"acc_stake_score"`

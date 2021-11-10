@@ -81,10 +81,9 @@ func getScore(epoch *mining.Schedule, ui *mining.UserInfo, remains decimal.Decim
 	}
 	fee := decimal.Zero
 	if epoch.Epoch == 0 {
-		// epoch 0 is totalFee
-		fee = ui.AccTotalFee.Sub(ui.InitTotalFee)
+		fee = ui.AccTotalFeeFactor.Sub(ui.InitTotalFeeFactor)
 	} else {
-		fee = ui.AccFee.Sub(ui.InitFee)
+		fee = ui.AccFeeFactor.Sub(ui.InitFeeFactor)
 	}
 	if fee.LessThanOrEqual(decimal.Zero) {
 		return decimal.Zero
@@ -123,12 +122,39 @@ func GetRemainMinutes(timestamp int64, epoch *mining.Schedule) decimal.Decimal {
 	return remains
 }
 
+func getFeeFromAccount(
+	account *mai3.MarginAccount, quotePrice decimal.Decimal,
+) (totalFee, daoFee, totalFeeFactor, daoFeeFactor decimal.Decimal) {
+	totalFee = account.TotalFee.Mul(quotePrice)
+	totalFeeFactor = account.TotalFeeFactor.Mul(quotePrice)
+	dFee := account.OperatorFee.Add(account.VaultFee)
+	daoFee = dFee.Mul(quotePrice)
+	dFeeFactor := account.OperatorFeeFactor.Add(account.VaultFeeFactor)
+	daoFeeFactor = dFeeFactor.Mul(quotePrice)
+	return
+}
+
+func getOIFromAccount(account *mai3.MarginAccount, cache map[string]decimal.Decimal, base string,
+	mai3Graph mai3.GraphInterface) (decimal.Decimal, error) {
+	if base == "USD" {
+		return account.Position.Abs(), nil
+	}
+	// base not USD
+	basePerpetualID, err := mai3Graph.GetPerpIDWithUSDBased(base)
+	if err != nil {
+		return decimal.Zero, err
+	}
+	return account.Position.Abs().Mul(cache[basePerpetualID]), nil
+}
+
 func GetOIFeeValue(
 	accounts []*mai3.MarginAccount, blockNumbers int64, cache map[string]decimal.Decimal,
-	mai3Graph mai3.GraphInterface) (oi, totalFee, daoFee decimal.Decimal, err error) {
+	mai3Graph mai3.GraphInterface) (oi, totalFee, daoFee, totalFeeFactor, daoFeeFactor decimal.Decimal, err error) {
 	oi = decimal.Zero
 	totalFee = decimal.Zero
 	daoFee = decimal.Zero
+	totalFeeFactor = decimal.Zero
+	daoFeeFactor = decimal.Zero
 	for _, a := range accounts {
 		var price decimal.Decimal
 		var poolAddr string
@@ -147,78 +173,73 @@ func GetOIFeeValue(
 		// is BTC inverse contract
 		match, base = mai3Graph.InBTCInverseContractWhiteList(perpId)
 		if match {
-			var btcPerpetualID, basePerpetualID string
+			var btcPerpetualID string
+			var onlyOI decimal.Decimal
 
 			btcPerpetualID, err = mai3Graph.GetPerpIDWithUSDBased("BTC")
 			if err != nil {
 				return
 			}
-			totalFee = totalFee.Add(a.TotalFee.Mul(cache[btcPerpetualID]))
-			dFee := a.OperatorFee.Add(a.VaultFee)
-			daoFee = daoFee.Add(dFee.Mul(cache[btcPerpetualID]))
 
-			if base == "USD" {
-				oi = oi.Add(a.Position.Abs())
-				continue
-			}
-			// base not USD
-			basePerpetualID, err = mai3Graph.GetPerpIDWithUSDBased(base)
+			tFee, dFee, tFeeFactor, dFeeFactor := getFeeFromAccount(a, cache[btcPerpetualID])
+			totalFee = totalFee.Add(tFee)
+			totalFeeFactor = totalFeeFactor.Add(tFeeFactor)
+			daoFee = daoFee.Add(dFee)
+			daoFeeFactor = daoFeeFactor.Add(dFeeFactor)
+
+			onlyOI, err = getOIFromAccount(a, cache, base, mai3Graph)
 			if err != nil {
 				return
 			}
-			oi = oi.Add(a.Position.Abs().Mul(cache[basePerpetualID]))
+			oi = oi.Add(onlyOI)
 			continue
 		}
 		// is ETH inverse contract
 		match, base = mai3Graph.InETHInverseContractWhiteList(perpId)
 		if match {
-			var ethPerpetualID, basePerpetualID string
+			var ethPerpetualID string
+			var onlyOI decimal.Decimal
 
 			ethPerpetualID, err = mai3Graph.GetPerpIDWithUSDBased("ETH")
 			if err != nil {
 				return
 			}
-			totalFee = totalFee.Add(a.TotalFee.Mul(cache[ethPerpetualID]))
-			dFee := a.OperatorFee.Add(a.VaultFee)
-			daoFee = daoFee.Add(dFee.Mul(cache[ethPerpetualID]))
 
-			if base == "USD" {
-				oi = oi.Add(a.Position.Abs())
-				continue
-			}
-			// base not USD
-			basePerpetualID, err = mai3Graph.GetPerpIDWithUSDBased(base)
+			tFee, dFee, tFeeFactor, dFeeFactor := getFeeFromAccount(a, cache[ethPerpetualID])
+			totalFee = totalFee.Add(tFee)
+			totalFeeFactor = totalFeeFactor.Add(tFeeFactor)
+			daoFee = daoFee.Add(dFee)
+			daoFeeFactor = daoFeeFactor.Add(dFeeFactor)
+
+			onlyOI, err = getOIFromAccount(a, cache, base, mai3Graph)
 			if err != nil {
 				return
 			}
-			oi = oi.Add(a.Position.Abs().Mul(cache[basePerpetualID]))
+			oi = oi.Add(onlyOI)
 			continue
 		}
 		// is SATS inverse contract
 		match, base = mai3Graph.InSATSInverseContractWhiteList(perpId)
 		if match {
 			// 1SATS = 1BTC / 1e8
-			var btcPerpetualID, basePerpetualID string
+			var btcPerpetualID string
+			var onlyOI decimal.Decimal
 
 			btcPerpetualID, err = mai3Graph.GetPerpIDWithUSDBased("BTC")
 			if err != nil {
 				return
 			}
-			satsPrice := cache[btcPerpetualID].Div(decimal.NewFromInt(100000000))
-			totalFee = totalFee.Add(a.TotalFee.Mul(satsPrice))
-			dFee := a.OperatorFee.Add(a.VaultFee)
-			daoFee = daoFee.Add(dFee.Mul(satsPrice))
+			tFee, dFee, tFeeFactor, dFeeFactor := getFeeFromAccount(a, cache[btcPerpetualID].Div(decimal.NewFromInt(100000000)))
+			totalFee = totalFee.Add(tFee)
+			totalFeeFactor = totalFeeFactor.Add(tFeeFactor)
+			daoFee = daoFee.Add(dFee)
+			daoFeeFactor = daoFeeFactor.Add(dFeeFactor)
 
-			if base == "USD" {
-				oi = oi.Add(a.Position.Abs())
-				continue
-			}
-			// base not USD
-			basePerpetualID, err = mai3Graph.GetPerpIDWithUSDBased(base)
+			onlyOI, err = getOIFromAccount(a, cache, base, mai3Graph)
 			if err != nil {
 				return
 			}
-			oi = oi.Add(a.Position.Abs().Mul(cache[basePerpetualID]))
+			oi = oi.Add(onlyOI)
 			continue
 		}
 
@@ -236,8 +257,11 @@ func GetOIFeeValue(
 		}
 		oi = oi.Add(price.Mul(a.Position).Abs())
 		totalFee = totalFee.Add(a.TotalFee)
+		totalFeeFactor = totalFeeFactor.Add(a.TotalFeeFactor)
 		dFee := a.OperatorFee.Add(a.VaultFee)
 		daoFee = daoFee.Add(dFee)
+		dFeeFactor := a.OperatorFeeFactor.Add(a.VaultFeeFactor)
+		daoFeeFactor = daoFeeFactor.Add(dFeeFactor)
 	}
 	err = nil
 	return

@@ -40,6 +40,10 @@ func main() {
 	migrationAddColumn(db, "AccTotalFee", logger)
 	migrationAddColumn(db, "InitTotalFee", logger)
 	migrationAddColumn(db, "Chain", logger)
+	migrationAddColumn(db, "InitFeeFactor", logger)
+	migrationAddColumn(db, "AccFeeFactor", logger)
+	migrationAddColumn(db, "InitTotalFeeFactor", logger)
+	migrationAddColumn(db, "AccTotalFeeFactor", logger)
 
 	var AllModels = []interface{}{
 		&mining.UserInfo{},

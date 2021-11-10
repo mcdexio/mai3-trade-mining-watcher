@@ -112,7 +112,7 @@ func (t *SyncerTestSuite) TestStateOnlyOneChain() {
 			t.Require().Equal(users[0].CurStakeScore.String(), decimal.NewFromInt(98*3).String())
 			t.Require().Equal(users[0].AccPosValue.String(), decimal.NewFromInt(4620).String())
 			t.Require().Equal(users[0].CurPosValue.String(), decimal.NewFromInt(3780).String())
-			t.Require().Equal(users[0].AccTotalFee.String(), decimal.NewFromInt(10).String())
+			t.Require().Equal(users[0].AccTotalFeeFactor.String(), decimal.NewFromInt(10).String())
 			// remainEpochDays 0, remainProportion 1, remainEpochMinutes 2, A = (1 - 0) * 98*3 * 2 = 588
 			t.Require().Equal(users[0].EstimatedStakeScore.String(), decimal.NewFromInt(588).String())
 
@@ -135,7 +135,7 @@ func (t *SyncerTestSuite) TestStateOnlyOneChain() {
 			t.Require().Equal(users[0].CurStakeScore.String(), decimal.NewFromInt(1000).String())
 			t.Require().Equal(users[0].AccPosValue.String(), decimal.NewFromInt(4620+3780).String())
 			t.Require().Equal(users[0].CurPosValue.String(), decimal.NewFromInt(9700).String())
-			t.Require().Equal(users[0].AccTotalFee.String(), decimal.NewFromInt(15).String())
+			t.Require().Equal(users[0].AccTotalFeeFactor.String(), decimal.NewFromInt(15).String())
 			// remainEpochDays 0, remainProportion 1, remainEpochMinutes 2, A = (1 - 0) * 100*10 * 1 = 1000
 			t.Require().Equal(users[0].EstimatedStakeScore.String(), decimal.NewFromInt(1000).String())
 
@@ -255,8 +255,8 @@ func (t *SyncerTestSuite) TestGetScore() {
 	remains := decimal.NewFromInt((epoch.EndTime-epoch.StartTime)/60.0 - minuteCeil) // total epoch in minutes
 
 	ui := mining.UserInfo{
-		InitTotalFee:  decimal.NewFromFloat(5),
-		AccTotalFee:   decimal.NewFromFloat(5),
+		InitFeeFactor: decimal.NewFromFloat(5),
+		AccFeeFactor:  decimal.NewFromFloat(5),
 		AccPosValue:   decimal.NewFromFloat(4.5),
 		CurPosValue:   decimal.NewFromFloat(4),
 		AccStakeScore: decimal.NewFromFloat(3.5),
@@ -266,8 +266,8 @@ func (t *SyncerTestSuite) TestGetScore() {
 	t.Require().Equal(actual, decimal.Zero)
 
 	ui = mining.UserInfo{
-		InitTotalFee:  decimal.NewFromFloat(5),
-		AccTotalFee:   decimal.NewFromFloat(213),
+		InitFeeFactor: decimal.NewFromFloat(5),
+		AccFeeFactor:  decimal.NewFromFloat(213),
 		AccPosValue:   decimal.NewFromFloat(0),
 		CurPosValue:   decimal.NewFromFloat(0),
 		AccStakeScore: decimal.NewFromFloat(3.5),
@@ -277,8 +277,8 @@ func (t *SyncerTestSuite) TestGetScore() {
 	t.Require().Equal(actual, decimal.Zero)
 
 	ui = mining.UserInfo{
-		InitTotalFee:  decimal.NewFromFloat(5),
-		AccTotalFee:   decimal.NewFromFloat(56),
+		InitFeeFactor: decimal.NewFromFloat(5),
+		AccFeeFactor:  decimal.NewFromFloat(56),
 		AccPosValue:   decimal.NewFromFloat(12345),
 		CurPosValue:   decimal.NewFromFloat(12),
 		AccStakeScore: decimal.NewFromFloat(0),
@@ -290,8 +290,9 @@ func (t *SyncerTestSuite) TestGetScore() {
 	currentStakeReward := decimal.NewFromFloat(3)
 	estimatedStakeScore := getEstimatedStakeScore(100, epoch, 60*60*24*100, currentStakeReward)
 	ui = mining.UserInfo{
-		InitTotalFee:        decimal.NewFromFloat(2.5),
-		AccTotalFee:         decimal.NewFromFloat(5),
+		InitTotalFeeFactor:  decimal.NewFromFloat(2.5),
+		AccTotalFeeFactor:   decimal.NewFromFloat(5),
+		AccTotalFee:         decimal.NewFromFloat(12), // don't affect score
 		AccPosValue:         decimal.NewFromFloat(4.5),
 		CurPosValue:         decimal.NewFromFloat(4),
 		AccStakeScore:       decimal.NewFromFloat(3.5),
@@ -560,8 +561,8 @@ func (t *SyncerTestSuite) TestStateMultiChain() {
 			t.Require().Equal(users[0].CurStakeScore.String(), decimal.NewFromInt(98*3).String())
 			t.Require().Equal(users[0].AccPosValue.String(), decimal.NewFromInt(4620).String())
 			t.Require().Equal(users[0].CurPosValue.String(), decimal.NewFromInt(3780).String())
-			t.Require().Equal(users[0].AccTotalFee.String(), decimal.NewFromInt(10).String())
-			t.Require().Equal(users[0].AccFee.String(), decimal.NewFromInt(6).String())
+			t.Require().Equal(users[0].AccTotalFeeFactor.String(), decimal.NewFromInt(10).String())
+			t.Require().Equal(users[0].AccFeeFactor.String(), decimal.NewFromInt(6).String())
 			// remainEpochDays 0, remainProportion 1, remainEpochMinutes 3, A = (1 - 0) * 98*3 * 3 = 882
 			t.Require().Equal(users[0].EstimatedStakeScore.String(), decimal.NewFromInt(882).String())
 
@@ -583,8 +584,8 @@ func (t *SyncerTestSuite) TestStateMultiChain() {
 			t.Require().Equal(users[0].CurStakeScore.String(), decimal.NewFromInt(10*100).String())
 			t.Require().Equal(users[0].AccPosValue.String(), decimal.NewFromInt(4620+3780).String())
 			t.Require().Equal(users[0].CurPosValue.String(), decimal.NewFromInt(9700).String())
-			t.Require().Equal(users[0].AccTotalFee.String(), decimal.NewFromInt(15).String())
-			t.Require().Equal(users[0].AccFee.String(), decimal.NewFromInt(10).String())
+			t.Require().Equal(users[0].AccTotalFeeFactor.String(), decimal.NewFromInt(15).String())
+			t.Require().Equal(users[0].AccFeeFactor.String(), decimal.NewFromInt(10).String())
 			// remainEpochDays 0, remainProportion 1, remainEpochMinutes 2, A = (1 - 0) * 100*10 * 2 = 2000
 			t.Require().Equal(users[0].EstimatedStakeScore.String(), decimal.NewFromInt(2000).String())
 
@@ -608,8 +609,8 @@ func (t *SyncerTestSuite) TestStateMultiChain() {
 			t.Require().Equal(users[0].CurStakeScore.String(), decimal.NewFromInt(10*99+6*100).String())
 			t.Require().Equal(users[0].AccPosValue.String(), decimal.NewFromInt(4620+3780+9700).String())
 			t.Require().Equal(users[0].CurPosValue.String(), decimal.NewFromInt(35200).String())
-			t.Require().Equal(users[0].AccTotalFee.String(), decimal.NewFromInt(58).String())
-			t.Require().Equal(users[0].AccFee.String(), decimal.NewFromInt(31).String())
+			t.Require().Equal(users[0].AccTotalFeeFactor.String(), decimal.NewFromInt(58).String())
+			t.Require().Equal(users[0].AccFeeFactor.String(), decimal.NewFromInt(31).String())
 			// remainEpochDays 0, remainProportion 1, remainEpochMinutes 1, A = (1 - 0) * ((10*99)+(6*100)) * 1 = 1590
 			t.Require().Equal(users[0].EstimatedStakeScore.String(), decimal.NewFromInt(1590).String())
 

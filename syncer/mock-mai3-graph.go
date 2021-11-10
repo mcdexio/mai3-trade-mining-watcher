@@ -106,18 +106,20 @@ func (mockMAI3 *MockMAI3Graph1) GetUsersBasedOnBlockNumber(blockNumber int64) ([
 				UnlockMCBTime: 60 * 60 * 24 * 98, // 98 days
 				MarginAccounts: []*mai3.MarginAccount{
 					{
-						ID:          "0xPool-0-0xUser1",
-						TotalFee:    decimal.NewFromFloat(3),
-						VaultFee:    decimal.NewFromFloat(1),
-						OperatorFee: decimal.NewFromFloat(1),
-						Position:    decimal.NewFromFloat(2),
+						ID:                "0xPool-0-0xUser1",
+						TotalFee:          decimal.NewFromFloat(1), // don't affect score
+						TotalFeeFactor:    decimal.NewFromFloat(3),
+						VaultFeeFactor:    decimal.NewFromFloat(1),
+						OperatorFeeFactor: decimal.NewFromFloat(1),
+						Position:          decimal.NewFromFloat(2),
 					},
 					{
-						ID:          "0xPool-1-0xUser1",
-						TotalFee:    decimal.NewFromFloat(7),
-						VaultFee:    decimal.NewFromFloat(2),
-						OperatorFee: decimal.NewFromFloat(2),
-						Position:    decimal.NewFromFloat(4),
+						ID:                "0xPool-1-0xUser1",
+						TotalFee:          decimal.NewFromFloat(1), // don't affect score
+						TotalFeeFactor:    decimal.NewFromFloat(7),
+						VaultFeeFactor:    decimal.NewFromFloat(2),
+						OperatorFeeFactor: decimal.NewFromFloat(2),
+						Position:          decimal.NewFromFloat(4),
 					},
 				},
 			},
@@ -131,18 +133,20 @@ func (mockMAI3 *MockMAI3Graph1) GetUsersBasedOnBlockNumber(blockNumber int64) ([
 				UnlockMCBTime: 60 * 60 * 24 * 100, // 100 days
 				MarginAccounts: []*mai3.MarginAccount{
 					{
-						ID:          "0xPool-0-0xUser1",
-						TotalFee:    decimal.NewFromFloat(5),
-						VaultFee:    decimal.NewFromFloat(2),
-						OperatorFee: decimal.NewFromFloat(2),
-						Position:    decimal.NewFromFloat(7),
+						ID:                "0xPool-0-0xUser1",
+						TotalFee:          decimal.NewFromFloat(1), // don't affect score
+						TotalFeeFactor:    decimal.NewFromFloat(5),
+						VaultFeeFactor:    decimal.NewFromFloat(2),
+						OperatorFeeFactor: decimal.NewFromFloat(2),
+						Position:          decimal.NewFromFloat(7),
 					},
 					{
-						ID:          "0xPool-1-0xUser1",
-						TotalFee:    decimal.NewFromFloat(10),
-						VaultFee:    decimal.NewFromFloat(3),
-						OperatorFee: decimal.NewFromFloat(3),
-						Position:    decimal.NewFromFloat(9),
+						ID:                "0xPool-1-0xUser1",
+						TotalFee:          decimal.NewFromFloat(1), // don't affect score
+						TotalFeeFactor:    decimal.NewFromFloat(10),
+						VaultFeeFactor:    decimal.NewFromFloat(3),
+						OperatorFeeFactor: decimal.NewFromFloat(3),
+						Position:          decimal.NewFromFloat(9),
 					},
 				},
 			},
@@ -156,18 +160,20 @@ func (mockMAI3 *MockMAI3Graph1) GetUsersBasedOnBlockNumber(blockNumber int64) ([
 				UnlockMCBTime: 60 * 60 * 24 * 99, // 99 days
 				MarginAccounts: []*mai3.MarginAccount{
 					{
-						ID:          "0xPool-0-0xUser1",
-						TotalFee:    decimal.NewFromFloat(6),
-						VaultFee:    decimal.NewFromFloat(2.5),
-						OperatorFee: decimal.NewFromFloat(2.5),
-						Position:    decimal.NewFromFloat(12),
+						ID:                "0xPool-0-0xUser1",
+						TotalFee:          decimal.NewFromFloat(1), // don't affect score
+						TotalFeeFactor:    decimal.NewFromFloat(6),
+						VaultFeeFactor:    decimal.NewFromFloat(2.5),
+						OperatorFeeFactor: decimal.NewFromFloat(2.5),
+						Position:          decimal.NewFromFloat(12),
 					},
 					{
-						ID:          "0xPool-1-0xUser1",
-						TotalFee:    decimal.NewFromFloat(12),
-						VaultFee:    decimal.NewFromFloat(3),
-						OperatorFee: decimal.NewFromFloat(3),
-						Position:    decimal.NewFromFloat(24),
+						ID:                "0xPool-1-0xUser1",
+						TotalFee:          decimal.NewFromFloat(1), // don't affect score
+						TotalFeeFactor:    decimal.NewFromFloat(12),
+						VaultFeeFactor:    decimal.NewFromFloat(3),
+						OperatorFeeFactor: decimal.NewFromFloat(3),
+						Position:          decimal.NewFromFloat(24),
 					},
 				},
 			},
@@ -326,11 +332,12 @@ func (mockMAI3 *MockMAI3Graph2) GetUsersBasedOnBlockNumber(blockNumber int64) ([
 				UnlockMCBTime: 60 * 60 * 24 * 100, // 100 days
 				MarginAccounts: []*mai3.MarginAccount{
 					{
-						ID:          "0xPool-0-0xUser1",
-						TotalFee:    decimal.NewFromFloat(40),
-						VaultFee:    decimal.NewFromFloat(10),
-						OperatorFee: decimal.NewFromFloat(10),
-						Position:    decimal.NewFromFloat(100),
+						ID:                "0xPool-0-0xUser1",
+						TotalFee:          decimal.NewFromFloat(1), // don't affect score
+						TotalFeeFactor:    decimal.NewFromFloat(40),
+						VaultFeeFactor:    decimal.NewFromFloat(10),
+						OperatorFeeFactor: decimal.NewFromFloat(10),
+						Position:          decimal.NewFromFloat(100),
 					},
 				},
 			},
