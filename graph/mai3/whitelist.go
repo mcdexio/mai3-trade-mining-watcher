@@ -1,4 +1,4 @@
-package whitelist
+package mai3
 
 import "github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
 

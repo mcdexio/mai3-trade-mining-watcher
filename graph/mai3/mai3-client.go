@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
 	utils "github.com/mcdexio/mai3-trade-mining-watcher/utils/http"
-	"github.com/mcdexio/mai3-trade-mining-watcher/whitelist"
 	"github.com/shopspring/decimal"
 	"strings"
 )
@@ -37,9 +36,9 @@ type MarkPrice struct {
 type Client struct {
 	logger        logging.Logger
 	client        *utils.Client
-	btcWhiteList  *whitelist.Whitelist
-	ethWhiteList  *whitelist.Whitelist
-	satsWhiteList *whitelist.Whitelist
+	btcWhiteList  *Whitelist
+	ethWhiteList  *Whitelist
+	satsWhiteList *Whitelist
 	btcUsdPerpID  string
 	ethUsdPerpID  string
 }
@@ -61,8 +60,8 @@ type GraphInterface interface {
 	GetPerpIDWithUSDBased(symbol string) (string, error)
 }
 
-func NewClient(logger logging.Logger, url string, btcWhiteList *whitelist.Whitelist,
-	ethWhiteList *whitelist.Whitelist, satsWhiteList *whitelist.Whitelist,
+func NewClient(logger logging.Logger, url string, btcWhiteList *Whitelist,
+	ethWhiteList *Whitelist, satsWhiteList *Whitelist,
 	perpIDsUSDBased ...string) *Client {
 	logger.Info("New MAI3 graph client with url %s", url)
 	if url == "" {

@@ -5,7 +5,6 @@ import (
 	"github.com/mcdexio/mai3-trade-mining-watcher/database/models/mining"
 	"github.com/mcdexio/mai3-trade-mining-watcher/graph/block"
 	"github.com/mcdexio/mai3-trade-mining-watcher/graph/mai3"
-	"github.com/mcdexio/mai3-trade-mining-watcher/whitelist"
 	"gorm.io/gorm"
 	"os"
 	"os/signal"
@@ -86,16 +85,16 @@ func main() {
 	blockGraphClients := make([]block.BlockInterface, 0)
 	if env.BSCChainInclude() {
 		// for bsc mai3 graph client
-		bscBTCWhiteList := whitelist.NewWhiteList(
+		bscBTCWhiteList := mai3.NewWhiteList(
 			logger,
 			config.GetString("BSC_BTC_INVERSE_CONTRACT_WHITELIST0", ""),
 		)
-		bscETHWhiteList := whitelist.NewWhiteList(
+		bscETHWhiteList := mai3.NewWhiteList(
 			logger,
 			config.GetString("BSC_ETH_INVERSE_CONTRACT_WHITELIST0", ""),
 			config.GetString("BSC_ETH_INVERSE_CONTRACT_WHITELIST1", ""),
 		)
-		bscSatsWhiteList := whitelist.NewWhiteList(
+		bscSatsWhiteList := mai3.NewWhiteList(
 			logger,
 			config.GetString("BSC_SATS_INVERSE_CONTRACT_WHITELIST0", ""),
 		)
@@ -116,7 +115,7 @@ func main() {
 	}
 	if env.ArbOneChainInclude() {
 		// for arb mai3 graph client
-		arbETHWhiteList := whitelist.NewWhiteList(
+		arbETHWhiteList := mai3.NewWhiteList(
 			logger,
 			config.GetString("ARB_ONE_ETH_INVERSE_CONTRACT_WHITELIST0", ""),
 		)
@@ -137,11 +136,11 @@ func main() {
 	}
 	if env.ArbRinkebyChainInclude() {
 		// for arb-rinkeby mai3 graph client
-		arbRinkebyBTCWhiteList := whitelist.NewWhiteList(
+		arbRinkebyBTCWhiteList := mai3.NewWhiteList(
 			logger,
 			config.GetString("ARB_RINKEBY_BTC_INVERSE_CONTRACT_WHITELIST0", ""),
 		)
-		arbRinkebyETHWhiteList := whitelist.NewWhiteList(
+		arbRinkebyETHWhiteList := mai3.NewWhiteList(
 			logger,
 			config.GetString("ARB_RINKEBY_ETH_INVERSE_CONTRACT_WHITELIST0", ""),
 		)
