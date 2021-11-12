@@ -44,30 +44,6 @@ func main() {
 	migrationAddColumn(db, "InitTotalFeeFactor", logger)
 	migrationAddColumn(db, "AccTotalFeeFactor", logger)
 
-	var AllModels = []interface{}{
-		&mining.UserInfo{},
-	}
-	for _, model := range AllModels {
-		err := database.CreateCustomIndices(db, model, "user_info")
-		if err != nil {
-			logger.Warn("err=%s", err)
-			return
-		}
-		logger.Info("create new index for user_info")
-	}
-
-	AllModels = []interface{}{
-		&mining.Snapshot{},
-	}
-	for _, model := range AllModels {
-		err := database.CreateCustomIndices(db, model, "snapshot")
-		if err != nil {
-			logger.Warn("err=%s", err)
-			return
-		}
-		logger.Info("create new index for snapshot")
-	}
-
 	backgroundCtx, stop := context.WithCancel(context.Background())
 	group, ctx := errgroup.WithContext(backgroundCtx)
 
