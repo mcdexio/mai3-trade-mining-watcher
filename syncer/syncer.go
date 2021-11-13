@@ -645,9 +645,20 @@ func (s *Syncer) syncState(db *gorm.DB, epoch *mining.Schedule) (int64, error) {
 		h := normN(np, s.snapshotInterval)
 		if np-60 < h && np >= h && len(allStates) > 0 {
 			s.logger.Info("making snapshot for %v", h)
-			err := s.makeSnapshot(tx, np, allStates)
+			err = s.makeSnapshot(tx, np, allStates)
 			if err != nil {
-				s.logger.Error("err=%s", err)
+				s.logger.Error("makeSnapshot err=%s", err)
+			}
+			// calculate score for multi-chains
+			for chainID := 0; chainID < countChains; chainID++ {
+				var states []*mining.UserInfo
+				if err = tx.Where("epoch=? and chain=?", epoch.Epoch, strconv.Itoa(chainID)).Find(&states).Error; err != nil {
+					s.logger.Error("fail to fetch users for chain %d in this epoch err=%s", chainID, err)
+				}
+				err = s.makeSnapshot(tx, np, states)
+				if err != nil {
+					s.logger.Error("makeSnapshot err=%s", err)
+				}
 			}
 		}
 		return nil

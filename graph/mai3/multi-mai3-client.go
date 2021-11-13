@@ -43,6 +43,9 @@ func (c *MultiClient) GetMultiUsersBasedOnMultiBlockNumbers(blockNumbers []int64
 		if err != nil {
 			return nil, err
 		}
+		if len(users) == 0 {
+			return nil, fmt.Errorf("user is empty graph may error")
+		}
 		ret[i] = users
 	}
 	return ret, nil
