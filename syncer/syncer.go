@@ -447,7 +447,6 @@ func (s *Syncer) getUserStateBasedOnBlockNumber(epoch *mining.Schedule, timestam
 
 	var uis []*mining.UserInfo
 	for _, u := range summaryUser {
-		s.logger.Debug("u.ID %s, acc_fee_factor %s, acc_total_fee_factor %s, acc_fee %s", u.Trader, u.AccFeeFactor.String(), u.AccTotalFeeFactor.String(), u.AccFee.String())
 		uis = append(uis, u)
 	}
 	for i, u := range saveUsers {
