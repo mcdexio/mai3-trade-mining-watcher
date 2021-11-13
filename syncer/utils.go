@@ -81,7 +81,9 @@ func getScore(epoch *mining.Schedule, ui *mining.UserInfo, remains decimal.Decim
 	}
 	fee := decimal.Zero
 	if epoch.Epoch == 0 {
-		fee = ui.AccTotalFeeFactor.Sub(ui.InitTotalFeeFactor)
+		fee = ui.AccTotalFee.Sub(ui.InitTotalFee)
+	} else if epoch.Epoch <= 2 {
+		fee = ui.AccFeeFactor.Sub(ui.InitFee)
 	} else {
 		fee = ui.AccFeeFactor.Sub(ui.InitFeeFactor)
 	}

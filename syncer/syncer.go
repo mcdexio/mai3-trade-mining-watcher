@@ -433,8 +433,8 @@ func (s *Syncer) getUserStateBasedOnBlockNumber(epoch *mining.Schedule, timestam
 				CurStakeScore:       ss,
 				EstimatedStakeScore: estimatedStakeScore,
 				AccFee:              daoFee,
-				AccTotalFee:         totalFee,
 				AccFeeFactor:        daoFeeFactor,
+				AccTotalFee:         totalFee,
 				AccTotalFeeFactor:   totalFeeFactor,
 				Chain:               strconv.Itoa(i),
 			}

@@ -172,7 +172,11 @@ func (s *TMServer) calculateStat(info *mining.UserInfo, schedule *mining.Schedul
 	stake = (info.AccStakeScore.Add(info.CurStakeScore).Add(info.EstimatedStakeScore)).Div(
 		totalEpochMinutesDecimal)
 	// fee
-	daoFee = info.AccFeeFactor.Sub(info.InitFeeFactor)
+	if schedule.Epoch == 2 {
+		daoFee = info.AccFeeFactor.Sub(info.InitFee)
+	} else {
+		daoFee = info.AccFeeFactor.Sub(info.InitFeeFactor)
+	}
 	totalFee = info.AccTotalFee.Sub(info.InitTotalFee)
 	return
 }
