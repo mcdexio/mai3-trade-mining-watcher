@@ -43,7 +43,6 @@ func (c *MultiClient) GetMultiUsersBasedOnMultiBlockNumbers(blockNumbers []int64
 		if err != nil {
 			return nil, err
 		}
-		// subgraph returns [] without an error expectedly at Nov. 14, 2021. so now prevent this error
 		if len(users) == 0 {
 			return nil, fmt.Errorf("user is empty graph may error")
 		}
