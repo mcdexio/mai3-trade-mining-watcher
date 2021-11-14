@@ -58,8 +58,7 @@ func (h *Client) Request(method string, params []KeyValue, requestBody interface
 	respBody = []byte{}
 	err = nil
 	defer func() {
-		// h.logger.Debug("###[%s]### cost[%.0f] %s %v %v %v ###[%d]###response###%s", method, float64(time.Since(start))/1000000, u, requestBody, params, headers, code, string(respBody))
-		// h.logger.Debug("###[%s]### cost[%.0f] %s %v %v %v ###[%d]###response###", method, float64(time.Since(start))/1000000, u, requestBody, params, headers, code)
+		// h.logger.Debug("###[%s]### cost[%.0f] %v %v %v ###[%d]###response###%s", method, float64(time.Since(start))/1000000, requestBody, params, headers, code, string(respBody))
 	}()
 
 	if len(h.url) == 0 {

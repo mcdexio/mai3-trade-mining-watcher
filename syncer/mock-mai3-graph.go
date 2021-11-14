@@ -107,7 +107,7 @@ func (mockMAI3 *MockMAI3Graph1) GetUsersBasedOnBlockNumber(blockNumber int64) ([
 				MarginAccounts: []*mai3.MarginAccount{
 					{
 						ID:                "0xPool-0-0xUser1",
-						TotalFee:          decimal.NewFromFloat(1), // don't affect score
+						TotalFee:          decimal.NewFromFloat(3),
 						TotalFeeFactor:    decimal.NewFromFloat(3),
 						VaultFeeFactor:    decimal.NewFromFloat(1),
 						OperatorFeeFactor: decimal.NewFromFloat(1),
@@ -115,7 +115,7 @@ func (mockMAI3 *MockMAI3Graph1) GetUsersBasedOnBlockNumber(blockNumber int64) ([
 					},
 					{
 						ID:                "0xPool-1-0xUser1",
-						TotalFee:          decimal.NewFromFloat(1), // don't affect score
+						TotalFee:          decimal.NewFromFloat(7),
 						TotalFeeFactor:    decimal.NewFromFloat(7),
 						VaultFeeFactor:    decimal.NewFromFloat(2),
 						OperatorFeeFactor: decimal.NewFromFloat(2),
@@ -134,7 +134,7 @@ func (mockMAI3 *MockMAI3Graph1) GetUsersBasedOnBlockNumber(blockNumber int64) ([
 				MarginAccounts: []*mai3.MarginAccount{
 					{
 						ID:                "0xPool-0-0xUser1",
-						TotalFee:          decimal.NewFromFloat(1), // don't affect score
+						TotalFee:          decimal.NewFromFloat(5),
 						TotalFeeFactor:    decimal.NewFromFloat(5),
 						VaultFeeFactor:    decimal.NewFromFloat(2),
 						OperatorFeeFactor: decimal.NewFromFloat(2),
@@ -142,7 +142,7 @@ func (mockMAI3 *MockMAI3Graph1) GetUsersBasedOnBlockNumber(blockNumber int64) ([
 					},
 					{
 						ID:                "0xPool-1-0xUser1",
-						TotalFee:          decimal.NewFromFloat(1), // don't affect score
+						TotalFee:          decimal.NewFromFloat(10),
 						TotalFeeFactor:    decimal.NewFromFloat(10),
 						VaultFeeFactor:    decimal.NewFromFloat(3),
 						OperatorFeeFactor: decimal.NewFromFloat(3),
@@ -161,7 +161,7 @@ func (mockMAI3 *MockMAI3Graph1) GetUsersBasedOnBlockNumber(blockNumber int64) ([
 				MarginAccounts: []*mai3.MarginAccount{
 					{
 						ID:                "0xPool-0-0xUser1",
-						TotalFee:          decimal.NewFromFloat(1), // don't affect score
+						TotalFee:          decimal.NewFromFloat(6),
 						TotalFeeFactor:    decimal.NewFromFloat(6),
 						VaultFeeFactor:    decimal.NewFromFloat(2.5),
 						OperatorFeeFactor: decimal.NewFromFloat(2.5),
@@ -169,7 +169,7 @@ func (mockMAI3 *MockMAI3Graph1) GetUsersBasedOnBlockNumber(blockNumber int64) ([
 					},
 					{
 						ID:                "0xPool-1-0xUser1",
-						TotalFee:          decimal.NewFromFloat(1), // don't affect score
+						TotalFee:          decimal.NewFromFloat(12),
 						TotalFeeFactor:    decimal.NewFromFloat(12),
 						VaultFeeFactor:    decimal.NewFromFloat(3),
 						OperatorFeeFactor: decimal.NewFromFloat(3),

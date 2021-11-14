@@ -2,12 +2,19 @@ package block
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
 	utils "github.com/mcdexio/mai3-trade-mining-watcher/utils/http"
 	"strconv"
 )
+
+type Errors []struct {
+	Message string
+}
+
+func (e Errors) Error() string {
+	return e[0].Message
+}
 
 type BlockInterface interface {
 	GetBlockNumberWithTS(timestamp int64) (int64, error)
@@ -108,6 +115,11 @@ func (b *Client) queryGraph(resp interface{}, query string, args ...interface{})
 	var params struct {
 		Query string `json:"query"`
 	}
+
+	var out struct {
+		Errors Errors
+	}
+
 	params.Query = fmt.Sprintf(query, args...)
 	for i := 0; i < 3; i++ {
 		err, code, res := b.client.Post(nil, params, nil)
@@ -118,6 +130,14 @@ func (b *Client) queryGraph(resp interface{}, query string, args ...interface{})
 			b.logger.Error("unexpected http params=%+v, response=%v", params, code)
 			continue
 		}
+		err = json.Unmarshal(res, &out)
+		if err != nil {
+			b.logger.Error("fail to decode error=%+v, err=%s", res, err)
+			return err
+		}
+		if len(out.Errors) > 0 {
+			return out.Errors
+		}
 		err = json.Unmarshal(res, &resp)
 		if err != nil {
 			b.logger.Error("fail to unmarshal result=%+v, err=%s", res, err)
@@ -126,7 +146,7 @@ func (b *Client) queryGraph(resp interface{}, query string, args ...interface{})
 		// success
 		return nil
 	}
-	return errors.New("fail to query block graph in three times")
+	return fmt.Errorf("fail to query block graph in three times")
 }
 
 // GetLatestBlockNumber get the closest block number.

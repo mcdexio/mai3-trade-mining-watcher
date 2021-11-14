@@ -112,7 +112,7 @@ func (t *SyncerTestSuite) TestStateOnlyOneChain() {
 			t.Require().Equal(users[0].CurStakeScore.String(), decimal.NewFromInt(98*3).String())
 			t.Require().Equal(users[0].AccPosValue.String(), decimal.NewFromInt(4620).String())
 			t.Require().Equal(users[0].CurPosValue.String(), decimal.NewFromInt(3780).String())
-			t.Require().Equal(users[0].AccTotalFeeFactor.String(), decimal.NewFromInt(10).String())
+			t.Require().Equal(users[0].AccTotalFee.String(), decimal.NewFromInt(10).String())
 			// remainEpochDays 0, remainProportion 1, remainEpochMinutes 2, A = (1 - 0) * 98*3 * 2 = 588
 			t.Require().Equal(users[0].EstimatedStakeScore.String(), decimal.NewFromInt(588).String())
 
@@ -135,7 +135,7 @@ func (t *SyncerTestSuite) TestStateOnlyOneChain() {
 			t.Require().Equal(users[0].CurStakeScore.String(), decimal.NewFromInt(1000).String())
 			t.Require().Equal(users[0].AccPosValue.String(), decimal.NewFromInt(4620+3780).String())
 			t.Require().Equal(users[0].CurPosValue.String(), decimal.NewFromInt(9700).String())
-			t.Require().Equal(users[0].AccTotalFeeFactor.String(), decimal.NewFromInt(15).String())
+			t.Require().Equal(users[0].AccTotalFee.String(), decimal.NewFromInt(15).String())
 			// remainEpochDays 0, remainProportion 1, remainEpochMinutes 2, A = (1 - 0) * 100*10 * 1 = 1000
 			t.Require().Equal(users[0].EstimatedStakeScore.String(), decimal.NewFromInt(1000).String())
 
@@ -290,9 +290,8 @@ func (t *SyncerTestSuite) TestGetScore() {
 	currentStakeReward := decimal.NewFromFloat(3)
 	estimatedStakeScore := getEstimatedStakeScore(100, epoch, 60*60*24*100, currentStakeReward)
 	ui = mining.UserInfo{
-		InitTotalFeeFactor:  decimal.NewFromFloat(2.5),
-		AccTotalFeeFactor:   decimal.NewFromFloat(5),
-		AccTotalFee:         decimal.NewFromFloat(12), // don't affect score
+		InitTotalFee:        decimal.NewFromFloat(2.5),
+		AccTotalFee:         decimal.NewFromFloat(5),
 		AccPosValue:         decimal.NewFromFloat(4.5),
 		CurPosValue:         decimal.NewFromFloat(4),
 		AccStakeScore:       decimal.NewFromFloat(3.5),
@@ -393,7 +392,7 @@ func (t *SyncerTestSuite) TestRestoreFromSnapshot() {
 
 	var snapshots []*mining.Snapshot
 	db.Where("epoch=? and timestamp=?", epoch.Epoch, 120).Find(&snapshots)
-	t.Require().Equal(1, len(snapshots))
+	t.Require().Equal(2, len(snapshots))
 	t.Require().Equal(decimal.NewFromInt(297).String(), snapshots[0].CurStakeScore.String())
 	t.Require().Equal(decimal.NewFromInt(300).String(), snapshots[0].AccStakeScore.String())
 

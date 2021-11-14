@@ -2,13 +2,20 @@ package mai3
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
 	utils "github.com/mcdexio/mai3-trade-mining-watcher/utils/http"
 	"github.com/shopspring/decimal"
 	"strings"
 )
+
+type Errors []struct {
+	Message string
+}
+
+func (e Errors) Error() string {
+	return e[0].Message
+}
 
 type User struct {
 	ID             string          `json:"id"`
@@ -173,6 +180,11 @@ func (m *Client) queryGraph(resp interface{}, query string, args ...interface{})
 	var params struct {
 		Query string `json:"query"`
 	}
+
+	var out struct {
+		Errors Errors
+	}
+
 	params.Query = fmt.Sprintf(query, args...)
 	for i := 0; i < 3; i++ {
 		err, code, res := m.client.Post(nil, params, nil)
@@ -183,6 +195,14 @@ func (m *Client) queryGraph(resp interface{}, query string, args ...interface{})
 			m.logger.Error("unexpected http params=%+v, response=%v", params, code)
 			continue
 		}
+		err = json.Unmarshal(res, &out)
+		if err != nil {
+			m.logger.Error("fail to decode error=%+v, err=%s", res, err)
+			return err
+		}
+		if len(out.Errors) > 0 {
+			return out.Errors
+		}
 		err = json.Unmarshal(res, &resp)
 		if err != nil {
 			m.logger.Error("fail to unmarshal result=%+v, err=%s", res, err)
@@ -191,7 +211,37 @@ func (m *Client) queryGraph(resp interface{}, query string, args ...interface{})
 		// success
 		return nil
 	}
-	return errors.New("fail to query MAI3 graph in three times")
+	return fmt.Errorf("fail to query MAI3 graph in three times")
+}
+
+func (m *Client) GetUsersBasedOnBlockNumberTrade(blockNumber int64, trader string) (User, error) {
+	m.logger.Debug("GetUsersBasedOnBlockNumberTrade on block number %d, trader %s", blockNumber, trader)
+	query := `{
+		users(first: 1, block: {number: %d}, where: { id_gt: "%s" }) {
+			id
+			stakedMCB
+			unlockMCBTime
+			marginAccounts(where: { totalFee_gt: 0}) {
+				id
+				position
+				totalFee
+				vaultFee
+				operatorFee
+				totalFeeFactor
+				vaultFeeFactor
+				operatorFeeFactor
+			}
+		}
+	}`
+	var response struct {
+		Data struct {
+			Users []User
+		}
+	}
+	if err := m.queryGraph(&response, query, blockNumber, trader); err != nil {
+		return User{}, fmt.Errorf("fail to get users in three times err=%s", err)
+	}
+	return response.Data.Users[0], nil
 }
 
 // GetUsersBasedOnBlockNumber get users based on blockNumber.
@@ -247,7 +297,7 @@ func (m *Client) getUserWithBlockNumberID(blockNumber int64, id string) ([]User,
 	}
 	// try three times for each pagination.
 	if err := m.queryGraph(&response, query, blockNumber, id); err != nil {
-		return []User{}, errors.New("failed to get users in three times")
+		return []User{}, fmt.Errorf("fail to get users in three times err=%s", err)
 	}
 	return response.Data.Users, nil
 }
