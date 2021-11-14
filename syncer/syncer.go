@@ -641,29 +641,36 @@ func (s *Syncer) syncState(db *gorm.DB, epoch *mining.Schedule) (int64, error) {
 		if err := s.setProgress(tx, PROGRESS_SYNC_STATE, np, epoch.Epoch); err != nil {
 			return fmt.Errorf("fail to save sync progress %w", err)
 		}
-		h := normN(np, s.snapshotInterval)
-		if np-60 < h && np >= h && len(allStates) > 0 {
-			s.logger.Info("making snapshot for %v", h)
-			err = s.makeSnapshot(tx, np, allStates)
-			if err != nil {
-				s.logger.Error("makeSnapshot err=%s", err)
-			}
-			// calculate score for multi-chains
-			for chainID := 0; chainID < countChains; chainID++ {
-				var states []*mining.UserInfo
-				if err = tx.Where("epoch=? and chain=?", epoch.Epoch, strconv.Itoa(chainID)).Find(&states).Error; err != nil {
-					s.logger.Error("fail to fetch users for chain %d in this epoch err=%s", chainID, err)
-				}
-				err = s.makeSnapshot(tx, np, states)
-				if err != nil {
-					s.logger.Error("makeSnapshot err=%s", err)
-				}
-			}
-		}
 		return nil
 	}, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 	if err != nil {
 		return 0, fmt.Errorf("fail to update user states: timestamp=%v %w", np, err)
+	}
+	h := normN(np, s.snapshotInterval)
+	// calculate score for total
+	var allStates []*mining.UserInfo
+	err = db.Where("epoch=? and chain= 'total'", epoch.Epoch).Find(&allStates).Error
+	if err != nil {
+		s.logger.Error("fail to get allStates err=%s", err)
+	}
+	if np-60 < h && np >= h && len(allStates) > 0 {
+		s.logger.Info("making snapshot for %v", h)
+		err = s.makeSnapshot(db, np, allStates)
+		if err != nil {
+			s.logger.Error("makeSnapshot err=%s", err)
+		}
+		// calculate score for multi-chains
+		countChains := len(saveUsers)
+		for chainID := 0; chainID < countChains; chainID++ {
+			var states []*mining.UserInfo
+			if err = db.Where("epoch=? and chain=?", epoch.Epoch, strconv.Itoa(chainID)).Find(&states).Error; err != nil {
+				s.logger.Error("fail to fetch users for chain %d in this epoch err=%s", chainID, err)
+			}
+			err = s.makeSnapshot(db, np, states)
+			if err != nil {
+				s.logger.Error("makeSnapshot err=%s", err)
+			}
+		}
 	}
 	return np, nil
 }
