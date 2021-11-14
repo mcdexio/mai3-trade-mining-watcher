@@ -657,7 +657,7 @@ func (s *Syncer) syncState(db *gorm.DB, epoch *mining.Schedule) (int64, error) {
 		s.logger.Info("making snapshot for %v", h)
 		err = s.makeSnapshot(db, np, allStates)
 		if err != nil {
-			s.logger.Error("makeSnapshot err=%s", err)
+			s.logger.Error("makeSnapshot chain(total) err=%s", err)
 		}
 		// calculate score for multi-chains
 		countChains := len(saveUsers)
@@ -668,7 +668,7 @@ func (s *Syncer) syncState(db *gorm.DB, epoch *mining.Schedule) (int64, error) {
 			}
 			err = s.makeSnapshot(db, np, states)
 			if err != nil {
-				s.logger.Error("makeSnapshot err=%s", err)
+				s.logger.Error("makeSnapshot chain(%d), err=%s", chainID, err)
 			}
 		}
 	}
