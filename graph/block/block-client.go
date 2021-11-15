@@ -18,7 +18,7 @@ func (e Errors) Error() string {
 
 type BlockInterface interface {
 	GetBlockNumberWithTS(timestamp int64) (int64, error)
-	GetLatestBlockNumber() (int64, error)
+	GetLatestBlockNumberAndTS() (int64, int64, error)
 	GetTimestampWithBN(blockNumber int64) (int64, error)
 }
 
@@ -149,8 +149,8 @@ func (b *Client) queryGraph(resp interface{}, query string, args ...interface{})
 	return fmt.Errorf("fail to query block graph in three times")
 }
 
-// GetLatestBlockNumber get the closest block number.
-func (b *Client) GetLatestBlockNumber() (int64, error) {
+// GetLatestBlockNumberAndTS get the closest block number.
+func (b *Client) GetLatestBlockNumberAndTS() (int64, int64, error) {
 	query := `{
 		blocks(first: 1, orderBy: number, orderDirection: desc) {
     		id
@@ -165,17 +165,22 @@ func (b *Client) GetLatestBlockNumber() (int64, error) {
 	}
 	// return err when can't get block number in three times
 	if err := b.queryGraph(&response, query); err != nil {
-		return -1, err
+		return -1, -1, err
 	}
 
 	if len(response.Data.Blocks) != 1 {
-		return -1, fmt.Errorf("length of block response: expect=1, actual=%v",
+		return -1, -1, fmt.Errorf("length of block response: expect=1, actual=%v",
 			len(response.Data.Blocks))
 	}
 	bn := response.Data.Blocks[0].Number
 	number, err := strconv.Atoi(bn)
 	if err != nil {
-		return -1, fmt.Errorf("fail to get block number %s from string err=%s", bn, err)
+		return -1, -1, fmt.Errorf("fail to get block number %s from string err=%s", bn, err)
 	}
-	return int64(number), nil
+	ts := response.Data.Blocks[0].Timestamp
+	timestamp, err := strconv.Atoi(ts)
+	if err != nil {
+		return -1, -1, fmt.Errorf("fail to get ts %s from string err=%s", ts, err)
+	}
+	return int64(number), int64(timestamp), nil
 }

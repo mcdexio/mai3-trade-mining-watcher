@@ -12,8 +12,8 @@ func (mockBlock *MockBlockGraph1) GetBlockNumberWithTS(timestamp int64) (int64, 
 	return timestamp / 60, nil
 }
 
-func (mockBlock *MockBlockGraph1) GetLatestBlockNumber() (int64, error) {
-	return -1, nil
+func (mockBlock *MockBlockGraph1) GetLatestBlockNumberAndTS() (int64, int64, error) {
+	return -1, -1, nil
 }
 
 func (mockBlock *MockBlockGraph1) GetTimestampWithBN(blockNumber int64) (int64, error) {

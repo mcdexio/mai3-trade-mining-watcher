@@ -38,19 +38,21 @@ func main() {
 	)
 	bscBlockGraphClient := block.NewClient(logger, config.GetString("BSC_BLOCK_GRAPH_URL"))
 
-	lastBscBN, err := bscBlockGraphClient.GetLatestBlockNumber()
+	lastBscBN, lastBscTS, err := bscBlockGraphClient.GetLatestBlockNumberAndTS()
 	if err != nil {
 		logger.Error("fail to get bsc latest bn err=%s", err)
+	} else {
+		logger.Info("bsc last bn %d ts %d", lastBscBN, lastBscTS)
 	}
-	logger.Info("bsc last bn %d", lastBscBN)
 	bscBN, err := bscBlockGraphClient.GetBlockNumberWithTS(timestamp)
 	if err != nil {
 		logger.Error("fail to get bsc bn from ts %d", timestamp)
+	} else {
+		logger.Info("bscBN %d", bscBN)
 	}
-	logger.Info("bscBN %d", bscBN)
 	bscUsers, err := bscMAI3GraphClient.GetUsersBasedOnBlockNumber(bscBN)
 	if err != nil {
-		logger.Error("fail to get bsc users %d", bscBN)
+		logger.Error("fail to get bsc users bn %d", bscBN)
 	}
 	logger.Info("length bsc users %d", len(bscUsers))
 
@@ -71,20 +73,22 @@ func main() {
 	// for arb block graph client
 	arbBlockGraphClient := block.NewClient(logger, config.GetString("ARB_ONE_BLOCK_GRAPH_URL"))
 
-	lastArbBN, err := arbBlockGraphClient.GetLatestBlockNumber()
+	lastArbBN, lastArbTS, err := arbBlockGraphClient.GetLatestBlockNumberAndTS()
 	if err != nil {
 		logger.Error("fail to get arb latest bn err=%s", err)
 	}
-	logger.Info("arb last bn %d", lastArbBN)
-	arbBN, err := bscBlockGraphClient.GetBlockNumberWithTS(timestamp)
+	logger.Info("arb last bn %d ts %d", lastArbBN, lastArbTS)
+	arbBN, err := arbBlockGraphClient.GetBlockNumberWithTS(timestamp)
 	if err != nil {
-		logger.Error("fail to get bsc bn from ts %d", timestamp)
+		logger.Error("fail to get arb bn from ts %d", timestamp)
+	} else {
+		logger.Info("arbBN %d", arbBN)
 	}
-	logger.Info("arbBN %d", arbBN)
 
-	arbUsers, err := arbMAI3GraphClient.GetUsersBasedOnBlockNumber(bscBN)
+	arbUsers, err := arbMAI3GraphClient.GetUsersBasedOnBlockNumber(arbBN)
 	if err != nil {
-		logger.Error("fail to get arb users %d", bscBN)
+		logger.Error("fail to get arb users bn %d", arbBN)
+	} else {
+		logger.Info("length arb users %d", len(arbUsers))
 	}
-	logger.Info("length arb users %d", len(arbUsers))
 }
