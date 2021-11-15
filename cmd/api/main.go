@@ -95,7 +95,7 @@ func main() {
 			logger,
 			config.GetString("ARB_ONE_ETH_INVERSE_CONTRACT_WHITELIST0", ""),
 		)
-		arbRinkebyMAI3GraphClient := mai3.NewClient(
+		arbMAI3GraphClient := mai3.NewClient(
 			logger,
 			config.GetString("ARB_ONE_MAI3_GRAPH_URL"),
 			nil,
@@ -104,7 +104,7 @@ func main() {
 			config.GetString("ARB_ONE_BTC_USD_PERP_ID", ""),
 			config.GetString("ARB_ONE_ETH_USD_PERP_ID", ""),
 		)
-		mai3GraphClients = append(mai3GraphClients, arbRinkebyMAI3GraphClient)
+		mai3GraphClients = append(mai3GraphClients, arbMAI3GraphClient)
 
 		// for arb block graph client
 		arbBlockGraphClient := block.NewClient(logger, config.GetString("ARB_ONE_BLOCK_GRAPH_URL"))
