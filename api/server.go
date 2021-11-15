@@ -51,6 +51,7 @@ type TMServer struct {
 type MultiEpochScoreResp struct {
 	TotalFee     map[string]string `json:"totalFee"`
 	DaoFee       map[string]string `json:"daoFee"`
+	BaseDaoFee   map[string]string `json:"baseDaoFee"`
 	AverageOI    map[string]string `json:"averageOI"`
 	AverageStake map[string]string `json:"averageStake"`
 	Score        string            `json:"score"`
@@ -155,7 +156,8 @@ func (s *TMServer) getLatestSchedule(db *gorm.DB) (*mining.Schedule, error) {
 	return ss, nil
 }
 
-func (s *TMServer) calculateStat(info *mining.UserInfo, schedule *mining.Schedule) (totalFee, daoFee, oi, stake decimal.Decimal) {
+func (s *TMServer) calculateStat(info *mining.UserInfo, schedule *mining.Schedule) (
+	totalFee, daoFee, oi, stake, baseDaoFee decimal.Decimal) {
 	if info == nil || schedule == nil {
 		return
 	}
@@ -178,6 +180,7 @@ func (s *TMServer) calculateStat(info *mining.UserInfo, schedule *mining.Schedul
 		daoFee = info.AccFeeFactor.Sub(info.InitFeeFactor)
 	}
 	totalFee = info.AccTotalFee.Sub(info.InitTotalFee)
+	baseDaoFee = info.AccFee.Sub(info.InitFee)
 	return
 }
 
@@ -193,6 +196,7 @@ func (s *TMServer) calculateTotalStats() (err error) {
 		}
 	}
 	s.nowEpoch = schedule.Epoch
+	s.logger.Info("set nowEpoch %d from schedule.Epoch %d", s.nowEpoch, schedule.Epoch)
 
 	s.logger.Info("calculate total status from 0 to this epoch %d", s.nowEpoch)
 	for i := int64(0); i <= s.nowEpoch; i++ {
@@ -218,7 +222,7 @@ func (s *TMServer) calculateTotalStats() (err error) {
 		epochStat.epoch = i
 		epochStat.totalTrader = int64(count)
 		for _, t := range traders {
-			totalFee, daoFee, oi, stake := s.calculateStat(t, sch)
+			totalFee, daoFee, oi, stake, _ := s.calculateStat(t, sch)
 			epochStat.totalOI = epochStat.totalOI.Add(oi)
 			epochStat.totalStakeScore = epochStat.totalStakeScore.Add(stake)
 			epochStat.totalFee = epochStat.totalFee.Add(totalFee)
@@ -343,7 +347,7 @@ func (s *TMServer) OnQueryScore(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		totalFee, daoFee, oi, stake := s.calculateStat(&rsp, sch)
+		totalFee, daoFee, oi, stake, _ := s.calculateStat(&rsp, sch)
 		resp := EpochScoreResp{
 			TotalFee:     totalFee.String(),
 			DaoFee:       daoFee.String(),
@@ -405,6 +409,7 @@ func (s *TMServer) OnQueryMultiScore(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
+		s.logger.Debug("get userInfo from db epoch %d, rsps len %+v", i, len(rsps))
 
 		stats, match := s.history[i]
 		if !match {
@@ -436,6 +441,9 @@ func (s *TMServer) OnQueryMultiScore(w http.ResponseWriter, r *http.Request) {
 			resp.AverageOI = map[string]string{
 				"total": "0",
 			}
+			resp.BaseDaoFee = map[string]string{
+				"total": "0",
+			}
 		} else {
 			resp.TotalFee = map[string]string{
 				"total": "0",
@@ -443,6 +451,11 @@ func (s *TMServer) OnQueryMultiScore(w http.ResponseWriter, r *http.Request) {
 				"1":     "0",
 			}
 			resp.DaoFee = map[string]string{
+				"total": "0",
+				"0":     "0",
+				"1":     "0",
+			}
+			resp.BaseDaoFee = map[string]string{
 				"total": "0",
 				"0":     "0",
 				"1":     "0",
@@ -464,9 +477,10 @@ func (s *TMServer) OnQueryMultiScore(w http.ResponseWriter, r *http.Request) {
 				s.marshalEpochAllScoreResp(stats.totalScore, sch, rsp, &resp)
 			}
 			if i >= int(env.MultiChainEpochStart()) {
-				totalFee, daoFee, oi, stake := s.calculateStat(rsp, sch)
+				totalFee, daoFee, oi, stake, baseDaoFee := s.calculateStat(rsp, sch)
 				resp.TotalFee[rsp.Chain] = totalFee.String()
 				resp.DaoFee[rsp.Chain] = daoFee.String()
+				resp.BaseDaoFee[rsp.Chain] = baseDaoFee.String()
 				resp.AverageOI[rsp.Chain] = oi.String()
 				resp.AverageStake[rsp.Chain] = stake.String()
 			}
@@ -504,9 +518,11 @@ func (s *TMServer) marshalEpochAllScoreResp(
 	}
 	resp.Proportion = proportion
 
-	totalFee, daoFee, oi, stake := s.calculateStat(rsp, sch)
+	totalFee, daoFee, oi, stake, baseDaoFee := s.calculateStat(rsp, sch)
 	resp.TotalFee["total"] = totalFee.String()
 	resp.DaoFee["total"] = daoFee.String()
+	resp.BaseDaoFee["total"] = baseDaoFee.String()
 	resp.AverageOI["total"] = oi.String()
 	resp.AverageStake["total"] = stake.String()
+	return
 }
