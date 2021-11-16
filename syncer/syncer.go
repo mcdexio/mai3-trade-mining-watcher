@@ -249,11 +249,11 @@ func (s *Syncer) getProgress(db *gorm.DB, name string, epoch int64) (int64, erro
 }
 
 func (s *Syncer) setProgress(db *gorm.DB, name string, ts int64, epoch int64) error {
-	s.logger.Info("save progress for %v: timestamp=%v", name, ts)
 	p := &mining.Progress{TableName: types.TableName(name), From: ts, Epoch: epoch}
 	if err := db.Save(p).Error; err != nil {
 		return fmt.Errorf("fail to save progress: table=%v, timestamp=%v %w", name, ts, err)
 	}
+	s.logger.Info("save progress for %v: timestamp=%v", name, ts)
 	return nil
 }
 
@@ -574,11 +574,11 @@ func (s *Syncer) makeSnapshot(db *gorm.DB, timestamp int64, users []*mining.User
 }
 
 func (s *Syncer) syncState(db *gorm.DB, epoch *mining.Schedule) (int64, error) {
-	s.logger.Info("enter sync state epoch %d", epoch.Epoch)
+	s.logger.Info("enter syncState epoch %d", epoch.Epoch)
 	startTime := time.Now().Unix()
 	defer func() {
 		endTime := time.Now().Unix()
-		s.logger.Info("leave sync state, takes %d seconds", endTime-startTime)
+		s.logger.Info("leave syncState, takes %d seconds", endTime-startTime)
 	}()
 
 	p, err := s.getProgress(db, PROGRESS_SYNC_STATE, epoch.Epoch)
