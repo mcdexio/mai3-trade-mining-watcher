@@ -156,9 +156,37 @@ func (b *Client) GetBlockNumberWithTS(timestamp int64) (int64, error) {
 
 	if bn, match := b.tsCache[timestamp]; match {
 		return bn, nil
-	} else {
+	}
+
+	queryOne := `{
+		blocks(
+			first:1, orderBy: number, orderDirection: asc,
+			where: {timestamp_gte: %d}
+		) {
+			number
+			timestamp
+		}
+	}`
+
+	var responseOne struct {
+		Data struct {
+			Blocks []*Block
+		}
+	}
+	if err := b.queryGraph(&responseOne, queryOne, timestamp); err != nil {
+		b.logger.Error("queryGraphOne err=%s, url=%s", err, b.url)
+		return -1, err
+	}
+	if len(responseOne.Data.Blocks) != 1 {
+		return -1, fmt.Errorf("length of block responseOne: expect=1, actual=%v, timestamp=%v, url %s",
+			len(responseOne.Data.Blocks), timestamp, b.url)
+	}
+	bn := responseOne.Data.Blocks[0].Number
+	number, err := strconv.Atoi(bn)
+	if err != nil {
 		return -1, fmt.Errorf("fail to GetBlockNumberWithTS url %s, b.tsCache %+v", b.url, b.tsCache)
 	}
+	return int64(number - 1), nil
 }
 
 // GetTimestampWithBN get timestamp with block number
