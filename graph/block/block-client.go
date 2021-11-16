@@ -125,6 +125,7 @@ func (b *Client) GetBlockNumberWithTS(timestamp int64) (int64, error) {
 
 	// return err when can't get block number in three times
 	if err := b.queryGraph(&response, query, timestamp); err != nil {
+		b.logger.Error("queryGraph err=%s, url=%s", err, b.url)
 		return -1, err
 	}
 	length := len(response.Data.Blocks)
@@ -133,7 +134,9 @@ func (b *Client) GetBlockNumberWithTS(timestamp int64) (int64, error) {
 	for _, block := range response.Data.Blocks {
 		ts, err := strconv.Atoi(block.Timestamp)
 		if err != nil {
-			return -1, fmt.Errorf("fail to get ts %s from string err=%s", block.Timestamp, err)
+			err = fmt.Errorf("fail to get ts %s from string err=%s", block.Timestamp, err)
+			b.logger.Error("Atoi ts err=%s, url=%s", err, b.url)
+			return -1, err
 		}
 		tsInt64 := norm(int64(ts))
 		if _, match := b.tsCache[tsInt64]; match {
@@ -143,7 +146,9 @@ func (b *Client) GetBlockNumberWithTS(timestamp int64) (int64, error) {
 			var bn int
 			bn, err = strconv.Atoi(block.Number)
 			if err != nil {
-				return -1, fmt.Errorf("fail to get bn %s from string err=%s", block.Number, err)
+				err = fmt.Errorf("fail to get bn %s from string err=%s", block.Number, err)
+				b.logger.Error("Atoi bn err=%s, url=%s", err, b.url)
+				return -1, err
 			}
 			b.tsCache[tsInt64] = int64(bn)
 		}
@@ -152,7 +157,7 @@ func (b *Client) GetBlockNumberWithTS(timestamp int64) (int64, error) {
 	if bn, match := b.tsCache[timestamp]; match {
 		return bn, nil
 	} else {
-		return -1, fmt.Errorf("fail to GetBlockNumberWithTS url %s", b.url)
+		return -1, fmt.Errorf("fail to GetBlockNumberWithTS url %s, b.tsCache %+v", b.url, b.tsCache)
 	}
 }
 
