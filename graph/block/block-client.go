@@ -170,8 +170,8 @@ func (b *Client) GetTimestampWithBN(blockNumber int64) (int64, error) {
 		return -1, err
 	}
 	if len(response.Data.Blocks) != 1 {
-		return -1, fmt.Errorf("length of block response: expect=1, actual=%v, blockNumber=%v",
-			len(response.Data.Blocks), blockNumber)
+		return -1, fmt.Errorf("length of block response: expect=1, actual=%v, blockNumber=%v, url=%s",
+			len(response.Data.Blocks), blockNumber, b.url)
 	}
 	ts := response.Data.Blocks[0].Timestamp
 	timestamp, err := strconv.Atoi(ts)
