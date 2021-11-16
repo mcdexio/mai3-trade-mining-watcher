@@ -26,6 +26,7 @@ type BlockInterface interface {
 type Client struct {
 	logger logging.Logger
 	client *utils.Client
+	url    string
 }
 
 func NewClient(logger logging.Logger, url string) *Client {
@@ -36,6 +37,7 @@ func NewClient(logger logging.Logger, url string) *Client {
 	return &Client{
 		logger: logger,
 		client: utils.NewHttpClient(utils.DefaultTransport, logger, url),
+		url:    url,
 	}
 }
 
@@ -50,7 +52,7 @@ func (b *Client) GetBlockNumberWithTS(timestamp int64) (int64, error) {
 	startTime := time.Now().Unix()
 	defer func() {
 		endTime := time.Now().Unix()
-		b.logger.Info("leave GetBlockNumberWithTS which is the closest but <= @ts:%d, takes %d seconds", timestamp, endTime-startTime)
+		b.logger.Info("leave GetBlockNumberWithTS which is the closest but <= @ts:%d, takes %d seconds: url %s", timestamp, endTime-startTime, b.url)
 	}()
 	query := `{
 		blocks(
