@@ -124,7 +124,7 @@ func (b *Client) GetBlockNumberWithTS(timestamp int64) (int64, error) {
 	}`
 
 	// return err when can't get block number in three times
-	if err := b.queryGraph(&response, query, timestamp); err != nil {
+	if err := b.queryGraph(&response, query, timestamp-60); err != nil {
 		b.logger.Error("queryGraph err=%s, url=%s", err, b.url)
 		return -1, err
 	}
