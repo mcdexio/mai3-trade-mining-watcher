@@ -24,9 +24,10 @@ type BlockInterface interface {
 }
 
 type Client struct {
-	logger logging.Logger
-	client *utils.Client
-	url    string
+	logger  logging.Logger
+	client  *utils.Client
+	url     string
+	tsCache map[int64]int64
 }
 
 func NewClient(logger logging.Logger, url string) *Client {
@@ -35,9 +36,10 @@ func NewClient(logger logging.Logger, url string) *Client {
 		return nil
 	}
 	return &Client{
-		logger: logger,
-		client: utils.NewHttpClient(utils.DefaultTransport, logger, url),
-		url:    url,
+		logger:  logger,
+		client:  utils.NewHttpClient(utils.DefaultTransport, logger, url),
+		url:     url,
+		tsCache: make(map[int64]int64),
 	}
 }
 
@@ -47,6 +49,49 @@ type Block struct {
 	Timestamp string `json:"timestamp"`
 }
 
+// // GetBlockNumberWithTS which is the closest but less than or equal to timestamp
+// func (b *Client) GetBlockNumberWithTS(timestamp int64) (int64, error) {
+// 	startTime := time.Now().Unix()
+// 	defer func() {
+// 		endTime := time.Now().Unix()
+// 		b.logger.Info("leave GetBlockNumberWithTS which is the closest but <= @ts:%d, takes %d seconds: url %s", timestamp, endTime-startTime, b.url)
+// 	}()
+//
+// 	if bn, match := b.tsCache[timestamp]; match {
+// 		b.logger.Debug("match in tsCache")
+// 		return bn, nil
+// 	}
+// 	b.logger.Debug("didn't match get from graph")
+//
+// 	query := `
+// 		b%d: blocks(
+// 			first:1, orderBy: number, orderDirection: asc,
+// 			where: {timestamp_gte: %d}
+// 		) {
+// 			number
+// 		}
+// 	`
+// 	bigQuery := `{`
+// 	for t := timestamp; t < timestamp + 2*60; t+=60 {
+// 		bigQuery += fmt.Sprintf(query, t, t)
+// 	}
+// 	bigQuery += `}`
+// 	var response struct {
+// 		Data struct {
+// 			b1636149960 map[string][]map[string]string
+// 			b1636150020 map[string][]map[string]string
+// 		}
+// 	}
+// 	// return err when can't get block number in three times
+// 	if err := b.queryGraph(&response, bigQuery); err != nil {
+// 		return -1, err
+// 	}
+//
+// 	b.logger.Info("response.Data %+v", response.Data)
+//
+// 	return int64(- 1), nil
+// }
+
 // GetBlockNumberWithTS which is the closest but less than or equal to timestamp
 func (b *Client) GetBlockNumberWithTS(timestamp int64) (int64, error) {
 	startTime := time.Now().Unix()
@@ -54,36 +99,55 @@ func (b *Client) GetBlockNumberWithTS(timestamp int64) (int64, error) {
 		endTime := time.Now().Unix()
 		b.logger.Info("leave GetBlockNumberWithTS which is the closest but <= @ts:%d, takes %d seconds: url %s", timestamp, endTime-startTime, b.url)
 	}()
-	query := `{
-		blocks(
-			first:1, orderBy: number, orderDirection: asc, 
-			where: {timestamp_gte: %d}
-		) {
-			id
-			number
-			timestamp
-		}
-	}`
+
+	timestamp = norm(timestamp)
+	if bn, match := b.tsCache[timestamp]; match {
+		b.logger.Debug("match in tsCache")
+		return bn, nil
+	}
+	b.logger.Debug("didn't match get from graph")
+
 	var response struct {
 		Data struct {
 			Blocks []*Block
 		}
 	}
+
+	query := `{
+		blocks(
+			first:1000, orderBy: number, orderDirection: asc,
+			where: {timestamp_gte: %d}
+		) {
+			number
+			timestamp
+		}
+	}`
+
 	// return err when can't get block number in three times
 	if err := b.queryGraph(&response, query, timestamp); err != nil {
 		return -1, err
 	}
 
-	if len(response.Data.Blocks) != 1 {
-		return -1, fmt.Errorf("length of block response: expect=1, actual=%v, timestamp=%v",
-			len(response.Data.Blocks), timestamp)
+	for _, block := range response.Data.Blocks {
+		ts, err := strconv.Atoi(block.Timestamp)
+		if err != nil {
+			return -1, fmt.Errorf("fail to get ts %s from string err=%s", block.Timestamp, err)
+		}
+		tsInt64 := norm(int64(ts))
+		if _, match := b.tsCache[tsInt64]; match {
+			continue
+		} else {
+			// because number is asc and after norm, so get the closest ts as bn
+			var bn int
+			bn, err = strconv.Atoi(block.Number)
+			if err != nil {
+				return -1, fmt.Errorf("fail to get bn %s from string err=%s", block.Number, err)
+			}
+			b.tsCache[tsInt64] = int64(bn)
+		}
 	}
-	bn := response.Data.Blocks[0].Number
-	number, err := strconv.Atoi(bn)
-	if err != nil {
-		return -1, fmt.Errorf("fail to get block number %s from string err=%s", bn, err)
-	}
-	return int64(number - 1), nil
+
+	return b.tsCache[timestamp], nil
 }
 
 // GetTimestampWithBN get timestamp with block number
@@ -190,4 +254,8 @@ func (b *Client) GetLatestBlockNumberAndTS() (int64, int64, error) {
 		return -1, -1, fmt.Errorf("fail to get ts %s from string err=%s", ts, err)
 	}
 	return int64(number), int64(timestamp), nil
+}
+
+func norm(ts int64) int64 {
+	return ts - ts%60
 }
