@@ -147,7 +147,11 @@ func (b *Client) GetBlockNumberWithTS(timestamp int64) (int64, error) {
 		}
 	}
 
-	return b.tsCache[timestamp], nil
+	if bn, match := b.tsCache[timestamp]; match {
+		return bn, nil
+	} else {
+		return -1, fmt.Errorf("fail to GetBlockNumberWithTS url %s", b.url)
+	}
 }
 
 // GetTimestampWithBN get timestamp with block number
