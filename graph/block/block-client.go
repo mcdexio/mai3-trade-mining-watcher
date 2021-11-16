@@ -97,7 +97,7 @@ func (b *Client) GetBlockNumberWithTS(timestamp int64) (int64, error) {
 	startTime := time.Now().Unix()
 	defer func() {
 		endTime := time.Now().Unix()
-		b.logger.Info("leave GetBlockNumberWithTS which is the closest but <= @ts:%d, takes %d seconds: url %s", timestamp, endTime-startTime, b.url)
+		b.logger.Info("leave GetBlockNumberWithTS which @ts:%d, takes %d seconds: url %s", timestamp, endTime-startTime, b.url)
 	}()
 
 	timestamp = norm(timestamp)
@@ -105,7 +105,7 @@ func (b *Client) GetBlockNumberWithTS(timestamp int64) (int64, error) {
 		b.logger.Debug("match in tsCache")
 		return bn, nil
 	}
-	b.logger.Debug("didn't match get from graph")
+	b.logger.Debug("didn't match ts %d get from graph", timestamp)
 
 	var response struct {
 		Data struct {
@@ -198,7 +198,7 @@ func (b *Client) queryGraph(resp interface{}, query string, args ...interface{})
 			b.logger.Error("fail to post http params=%+v err=%s", params, err)
 			continue
 		} else if code/100 != 2 {
-			b.logger.Error("unexpected http params=%+v, response=%v", params, code)
+			b.logger.Error("unexpected http params=%+v, response=%v, url %s", params, code, b.url)
 			continue
 		}
 		err = json.Unmarshal(res, &out)
