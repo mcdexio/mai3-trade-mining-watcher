@@ -6,6 +6,7 @@ import (
 	"github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
 	utils "github.com/mcdexio/mai3-trade-mining-watcher/utils/http"
 	"strconv"
+	"time"
 )
 
 type Errors []struct {
@@ -46,11 +47,15 @@ type Block struct {
 
 // GetBlockNumberWithTS which is the closest but less than or equal to timestamp
 func (b *Client) GetBlockNumberWithTS(timestamp int64) (int64, error) {
-	b.logger.Debug("GetBlockNumberWithTS which is the closest but <= @ts:%d", timestamp)
+	startTime := time.Now().Unix()
+	defer func() {
+		endTime := time.Now().Unix()
+		b.logger.Info("leave GetBlockNumberWithTS which is the closest but <= @ts:%d, takes %d seconds", timestamp, endTime-startTime)
+	}()
 	query := `{
 		blocks(
 			first:1, orderBy: number, orderDirection: asc, 
-			where: {timestamp_gt: %d}
+			where: {timestamp_gte: %d}
 		) {
 			id
 			number

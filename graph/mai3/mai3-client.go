@@ -7,6 +7,7 @@ import (
 	utils "github.com/mcdexio/mai3-trade-mining-watcher/utils/http"
 	"github.com/shopspring/decimal"
 	"strings"
+	"time"
 )
 
 type Errors []struct {
@@ -246,6 +247,11 @@ func (m *Client) GetUsersBasedOnBlockNumberTrade(blockNumber int64, trader strin
 
 // GetUsersBasedOnBlockNumber get users based on blockNumber.
 func (m *Client) GetUsersBasedOnBlockNumber(blockNumber int64) ([]User, error) {
+	startTime := time.Now().Unix()
+	defer func() {
+		endTime := time.Now().Unix()
+		m.logger.Info("leave GetUsersBasedOnBlockNumber done: takes %d seconds", endTime-startTime)
+	}()
 	m.logger.Debug("Get users based on block number %d", blockNumber)
 	var retUser []User
 
