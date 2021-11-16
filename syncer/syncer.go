@@ -497,17 +497,17 @@ func (s *Syncer) updateUserStates(db *gorm.DB, users []*mining.UserInfo) error {
 	}
 
 	// make sure acc_fee >= init_fee, acc_total_fee >= init_total_fee
-	// if err := db.Clauses(clause.OnConflict{
-	// 	Columns: conflictColumns,
-	// 	DoUpdates: clause.Assignments(map[string]interface{}{
-	// 		"acc_fee":              gorm.Expr("GREATEST(user_info.acc_fee, user_info.init_fee)"),
-	// 		"acc_total_fee":        gorm.Expr("GREATEST(user_info.acc_total_fee, user_info.init_total_fee)"),
-	// 		"acc_fee_factor":       gorm.Expr("GREATEST(user_info.acc_fee_factor, user_info.init_fee_factor)"),
-	// 		"acc_total_fee_factor": gorm.Expr("GREATEST(user_info.acc_total_fee_factor, user_info.init_total_fee_factor)"),
-	// 	}),
-	// }).CreateInBatches(&users, 1000).Error; err != nil {
-	// 	return fmt.Errorf("failed to max(acc_fee, init_fee): size=%v %w", len(users), err)
-	// }
+	if err := db.Clauses(clause.OnConflict{
+		Columns: conflictColumns,
+		DoUpdates: clause.Assignments(map[string]interface{}{
+			"acc_fee":              gorm.Expr("GREATEST(user_info.acc_fee, user_info.init_fee)"),
+			"acc_total_fee":        gorm.Expr("GREATEST(user_info.acc_total_fee, user_info.init_total_fee)"),
+			"acc_fee_factor":       gorm.Expr("GREATEST(user_info.acc_fee_factor, user_info.init_fee_factor)"),
+			"acc_total_fee_factor": gorm.Expr("GREATEST(user_info.acc_total_fee_factor, user_info.init_total_fee_factor)"),
+		}),
+	}).CreateInBatches(&users, 1000).Error; err != nil {
+		return fmt.Errorf("failed to max(acc_fee, init_fee): size=%v %w", len(users), err)
+	}
 	return nil
 }
 
