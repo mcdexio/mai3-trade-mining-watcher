@@ -22,7 +22,7 @@ export SNAPSHOT_INTERVAL=60
 export MULTI_CHAIN_EPOCH_START=2
 
 # Arb-rinkeby graph url & inverse white list
-export ARB_RINKEBY_CHAIN=true
+export ARB_RINKEBY_CHAIN=false
 export ARB_RINKEBY_MAI3_GRAPH_URL=https://api.thegraph.com/subgraphs/name/champfu-mcdex/mai3-trading-mining2
 export ARB_RINKEBY_BLOCK_GRAPH_URL=https://api.thegraph.com/subgraphs/name/renpu-mcarlo/arbitrum-rinkeby-blocks
 export ARB_RINKEBY_BTC_INVERSE_CONTRACT_WHITELIST0='0x3d3744dc7a17d757a2568ddb171d162a7e12f80a-0' # arb-rinkeby USD-BTC
@@ -31,7 +31,7 @@ export ARB_RINKEBY_BTC_USD_PERP_ID="0xc32a2dfee97e2babc90a2b5e6aef41e789ef2e13-1
 export ARB_RINKEBY_ETH_USD_PERP_ID="0xc32a2dfee97e2babc90a2b5e6aef41e789ef2e13-0"
 
 # BSC graph url & inverse white list
-export BSC_CHAIN=false
+export BSC_CHAIN=true
 export BSC_MAI3_GRAPH_URL=https://api.thegraph.com/subgraphs/name/mcdexio/mcdex3-bsc-trade-mining
 # export BSC_MAI3_GRAPH_URL=https://api.thegraph.com/subgraphs/name/champfu-mcdex/bsc-mining-fee
 export BSC_BLOCK_GRAPH_URL=https://api.thegraph.com/subgraphs/name/venomprotocol/bsc-blocks

@@ -1,6 +1,9 @@
 package block
 
-import "github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
+import (
+	"github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
+	"golang.org/x/sync/errgroup"
+)
 
 type MultiClient struct {
 	clients []BlockInterface
@@ -19,13 +22,22 @@ func NewMultiClient(logger logging.Logger, clients []BlockInterface) *MultiClien
 }
 
 func (c *MultiClient) GetMultiBlockNumberWithTS(timestamp int64) ([]int64, error) {
-	var ret []int64
-	for _, blockGraph := range c.clients {
-		bn, err := blockGraph.GetBlockNumberWithTS(timestamp)
-		if err != nil {
-			return nil, err
-		}
-		ret = append(ret, bn)
+	g := new(errgroup.Group)
+
+	bns := make([]int64, len(c.clients))
+	for i, blockGraph := range c.clients {
+		i, blockGraph := i, blockGraph
+		g.Go(func() error {
+			result, err := blockGraph.GetBlockNumberWithTS(timestamp)
+			if err != nil {
+				return err
+			}
+			bns[i] = result
+			return nil
+		})
 	}
-	return ret, nil
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
+	return bns, nil
 }

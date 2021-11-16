@@ -702,12 +702,6 @@ func (s *Syncer) getMultiMarkPrices(
 	return mai3Graphs.GetMultiMarkPrices(blockNumbers)
 }
 
-func (s *Syncer) getMarkPriceWithBlockNumberAddrIndex(
-	blockNumbers int64, poolAddr string, perpIndex int, mai3Graph mai3.GraphInterface) (
-	decimal.Decimal, error) {
-	return mai3Graph.GetMarkPriceWithBlockNumberAddrIndex(blockNumbers, poolAddr, perpIndex)
-}
-
 func (s *Syncer) getMultiBlockNumberWithTS(
 	timestamp int64, blockGraphs block.MultiBlockInterface) ([]int64, error) {
 	return blockGraphs.GetMultiBlockNumberWithTS(timestamp)

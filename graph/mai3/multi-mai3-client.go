@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/shopspring/decimal"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
 )
@@ -36,17 +37,25 @@ func (c *MultiClient) GetMultiUsersBasedOnMultiBlockNumbers(blockNumbers []int64
 	if len(blockNumbers) != len(c.clients) {
 		return nil, ErrBlockLengthNotEqualMAI3
 	}
+	g := new(errgroup.Group)
 
 	ret := make([][]User, len(blockNumbers))
-	for i, bn := range blockNumbers {
-		users, err := c.clients[i].GetUsersBasedOnBlockNumber(bn)
-		if err != nil {
-			return nil, err
-		}
-		if len(users) == 0 {
-			return nil, fmt.Errorf("chain(%d) bn(%d) users is empty: graph may error", i, bn)
-		}
-		ret[i] = users
+	for i, blockGraph := range c.clients {
+		i, blockGraph := i, blockGraph
+		g.Go(func() error {
+			users, err := blockGraph.GetUsersBasedOnBlockNumber(blockNumbers[i])
+			if err != nil {
+				return err
+			}
+			if len(users) == 0 {
+				return fmt.Errorf("chain(%d) bn(%d) users is empty: graph may error", i, blockNumbers[i])
+			}
+			ret[i] = users
+			return nil
+		})
+	}
+	if err := g.Wait(); err != nil {
+		return nil, err
 	}
 	return ret, nil
 }
@@ -56,16 +65,24 @@ func (c *MultiClient) GetMultiMarkPrices(blockNumbers []int64) (map[string]decim
 	if len(blockNumbers) != len(c.clients) {
 		return nil, ErrBlockLengthNotEqualMAI3
 	}
+	g := new(errgroup.Group)
 
 	ret := make(map[string]decimal.Decimal)
-	for i, bn := range blockNumbers {
-		prices, err := c.clients[i].GetMarkPrices(bn)
-		if err != nil {
-			return nil, err
-		}
-		for k, v := range prices {
-			ret[k] = v
-		}
+	for i, blockGraph := range c.clients {
+		i, blockGraph := i, blockGraph
+		g.Go(func() error {
+			prices, err := blockGraph.GetMarkPrices(blockNumbers[i])
+			if err != nil {
+				return err
+			}
+			for k, v := range prices {
+				ret[k] = v
+			}
+			return nil
+		})
+	}
+	if err := g.Wait(); err != nil {
+		return nil, err
 	}
 	return ret, nil
 }
