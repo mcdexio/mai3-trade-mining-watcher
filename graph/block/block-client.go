@@ -127,7 +127,9 @@ func (b *Client) GetBlockNumberWithTS(timestamp int64) (int64, error) {
 	if err := b.queryGraph(&response, query, timestamp); err != nil {
 		return -1, err
 	}
-
+	length := len(response.Data.Blocks)
+	b.logger.Info("get blocks length %d, first ts %s, last ts %s",
+		length, response.Data.Blocks[0].Timestamp, response.Data.Blocks[length-1].Timestamp)
 	for _, block := range response.Data.Blocks {
 		ts, err := strconv.Atoi(block.Timestamp)
 		if err != nil {
