@@ -128,33 +128,35 @@ func (b *Client) GetBlockNumberWithTS(timestamp int64) (int64, error) {
 		return -1, err
 	}
 	length := len(response.Data.Blocks)
-	b.logger.Info("get blocks length %d, first ts %s, last ts %s",
-		length, response.Data.Blocks[0].Timestamp, response.Data.Blocks[length-1].Timestamp)
-	for _, block := range response.Data.Blocks {
-		ts, err := strconv.Atoi(block.Timestamp)
-		if err != nil {
-			err = fmt.Errorf("fail to get ts %s from string err=%s", block.Timestamp, err)
-			b.logger.Error("Atoi ts err=%s, url=%s", err, b.url)
-			return -1, err
-		}
-		tsInt64 := norm(int64(ts))
-		if _, match := b.tsCache[tsInt64]; match {
-			continue
-		} else {
-			// because number is asc and after norm, so get the closest ts as bn
-			var bn int
-			bn, err = strconv.Atoi(block.Number)
+	if length != 0 {
+		b.logger.Info("get blocks length %d, first ts %s, last ts %s",
+			length, response.Data.Blocks[0].Timestamp, response.Data.Blocks[length-1].Timestamp)
+		for _, block := range response.Data.Blocks {
+			ts, err := strconv.Atoi(block.Timestamp)
 			if err != nil {
-				err = fmt.Errorf("fail to get bn %s from string err=%s", block.Number, err)
-				b.logger.Error("Atoi bn err=%s, url=%s", err, b.url)
+				err = fmt.Errorf("fail to get ts %s from string err=%s", block.Timestamp, err)
+				b.logger.Error("Atoi ts err=%s, url=%s", err, b.url)
 				return -1, err
 			}
-			b.tsCache[tsInt64] = int64(bn)
+			tsInt64 := norm(int64(ts))
+			if _, match := b.tsCache[tsInt64]; match {
+				continue
+			} else {
+				// because number is asc and after norm, so get the closest ts as bn
+				var bn int
+				bn, err = strconv.Atoi(block.Number)
+				if err != nil {
+					err = fmt.Errorf("fail to get bn %s from string err=%s", block.Number, err)
+					b.logger.Error("Atoi bn err=%s, url=%s", err, b.url)
+					return -1, err
+				}
+				b.tsCache[tsInt64] = int64(bn)
+			}
 		}
-	}
 
-	if bn, match := b.tsCache[timestamp]; match {
-		return bn, nil
+		if bn, match := b.tsCache[timestamp]; match {
+			return bn, nil
+		}
 	}
 
 	queryOne := `{
