@@ -100,7 +100,6 @@ func (b *Client) GetBlockNumberWithTS(timestamp int64) (int64, error) {
 		b.logger.Info("leave GetBlockNumberWithTS which @ts:%d, takes %d seconds: url %s", timestamp, endTime-startTime, b.url)
 	}()
 
-	timestamp = norm(timestamp)
 	if bn, match := b.tsCache[timestamp]; match {
 		b.logger.Debug("match in tsCache")
 		return bn, nil
