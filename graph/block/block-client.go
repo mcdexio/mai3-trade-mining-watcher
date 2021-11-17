@@ -302,7 +302,7 @@ func (b *Client) GetLatestBlockNumberAndTS() (int64, int64, error) {
 		}
 	}
 	// return err when can't get block number in three times
-	if err = b.queryGraph(&response, query); err != nil {
+	if err := b.queryGraph(&response, query); err != nil {
 		return -1, -1, err
 	}
 
