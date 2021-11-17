@@ -36,7 +36,7 @@ func main() {
 		config.GetString("BSC_BTC_USD_PERP_ID", ""),
 		config.GetString("BSC_ETH_USD_PERP_ID", ""),
 	)
-	bscBlockGraphClient := block.NewClient(logger, config.GetString("BSC_BLOCK_GRAPH_URL"))
+	bscBlockGraphClient := block.NewClient(logger, config.GetString("BSC_BLOCK_GRAPH_URL"), nil)
 
 	lastBscBN, lastBscTS, err := bscBlockGraphClient.GetLatestBlockNumberAndTS()
 	if err != nil {
@@ -71,7 +71,7 @@ func main() {
 	)
 
 	// for arb block graph client
-	arbBlockGraphClient := block.NewClient(logger, config.GetString("ARB_ONE_BLOCK_GRAPH_URL"))
+	arbBlockGraphClient := block.NewClient(logger, config.GetString("ARB_ONE_BLOCK_GRAPH_URL"), nil)
 
 	lastArbBN, lastArbTS, err := arbBlockGraphClient.GetLatestBlockNumberAndTS()
 	if err != nil {

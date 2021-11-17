@@ -107,7 +107,7 @@ func main() {
 		mai3GraphClients = append(mai3GraphClients, bscMAI3GraphClient)
 
 		// for bsc block graph client
-		bscBlockGraphClient := block.NewClient(logger, config.GetString("BSC_BLOCK_GRAPH_URL"))
+		bscBlockGraphClient := block.NewClient(logger, config.GetString("BSC_BLOCK_GRAPH_URL"), nil)
 		blockGraphClients = append(blockGraphClients, bscBlockGraphClient)
 	}
 	if env.ArbRinkebyChainInclude() {
@@ -132,7 +132,7 @@ func main() {
 		mai3GraphClients = append(mai3GraphClients, arbRinkebyMAI3GraphClient)
 
 		// for arb-rinkeby block graph client
-		arbRinkebyBlockGraphClient := block.NewClient(logger, config.GetString("ARB_RINKEBY_BLOCK_GRAPH_URL"))
+		arbRinkebyBlockGraphClient := block.NewClient(logger, config.GetString("ARB_RINKEBY_BLOCK_GRAPH_URL"), nil)
 		blockGraphClients = append(blockGraphClients, arbRinkebyBlockGraphClient)
 	}
 

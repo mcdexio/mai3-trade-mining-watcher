@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"github.com/mcdexio/mai3-trade-mining-watcher/database/models/mining"
+	go_ethereum "github.com/mcdexio/mai3-trade-mining-watcher/go-ethereum"
 	"github.com/mcdexio/mai3-trade-mining-watcher/graph/block"
 	"github.com/mcdexio/mai3-trade-mining-watcher/graph/mai3"
 	"gorm.io/gorm"
@@ -29,6 +30,7 @@ func main() {
 	logging.Initialize(name)
 	defer logging.Finalize()
 	logger := logging.NewLoggerTag(name)
+	loggerGraph := logging.NewLoggerTag("graph")
 
 	database.Initialize()
 	if env.ResetDatabase() {
@@ -62,20 +64,20 @@ func main() {
 	if env.BSCChainInclude() {
 		// for bsc mai3 graph client
 		bscBTCWhiteList := mai3.NewWhiteList(
-			logger,
+			loggerGraph,
 			config.GetString("BSC_BTC_INVERSE_CONTRACT_WHITELIST0", ""),
 		)
 		bscETHWhiteList := mai3.NewWhiteList(
-			logger,
+			loggerGraph,
 			config.GetString("BSC_ETH_INVERSE_CONTRACT_WHITELIST0", ""),
 			config.GetString("BSC_ETH_INVERSE_CONTRACT_WHITELIST1", ""),
 		)
 		bscSatsWhiteList := mai3.NewWhiteList(
-			logger,
+			loggerGraph,
 			config.GetString("BSC_SATS_INVERSE_CONTRACT_WHITELIST0", ""),
 		)
 		bscMAI3GraphClient := mai3.NewClient(
-			logger,
+			loggerGraph,
 			config.GetString("BSC_MAI3_GRAPH_URL"),
 			bscBTCWhiteList,
 			bscETHWhiteList,
@@ -85,18 +87,26 @@ func main() {
 		)
 		mai3GraphClients = append(mai3GraphClients, bscMAI3GraphClient)
 
+		goClient, err := go_ethereum.NewClient(logging.NewLoggerTag("go-eth"),
+			config.GetString("BSC_PRC_SERVER"), ctx,
+		)
+		if err != nil {
+			logger.Error("go-ethereum-client bsc err=%s", err)
+			return
+		}
+
 		// for bsc block graph client
-		bscBlockGraphClient := block.NewClient(logger, config.GetString("BSC_BLOCK_GRAPH_URL"))
+		bscBlockGraphClient := block.NewClient(loggerGraph, config.GetString("BSC_BLOCK_GRAPH_URL"), goClient)
 		blockGraphClients = append(blockGraphClients, bscBlockGraphClient)
 	}
 	if env.ArbOneChainInclude() {
 		// for arb mai3 graph client
 		arbETHWhiteList := mai3.NewWhiteList(
-			logger,
+			loggerGraph,
 			config.GetString("ARB_ONE_ETH_INVERSE_CONTRACT_WHITELIST0", ""),
 		)
 		arbMAI3GraphClient := mai3.NewClient(
-			logger,
+			loggerGraph,
 			config.GetString("ARB_ONE_MAI3_GRAPH_URL"),
 			nil,
 			arbETHWhiteList,
@@ -106,22 +116,30 @@ func main() {
 		)
 		mai3GraphClients = append(mai3GraphClients, arbMAI3GraphClient)
 
+		goClient, err := go_ethereum.NewClient(logging.NewLoggerTag("go-eth"),
+			config.GetString("ARB_ONE_PRC_SERVER"), ctx,
+		)
+		if err != nil {
+			logger.Error("go-ethereum-client arb-one err=%s", err)
+			return
+		}
+
 		// for arb block graph client
-		arbBlockGraphClient := block.NewClient(logger, config.GetString("ARB_ONE_BLOCK_GRAPH_URL"))
+		arbBlockGraphClient := block.NewClient(loggerGraph, config.GetString("ARB_ONE_BLOCK_GRAPH_URL"), goClient)
 		blockGraphClients = append(blockGraphClients, arbBlockGraphClient)
 	}
 	if env.ArbRinkebyChainInclude() {
 		// for arb-rinkeby mai3 graph client
 		arbRinkebyBTCWhiteList := mai3.NewWhiteList(
-			logger,
+			loggerGraph,
 			config.GetString("ARB_RINKEBY_BTC_INVERSE_CONTRACT_WHITELIST0", ""),
 		)
 		arbRinkebyETHWhiteList := mai3.NewWhiteList(
-			logger,
+			loggerGraph,
 			config.GetString("ARB_RINKEBY_ETH_INVERSE_CONTRACT_WHITELIST0", ""),
 		)
 		arbRinkebyMAI3GraphClient := mai3.NewClient(
-			logger,
+			loggerGraph,
 			config.GetString("ARB_RINKEBY_MAI3_GRAPH_URL"),
 			arbRinkebyBTCWhiteList,
 			arbRinkebyETHWhiteList,
@@ -131,17 +149,25 @@ func main() {
 		)
 		mai3GraphClients = append(mai3GraphClients, arbRinkebyMAI3GraphClient)
 
+		goClient, err := go_ethereum.NewClient(logging.NewLoggerTag("go-eth"),
+			config.GetString("ARB_RINKEBY_PRC_SERVER"), ctx,
+		)
+		if err != nil {
+			logger.Error("go-ethereum-client arb-one err=%s", err)
+			return
+		}
+
 		// for arb-rinkeby block graph client
-		arbRinkebyBlockGraphClient := block.NewClient(logger, config.GetString("ARB_RINKEBY_BLOCK_GRAPH_URL"))
+		arbRinkebyBlockGraphClient := block.NewClient(loggerGraph, config.GetString("ARB_RINKEBY_BLOCK_GRAPH_URL"), goClient)
 		blockGraphClients = append(blockGraphClients, arbRinkebyBlockGraphClient)
 	}
 
 	multiMai3Graphs := mai3.NewMultiClient(
-		logger,
+		loggerGraph,
 		mai3GraphClients,
 	)
 	multiBlockGraphs := block.NewMultiClient(
-		logger,
+		loggerGraph,
 		blockGraphClients,
 	)
 	syn := syncer.NewSyncer(

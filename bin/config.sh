@@ -16,10 +16,10 @@ export DB_ARGS=postgres://mcdex@localhost:5432/mcdex?sslmode=disable # Disable s
 
 # setting
 export DEFAULT_EPOCH_0_START_TIME=1634058000
-export RESET_DATABASE=false
+export RESET_DATABASE=true
 export SYNC_DELAY=0
 export SNAPSHOT_INTERVAL=60
-export MULTI_CHAIN_EPOCH_START=2
+export MULTI_CHAIN_EPOCH_START=0
 
 # Arb-rinkeby graph url & inverse white list
 export ARB_RINKEBY_CHAIN=false
@@ -29,6 +29,7 @@ export ARB_RINKEBY_BTC_INVERSE_CONTRACT_WHITELIST0='0x3d3744dc7a17d757a2568ddb17
 export ARB_RINKEBY_ETH_INVERSE_CONTRACT_WHITELIST0='0x727e5a9a04080741cbc8a2dc891e28ca8af6537e-0' # USD-ETHB
 export ARB_RINKEBY_BTC_USD_PERP_ID="0xc32a2dfee97e2babc90a2b5e6aef41e789ef2e13-1"
 export ARB_RINKEBY_ETH_USD_PERP_ID="0xc32a2dfee97e2babc90a2b5e6aef41e789ef2e13-0"
+export ARB_RINKEBY_PRC_SERVER="https://rinkeby.arbitrum.io/rpc"
 
 # BSC graph url & inverse white list
 export BSC_CHAIN=true
@@ -43,6 +44,7 @@ export BSC_SATS_INVERSE_CONTRACT_WHITELIST0='0xfdd10c021b43c4be1b9f0473bad686e54
 export BSC_BTC_USD_PERP_ID="0xdb282bbace4e375ff2901b84aceb33016d0d663d-0"
 export BSC_ETH_USD_PERP_ID="0xdb282bbace4e375ff2901b84aceb33016d0d663d-1"
 export BSC_BNB_USD_PERP_ID="0xdb282bbace4e375ff2901b84aceb33016d0d663d-2"
+export BSC_PRC_SERVER="https://bsc-dataseed.binance.org/"
 
 # Arb1 graph url & inverse white list
 export ARB_ONE_CHAIN=true
@@ -52,3 +54,4 @@ export ARB_ONE_BLOCK_GRAPH_URL=https://api.thegraph.com/subgraphs/name/ianlapham
 export ARB_ONE_ETH_INVERSE_CONTRACT_WHITELIST0='0xc7b2ad78fded2bbc74b50dc1881ce0f81a7a0cca-0' # USD-ETH
 export ARB_ONE_BTC_USD_PERP_ID="0xab324146c49b23658e5b3930e641bdbdf089cbac-1"
 export ARB_ONE_ETH_USD_PERP_ID="0xab324146c49b23658e5b3930e641bdbdf089cbac-0"
+export ARB_ONE_PRC_SERVER="https://arb1.arbitrum.io/rpc"
