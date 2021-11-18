@@ -118,10 +118,11 @@ func (c *Client) GetTimestampWithBN(blockNumber int64) (int64, error) {
 }
 
 func (c *Client) GetBlockNumberWithTS(timestamp int64) (int64, error) {
+	var guessBN int64
 	startTime := time.Now().Unix()
 	defer func() {
 		endTime := time.Now().Unix()
-		c.logger.Info("leave GetBlockNumberWithTS of which @ts:%d, takes %d seconds: url %s", timestamp, endTime-startTime, c.url)
+		c.logger.Info("leave GetBlockNumberWithTS of which @ts:%d, bn:%d, takes %d seconds: url %s", timestamp, guessBN, endTime-startTime, c.url)
 	}()
 
 	rightBlock, err := c.GetLatestBlock()
@@ -141,16 +142,18 @@ func (c *Client) GetBlockNumberWithTS(timestamp int64) (int64, error) {
 	c.calSpeed()
 	bnDiff := tsDiff / c.speed
 	leftBN := rightBN - bnDiff
-	guessBN := leftBN
+	guessBN = leftBN
 
 	var guessTS int64
 	count := 0
-	for count < 10 {
+	for count < 30 {
 		guessTS, err = c.GetTimestampWithBN(guessBN)
 		if err != nil {
 			return -1, err
 		}
-		c.logger.Info("guessTS(%d), %d hours ago", guessTS, (startTime-guessTS)/60/60)
+		if count % 5 == 0 {
+			c.logger.Debug("guessTS(%d), guessBN(%d), %+v hours ago", guessTS, guessBN, float64(startTime-guessTS)/60.0/60.0)
+		}
 		if guessTS == timestamp {
 			return guessBN, nil
 		} else if guessTS > timestamp {
@@ -164,5 +167,6 @@ func (c *Client) GetBlockNumberWithTS(timestamp int64) (int64, error) {
 		guessBN = leftBN + (rightBN-leftBN)/2
 		count++
 	}
+	c.logger.Info("return guessTS(%d), guessBN(%d), %d hours ago", guessTS, guessBN, (startTime-guessTS)/60.0/60.0)
 	return guessBN, nil
 }
