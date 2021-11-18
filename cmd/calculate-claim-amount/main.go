@@ -8,7 +8,9 @@ import (
 	"strings"
 )
 
-var readCsvPath = "/Users/champ/Downloads/2021.11.17epoch2.csv"
+var readScoreCsvPath = "/Users/champ/Downloads/2021.11.17epoch2-totalScore.csv"
+var readFeeCsvPath = "/Users/champ/Downloads/2021.11.17epoch2-fee.csv"
+
 var writeCsvPathBsc = "/Users/champ/Downloads/2021.11.17epoch2BscProportion.csv"
 var writeCsvPathArb = "/Users/champ/Downloads/2021.11.17epoch2ArbProportion.csv"
 
@@ -19,12 +21,21 @@ func main() {
 		panic(err)
 	}
 
-	rFile, err := os.OpenFile(readCsvPath, os.O_RDONLY, 0777)
+	rScoreFile, err := os.OpenFile(readScoreCsvPath, os.O_RDONLY, 0777)
 	if err != nil {
 		panic(err)
 	}
-	r := csv.NewReader(rFile)
-	defer rFile.Close()
+	rScore := csv.NewReader(rScoreFile)
+	defer rScoreFile.Close()
+	recordsScores, err := rScore.ReadAll()
+
+	rFeeFile, err := os.OpenFile(readFeeCsvPath, os.O_RDONLY, 0777)
+	if err != nil {
+		panic(err)
+	}
+	rFee := csv.NewReader(rFeeFile)
+	defer rFeeFile.Close()
+	recordsFees, err := rFee.ReadAll()
 
 	wBscFile, err := os.Create(writeCsvPathBsc)
 	if err != nil {
@@ -42,43 +53,52 @@ func main() {
 	defer wArbFile.Close()
 	defer wArb.Flush()
 
-	records, err := r.ReadAll()
-
-	traderMap := make(map[string]map[string]decimal.Decimal, 0)
-	traderScoreMap := make(map[string]decimal.Decimal, 0)
 	totalSum := decimal.Zero
-	totalChainCount := 0
-	bscChainCount := 0
-	arbChainCount := 0
-	for _, record := range records[1:] {
+	traderScoreMap := make(map[string]decimal.Decimal, 0)
+	allTradeScoreCount := 0
+	for _, record := range recordsScores[1:] {
 		var score decimal.Decimal
-		score, err = decimal.NewFromString(record[2])
+		score, err = decimal.NewFromString(record[1])
 		if err != nil {
 			panic(err)
 		}
+		totalSum = totalSum.Add(score)
 		trader := strings.ToLower(record[0])
-		chain := strings.ToLower(record[1])
+		traderScoreMap[trader] = score
+		allTradeScoreCount++
+	}
+	fmt.Printf("totalSum=%s, allTradeScoreCount=%d\n", totalSum.String(), allTradeScoreCount)
 
-		if chain == "total" {
-			totalSum = totalSum.Add(score)
-			traderScoreMap[trader] = score
-			totalChainCount++
-		} else if chain == "0" {
+	traderMap := make(map[string]map[string]decimal.Decimal, 0)
+	bscChainCount := 0
+	arbChainCount := 0
+	for _, record := range recordsFees[1:] {
+		trader := strings.ToLower(record[0])
+		_, match := traderScoreMap[trader]
+		if !match {
+			// skip for total score == 0
+			continue
+		}
+
+		chain := strings.ToLower(record[1])
+		var fee decimal.Decimal
+		fee, err = decimal.NewFromString(record[2])
+		if err != nil {
+			panic(err)
+		}
+		if chain == "0" {
 			bscChainCount++
 		} else if chain == "1" {
 			arbChainCount++
 		}
-
-		if trad, match := traderMap[trader]; match {
-			trad[chain] = score
+		if trade, match := traderMap[trader]; match {
+			trade[chain] = fee
 		} else {
 			traderMap[trader] = make(map[string]decimal.Decimal)
-			traderMap[trader][chain] = score
+			traderMap[trader][chain] = fee
 		}
 	}
-	fmt.Printf("totalSum=%s, totalChainCount=%d, bscChainCount=%d, arbChainCount=%d\n",
-		totalSum.String(), totalChainCount, bscChainCount, arbChainCount,
-	)
+	fmt.Printf("bscChainCount %d, arbChainCount %d\n", bscChainCount, arbChainCount)
 
 	if err = wBsc.Write([]string{"trader", "score", "proportion", "MCB"}); err != nil {
 		panic(err)
@@ -92,8 +112,7 @@ func main() {
 		score := traderScoreMap[trader]
 		proportion := score.Div(totalSum)
 		mcbAmountOne := score.Mul(mcbAmount).Div(totalSum)
-		if len(chains) == 2 || len(chains) == 1 {
-			// default to arbitrum
+		if len(chains) == 1 {
 			var w *csv.Writer
 			if _, match := chains["0"]; match {
 				w = wBsc
@@ -108,14 +127,15 @@ func main() {
 			if err = w.Write(x); err != nil {
 				panic(err)
 			}
+			continue
 		}
 
-		if len(chains) == 3 {
-			bscScore := chains["0"]
-			arbScore := chains["1"]
-			chainScore := bscScore.Add(arbScore)
-			bscProportion := bscScore.Div(chainScore)
-			arbProportion := arbScore.Div(chainScore)
+		if len(chains) == 2 {
+			bscFee := chains["0"]
+			arbFee := chains["1"]
+			chainFee := bscFee.Add(arbFee)
+			bscProportion := bscFee.Div(chainFee)
+			arbProportion := arbFee.Div(chainFee)
 
 			xBsc := []string{trader}
 			xBsc = append(xBsc, score.Mul(bscProportion).String())
@@ -134,10 +154,6 @@ func main() {
 			if err = wArb.Write(xArb); err != nil {
 				panic(err)
 			}
-		}
-
-		if !chains["total"].Equal(chains["0"].Add(chains["1"])) {
-			fmt.Printf("trader %s score %+v is not equal\n", trader, chains)
 		}
 	}
 	fmt.Printf("disperse %s\n", disperse.String())
