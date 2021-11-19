@@ -2,14 +2,12 @@ package main
 
 import (
 	"context"
-	"os"
-	"os/signal"
-	"syscall"
-	"time"
-
 	"github.com/mcdexio/mai3-trade-mining-watcher/api"
 	"github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
 	"golang.org/x/sync/errgroup"
+	"os"
+	"os/signal"
+	"syscall"
 )
 
 func main() {
@@ -19,7 +17,7 @@ func main() {
 	defer logging.Finalize()
 	logger := logging.NewLoggerTag(name)
 
-	backgroundCtx, stop := context.WithTimeout(context.Background(), 30*time.Second)
+	backgroundCtx, stop := context.WithCancel(context.Background())
 	group, ctx := errgroup.WithContext(backgroundCtx)
 
 	tmServer := api.NewTMServer(ctx, logger)

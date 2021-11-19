@@ -46,7 +46,7 @@ func main() {
 	migrationAddColumn(db, "InitTotalFeeFactor", logger)
 	migrationAddColumn(db, "AccTotalFeeFactor", logger)
 
-	backgroundCtx, stop := context.WithTimeout(context.Background(), 30*time.Second)
+	backgroundCtx, stop := context.WithCancel(context.Background())
 	group, ctx := errgroup.WithContext(backgroundCtx)
 
 	tmServer := api.NewTMServer(ctx, logging.NewLoggerTag("server"))

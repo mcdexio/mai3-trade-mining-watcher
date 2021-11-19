@@ -70,7 +70,7 @@ func (s *InternalServer) Run() error {
 	for {
 		select {
 		case <-s.ctx.Done():
-			s.logger.Info("Syncer receives shutdown signal.")
+			s.logger.Info("InternalServer receives shutdown signal.")
 			return nil
 		}
 	}
