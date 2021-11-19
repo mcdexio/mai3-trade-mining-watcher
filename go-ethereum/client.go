@@ -59,7 +59,9 @@ func (c *Client) calSpeed() {
 }
 
 func (c *Client) GetSigner() (*types.EIP155Signer, error) {
-	chainID, err := c.client.ChainID(c.ctx)
+	ctx30, cancel := context.WithTimeout(c.ctx, 30*time.Second)
+	defer cancel()
+	chainID, err := c.client.ChainID(ctx30)
 	if err != nil {
 		return nil, fmt.Errorf("fail to get chain id err=%s", err)
 	}
@@ -68,7 +70,9 @@ func (c *Client) GetSigner() (*types.EIP155Signer, error) {
 }
 
 func (c *Client) GetFilterLogsByQuery(query ethereum.FilterQuery) (logs []types.Log, err error) {
-	logs, err = c.client.FilterLogs(c.ctx, query)
+	ctx30, cancel := context.WithTimeout(c.ctx, 30*time.Second)
+	defer cancel()
+	logs, err = c.client.FilterLogs(ctx30, query)
 	if err != nil {
 		c.logger.Error("fail to execute a filter query %+v err=%s", query, err)
 		return
@@ -77,7 +81,9 @@ func (c *Client) GetFilterLogsByQuery(query ethereum.FilterQuery) (logs []types.
 }
 
 func (c *Client) GetTransactionByHash(txHash common.Hash) (*types.Transaction, error) {
-	tx, isPending, err := c.client.TransactionByHash(c.ctx, txHash)
+	ctx30, cancel := context.WithTimeout(c.ctx, 30*time.Second)
+	defer cancel()
+	tx, isPending, err := c.client.TransactionByHash(ctx30, txHash)
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +94,9 @@ func (c *Client) GetTransactionByHash(txHash common.Hash) (*types.Transaction, e
 }
 
 func (c *Client) GetReceiptFromTransaction(txHash common.Hash) (receipt *types.Receipt, err error) {
-	receipt, err = c.client.TransactionReceipt(c.ctx, txHash)
+	ctx30, cancel := context.WithTimeout(c.ctx, 30*time.Second)
+	defer cancel()
+	receipt, err = c.client.TransactionReceipt(ctx30, txHash)
 	if err != nil {
 		return nil, err
 	}
@@ -99,7 +107,9 @@ func (c *Client) GetReceiptFromTransaction(txHash common.Hash) (receipt *types.R
 }
 
 func (c *Client) GetLatestBlock() (*Block, error) {
-	header, err := c.client.HeaderByNumber(c.ctx, nil)
+	ctx30, cancel := context.WithTimeout(c.ctx, 30*time.Second)
+	defer cancel()
+	header, err := c.client.HeaderByNumber(ctx30, nil)
 	if err != nil {
 		return nil, fmt.Errorf("fail to get header err=%s", err)
 	}
@@ -110,7 +120,9 @@ func (c *Client) GetLatestBlock() (*Block, error) {
 }
 
 func (c *Client) GetTimestampWithBN(blockNumber int64) (int64, error) {
-	header, err := c.client.HeaderByNumber(c.ctx, big.NewInt(blockNumber))
+	ctx30, cancel := context.WithTimeout(c.ctx, 30*time.Second)
+	defer cancel()
+	header, err := c.client.HeaderByNumber(ctx30, big.NewInt(blockNumber))
 	if err != nil {
 		return -1, fmt.Errorf("fail to get header err=%s", err)
 	}
