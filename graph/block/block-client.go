@@ -142,18 +142,18 @@ func (b *Client) GetBlockNumberWithTS(timestamp int64) (int64, error) {
 				break
 			}
 			tsInt64 := norm(int64(ts))
-			if _, match := b.tsCache[tsInt64]; match {
+			if _, match = b.tsCache[tsInt64]; match {
 				continue
 			} else {
 				// because number is asc and after norm, so get the closest ts as bn
-				var bn int
-				bn, err = strconv.Atoi(block.Number)
+				var bnInt int
+				bnInt, err = strconv.Atoi(block.Number)
 				if err != nil {
 					err = fmt.Errorf("fail to get bn %s from string err=%s", block.Number, err)
 					b.logger.Warn("Atoi bn err=%s, url=%s", err, b.graphUrl)
 					break
 				}
-				b.tsCache[tsInt64] = int64(bn)
+				b.tsCache[tsInt64] = int64(bnInt)
 			}
 		}
 
