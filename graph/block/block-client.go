@@ -98,12 +98,14 @@ type Block struct {
 // GetBlockNumberWithTS which is the closest but less than or equal to timestamp
 func (b *Client) GetBlockNumberWithTS(timestamp int64) (int64, error) {
 	startTime := time.Now().Unix()
+	var bn int64
+	var match bool
 	defer func() {
 		endTime := time.Now().Unix()
-		b.logger.Info("leave GetBlockNumberWithTS which @ts:%d, takes %d seconds: url %s", timestamp, endTime-startTime, b.graphUrl)
+		b.logger.Info("leave GetBlockNumberWithTS which @ts:%d bn:%d, takes %d seconds: url %s", timestamp, bn, endTime-startTime, b.graphUrl)
 	}()
 
-	if bn, match := b.tsCache[timestamp]; match {
+	if bn, match = b.tsCache[timestamp]; match {
 		b.logger.Debug("match in tsCache")
 		return bn, nil
 	}
@@ -155,7 +157,7 @@ func (b *Client) GetBlockNumberWithTS(timestamp int64) (int64, error) {
 			}
 		}
 
-		if bn, match := b.tsCache[timestamp]; match {
+		if bn, match = b.tsCache[timestamp]; match {
 			return bn, nil
 		}
 	}
@@ -179,10 +181,11 @@ func (b *Client) GetBlockNumberWithTS(timestamp int64) (int64, error) {
 	err = b.queryGraph(&responseOne, queryOne, timestamp)
 	if err == nil && len(responseOne.Data.Blocks) == 1 {
 		// correct get 1 blocks from graph
-		bn := responseOne.Data.Blocks[0].Number
+		bnString := responseOne.Data.Blocks[0].Number
 		var number int
-		number, err = strconv.Atoi(bn)
+		number, err = strconv.Atoi(bnString)
 		if err == nil {
+			bn = int64(number - 1)
 			return int64(number - 1), nil
 		}
 	}
@@ -192,11 +195,11 @@ func (b *Client) GetBlockNumberWithTS(timestamp int64) (int64, error) {
 		return -1, fmt.Errorf("fail to GetBlockNumberWithTS %d from go-eth err=%s", timestamp, err)
 	}
 
-	goBN, err := b.goClient.GetBlockNumberWithTS(timestamp)
+	bn, err = b.goClient.GetBlockNumberWithTS(timestamp)
 	if err != nil {
 		return -1, fmt.Errorf("fail to GetBlockNumberWithTS from go-eth err=%s", err)
 	}
-	return goBN, nil
+	return bn, nil
 }
 
 // GetTimestampWithBN get timestamp with block number
