@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/mcdexio/mai3-trade-mining-watcher/api"
 	"github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
@@ -18,7 +19,7 @@ func main() {
 	defer logging.Finalize()
 	logger := logging.NewLoggerTag(name)
 
-	backgroundCtx, stop := context.WithCancel(context.Background())
+	backgroundCtx, stop := context.WithTimeout(context.Background(), 30*time.Second)
 	group, ctx := errgroup.WithContext(backgroundCtx)
 
 	tmServer := api.NewTMServer(ctx, logger)

@@ -151,7 +151,7 @@ func (c *Client) GetBlockNumberWithTS(timestamp int64) (int64, error) {
 		if err != nil {
 			return -1, err
 		}
-		if count % 5 == 0 {
+		if count%5 == 0 {
 			c.logger.Debug("guessTS(%d), guessBN(%d), %+v hours ago", guessTS, guessBN, float64(startTime-guessTS)/60.0/60.0)
 		}
 		if guessTS == timestamp {
