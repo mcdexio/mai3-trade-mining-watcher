@@ -16,7 +16,7 @@ export DB_ARGS=postgres://mcdex@localhost:5432/mcdex?sslmode=disable # Disable s
 
 # setting
 export DEFAULT_EPOCH_0_START_TIME=1634058000
-export RESET_DATABASE=true
+export RESET_DATABASE=false
 export SYNC_DELAY=0
 export SNAPSHOT_INTERVAL=60
 export MULTI_CHAIN_EPOCH_START=0

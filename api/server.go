@@ -215,7 +215,7 @@ func (s *TMServer) calculateTotalStats() (err error) {
 		var sch *mining.Schedule
 		sch, err = s.getScheduleWithEpoch(s.db, int(i))
 		if err != nil {
-			s.logger.Error("failed to get epoch %d from schedule table err=%s", i, err)
+			s.logger.Error("fail to get epoch %d from schedule table err=%s", i, err)
 			return err
 		}
 
@@ -314,14 +314,14 @@ func (s *TMServer) OnQueryScore(w http.ResponseWriter, r *http.Request) {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				s.logger.Info("trader %s not found in db epoch %d", traderID, i)
 			} else {
-				s.logger.Error("failed to get value from user info table err=%s", err)
+				s.logger.Error("fail to get value from user info table err=%s", err)
 				s.jsonError(w, "internal error", 400)
 				return
 			}
 		}
 		stats, match := s.history[i]
 		if !match {
-			s.logger.Error("failed to get stats %+v", s.history)
+			s.logger.Error("fail to get stats %+v", s.history)
 			s.jsonError(w, "internal error", 400)
 			return
 		}
@@ -330,7 +330,7 @@ func (s *TMServer) OnQueryScore(w http.ResponseWriter, r *http.Request) {
 
 		sch, err := s.getScheduleWithEpoch(s.db, i)
 		if err != nil {
-			s.logger.Error("failed to get epoch %d from schedule table err=%s", i, err)
+			s.logger.Error("fail to get epoch %d from schedule table err=%s", i, err)
 			s.jsonError(w, "internal error", 400)
 			return
 		}
@@ -395,36 +395,21 @@ func (s *TMServer) OnQueryMultiScore(w http.ResponseWriter, r *http.Request) {
 	}
 	traderID := strings.ToLower(trader[0])
 	s.logger.Info("OnQueryMultiScore user id %s", traderID)
+	var rsps []*mining.UserInfo
+	err := s.db.Model(mining.UserInfo{}).Where("trader = ?", traderID).Order(
+		"epoch asc").Scan(&rsps).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			s.logger.Info("user %s not found in db", traderID)
+		} else {
+			s.logger.Error("fail to get value from user info table err=%s", err)
+			s.jsonError(w, "internal error", 400)
+			return
+		}
+	}
+
 	queryTradingMiningResp := make(map[int]*MultiEpochScoreResp)
 	for i := 0; i <= int(s.nowEpoch); i++ {
-		var rsps []*mining.UserInfo
-		err := s.db.Model(mining.UserInfo{}).Where(
-			"trader = ? and epoch = ?", traderID, i).Scan(&rsps).Error
-		if err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				s.logger.Info("user %s not found in db epoch %d", traderID, i)
-			} else {
-				s.logger.Error("failed to get value from user info table err=%s", err)
-				s.jsonError(w, "internal error", 400)
-				return
-			}
-		}
-		s.logger.Debug("get userInfo from db epoch %d, rsps len %+v", i, len(rsps))
-
-		stats, match := s.history[i]
-		if !match {
-			s.logger.Error("failed to get stats %+v", s.history)
-			s.jsonError(w, "internal error", 400)
-			return
-		}
-
-		sch, err := s.getScheduleWithEpoch(s.db, i)
-		if err != nil {
-			s.logger.Error("failed to get epoch %d from schedule table err=%s", i, err)
-			s.jsonError(w, "internal error", 400)
-			return
-		}
-
 		var resp = MultiEpochScoreResp{}
 		resp.Proportion = "0"
 		resp.Score = "0"
@@ -471,21 +456,43 @@ func (s *TMServer) OnQueryMultiScore(w http.ResponseWriter, r *http.Request) {
 				"1":     "0",
 			}
 		}
-
-		for _, rsp := range rsps {
-			if rsp.Chain == "total" {
-				s.marshalEpochAllScoreResp(stats.totalScore, sch, rsp, &resp)
-			}
-			if i >= int(env.MultiChainEpochStart()) {
-				totalFee, daoFee, oi, stake, baseDaoFee := s.calculateStat(rsp, sch)
-				resp.TotalFee[rsp.Chain] = totalFee.String()
-				resp.DaoFee[rsp.Chain] = daoFee.String()
-				resp.BaseDaoFee[rsp.Chain] = baseDaoFee.String()
-				resp.AverageOI[rsp.Chain] = oi.String()
-				resp.AverageStake[rsp.Chain] = stake.String()
-			}
-		}
 		queryTradingMiningResp[i] = &resp
+	}
+
+	for _, rsp := range rsps {
+		epoch := int(rsp.Epoch)
+
+		stats, match := s.history[epoch]
+		if !match {
+			s.logger.Error("fail to get stats %+v", s.history)
+			s.jsonError(w, "internal error", 400)
+			return
+		}
+
+		var sch *mining.Schedule
+		sch, err = s.getScheduleWithEpoch(s.db, epoch)
+		if err != nil {
+			s.logger.Error("fail to get epoch %d from schedule table err=%s", epoch, err)
+			s.jsonError(w, "internal error", 400)
+			return
+		}
+
+		resp, match := queryTradingMiningResp[epoch]
+		if !match {
+			continue
+		}
+		if rsp.Chain == "total" {
+			s.marshalEpochAllScoreResp(stats.totalScore, sch, rsp, resp)
+		}
+		if epoch >= int(env.MultiChainEpochStart()) {
+			totalFee, daoFee, oi, stake, baseDaoFee := s.calculateStat(rsp, sch)
+			resp.TotalFee[rsp.Chain] = totalFee.String()
+			resp.DaoFee[rsp.Chain] = daoFee.String()
+			resp.BaseDaoFee[rsp.Chain] = baseDaoFee.String()
+			resp.AverageOI[rsp.Chain] = oi.String()
+			resp.AverageStake[rsp.Chain] = stake.String()
+		}
+		queryTradingMiningResp[epoch] = resp
 	}
 	json.NewEncoder(w).Encode(queryTradingMiningResp)
 }
