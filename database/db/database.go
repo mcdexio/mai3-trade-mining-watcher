@@ -415,7 +415,7 @@ func DeleteAllData(appType types.AppType) {
 	allModels := dbApp.Models()
 	stmt := &gorm.Statement{DB: db}
 	for i := 0; i < len(allModels); i++ {
-		m := allModels[len(allModels)-1-i] // TODO(ChampFu): why get the last i index
+		m := allModels[len(allModels)-1-i]
 		err = stmt.Parse(m)
 		if err != nil {
 			logger.Warn("failed to parse model %+v err=%v", m, err)

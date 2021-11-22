@@ -115,12 +115,12 @@ func (s *Syncer) restoreFromSnapshot(db *gorm.DB, checkpoint int64) error {
 			return err
 		}
 		length := len(snapshots)
-		// TODO(champFu): find a way to iterate all fields
 		users := make([]*mining.UserInfo, length)
 		for i, s := range snapshots {
 			users[i] = &mining.UserInfo{
 				Trader:              s.Trader,
 				Epoch:               s.Epoch,
+				Chain:               s.Chain,
 				Timestamp:           s.Timestamp,
 				InitFee:             s.InitFee,
 				AccFee:              s.AccFee,
@@ -136,7 +136,6 @@ func (s *Syncer) restoreFromSnapshot(db *gorm.DB, checkpoint int64) error {
 				CurStakeScore:       s.CurStakeScore,
 				EstimatedStakeScore: s.EstimatedStakeScore,
 				Score:               s.Score,
-				Chain:               s.Chain,
 			}
 		}
 		for i := 0; i*500 < length; i++ {
@@ -539,6 +538,7 @@ func (s *Syncer) makeSnapshot(db *gorm.DB, timestamp int64, users []*mining.User
 		snapshot[i] = &mining.Snapshot{
 			Trader:              u.Trader,
 			Epoch:               u.Epoch,
+			Chain:               u.Chain,
 			Timestamp:           timestamp,
 			InitFee:             u.InitFee,
 			AccFee:              u.AccFee,
@@ -554,7 +554,6 @@ func (s *Syncer) makeSnapshot(db *gorm.DB, timestamp int64, users []*mining.User
 			CurStakeScore:       u.CurStakeScore,
 			EstimatedStakeScore: u.EstimatedStakeScore,
 			Score:               u.Score,
-			Chain:               u.Chain,
 		}
 	}
 	for i := 0; i*500 < length; i++ {
