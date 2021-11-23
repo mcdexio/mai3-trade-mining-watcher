@@ -162,8 +162,10 @@ func main() {
 	}
 	logger.Info("BNs %d", multiBNs[0])
 	for _, u := range multiUsers[0] {
+		var hasInverse bool
 		for _, a := range u.MarginAccounts {
 			if strings.HasPrefix(a.ID, "0xc7b2ad78fded2bbc74b50dc1881ce0f81a7a0cca-0") {
+				hasInverse = true
 				logger.Info("u.ID %s, totalFee %s, totalFeeFactor %s, vaultFee %s, vaultFeeFactor %s position %s",
 					u.ID, a.TotalFee.String(), a.TotalFeeFactor.String(), a.VaultFee.String(), a.VaultFeeFactor.String(), a.Position)
 			}
@@ -173,7 +175,7 @@ func main() {
 		if err != nil {
 			return
 		}
-		if u.ID == "0x" {
+		if hasInverse {
 			logger.Info("pv %s, totalFee %s, daoFee %s, totalFeeFactor %s, daoFeeFactor %s",
 				pv.String(), totalFee.String(), daoFee.String(), totalFeeFactor.String(), daoFeeFactor.String())
 		}
@@ -184,8 +186,10 @@ func main() {
 	}
 	logger.Info("BNs %d", multiBNs[0])
 	for _, u := range multiUsers[0] {
+		var hasInverse bool
 		for _, a := range u.MarginAccounts {
 			if strings.HasPrefix(a.ID, "0xc7b2ad78fded2bbc74b50dc1881ce0f81a7a0cca-0") {
+				hasInverse = true
 				logger.Info("u.ID %s, totalFee %s, totalFeeFactor %s, vaultFee %s, vaultFeeFactor %s position %s",
 					u.ID, a.TotalFee.String(), a.TotalFeeFactor.String(), a.VaultFee.String(), a.VaultFeeFactor.String(), a.Position)
 			}
@@ -195,7 +199,7 @@ func main() {
 		if err != nil {
 			return
 		}
-		if u.ID == "0x" {
+		if hasInverse {
 			logger.Info("pv %s, totalFee %s, daoFee %s, totalFeeFactor %s, daoFeeFactor %s",
 				pv.String(), totalFee.String(), daoFee.String(), totalFeeFactor.String(), daoFeeFactor.String())
 		}
