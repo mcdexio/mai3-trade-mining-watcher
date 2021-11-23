@@ -274,7 +274,7 @@ func (s *Syncer) initUserStates(db *gorm.DB, epoch *mining.Schedule) error {
 		return nil
 	}
 
-	multiBNs, multiUsers, multiPrices, err := s.getMultiChainInfo(epoch.StartTime)
+	multiBNs, multiUsers, multiPrices, err := s.GetMultiChainInfo(epoch.StartTime)
 	if err != nil {
 		return err
 	}
@@ -377,7 +377,7 @@ func (s *Syncer) initUserStates(db *gorm.DB, epoch *mining.Schedule) error {
 }
 
 func (s *Syncer) getUserStateBasedOnBlockNumber(epoch *mining.Schedule, timestamp int64) ([]*mining.UserInfo, [][]*mining.UserInfo, error) {
-	multiBNs, multiUsers, multiPrices, err := s.getMultiChainInfo(timestamp)
+	multiBNs, multiUsers, multiPrices, err := s.GetMultiChainInfo(timestamp)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -706,7 +706,7 @@ func (s *Syncer) getMultiBlockNumberWithTS(
 	return blockGraphs.GetMultiBlockNumberWithTS(timestamp)
 }
 
-func (s *Syncer) getMultiChainInfo(timestamp int64) (
+func (s *Syncer) GetMultiChainInfo(timestamp int64) (
 	multiBNs []int64, multiUsers [][]mai3.User, multiPrices map[string]decimal.Decimal, err error) {
 	multiBNs, err = s.getMultiBlockNumberWithTS(timestamp, s.blockGraphs)
 	if err != nil {
