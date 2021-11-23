@@ -124,18 +124,6 @@ func GetRemainMinutes(timestamp int64, epoch *mining.Schedule) decimal.Decimal {
 	return remains
 }
 
-func getFeeFromAccount(
-	account *mai3.MarginAccount, quotePrice decimal.Decimal,
-) (totalFee, daoFee, totalFeeFactor, daoFeeFactor decimal.Decimal) {
-	totalFee = account.TotalFee.Mul(quotePrice)
-	totalFeeFactor = account.TotalFeeFactor.Mul(quotePrice)
-	dFee := account.OperatorFee.Add(account.VaultFee)
-	daoFee = dFee.Mul(quotePrice)
-	dFeeFactor := account.OperatorFeeFactor.Add(account.VaultFeeFactor)
-	daoFeeFactor = dFeeFactor.Mul(quotePrice)
-	return
-}
-
 func getOIFromAccount(account *mai3.MarginAccount, cache map[string]decimal.Decimal, base string,
 	mai3Graph mai3.GraphInterface) (decimal.Decimal, error) {
 	if base == "USD" {
@@ -149,14 +137,28 @@ func getOIFromAccount(account *mai3.MarginAccount, cache map[string]decimal.Deci
 	return account.Position.Abs().Mul(cache[basePerpetualID]), nil
 }
 
-func GetOIFeeValue(
-	accounts []*mai3.MarginAccount, blockNumbers int64, cache map[string]decimal.Decimal,
-	mai3Graph mai3.GraphInterface) (oi, totalFee, daoFee, totalFeeFactor, daoFeeFactor decimal.Decimal, err error) {
-	oi = decimal.Zero
+func GetFeeValue(accounts []*mai3.MarginAccount) (
+	totalFee, daoFee, totalFeeFactor, daoFeeFactor decimal.Decimal) {
 	totalFee = decimal.Zero
 	daoFee = decimal.Zero
 	totalFeeFactor = decimal.Zero
 	daoFeeFactor = decimal.Zero
+	for _, a := range accounts {
+		totalFee = totalFee.Add(a.TotalFee)
+
+		totalFeeFactor = totalFeeFactor.Add(a.TotalFeeFactor)
+
+		daoFee = daoFee.Add(a.OperatorFee).Add(a.VaultFee)
+
+		daoFeeFactor = daoFeeFactor.Add(a.OperatorFeeFactor).Add(a.VaultFeeFactor)
+	}
+	return
+}
+
+func GetOIValue(
+	accounts []*mai3.MarginAccount, blockNumbers int64, cache map[string]decimal.Decimal,
+	mai3Graph mai3.GraphInterface) (oi decimal.Decimal, err error) {
+	oi = decimal.Zero
 	for _, a := range accounts {
 		var price decimal.Decimal
 		var poolAddr string
@@ -175,19 +177,7 @@ func GetOIFeeValue(
 		// is BTC inverse contract
 		match, base = mai3Graph.InBTCInverseContractWhiteList(perpId)
 		if match {
-			var btcPerpetualID string
 			var onlyOI decimal.Decimal
-
-			btcPerpetualID, err = mai3Graph.GetPerpIDWithUSDBased("BTC")
-			if err != nil {
-				return
-			}
-
-			tFee, dFee, tFeeFactor, dFeeFactor := getFeeFromAccount(a, cache[btcPerpetualID])
-			totalFee = totalFee.Add(tFee)
-			totalFeeFactor = totalFeeFactor.Add(tFeeFactor)
-			daoFee = daoFee.Add(dFee)
-			daoFeeFactor = daoFeeFactor.Add(dFeeFactor)
 
 			onlyOI, err = getOIFromAccount(a, cache, base, mai3Graph)
 			if err != nil {
@@ -199,19 +189,7 @@ func GetOIFeeValue(
 		// is ETH inverse contract
 		match, base = mai3Graph.InETHInverseContractWhiteList(perpId)
 		if match {
-			var ethPerpetualID string
 			var onlyOI decimal.Decimal
-
-			ethPerpetualID, err = mai3Graph.GetPerpIDWithUSDBased("ETH")
-			if err != nil {
-				return
-			}
-
-			tFee, dFee, tFeeFactor, dFeeFactor := getFeeFromAccount(a, cache[ethPerpetualID])
-			totalFee = totalFee.Add(tFee)
-			totalFeeFactor = totalFeeFactor.Add(tFeeFactor)
-			daoFee = daoFee.Add(dFee)
-			daoFeeFactor = daoFeeFactor.Add(dFeeFactor)
 
 			onlyOI, err = getOIFromAccount(a, cache, base, mai3Graph)
 			if err != nil {
@@ -223,19 +201,7 @@ func GetOIFeeValue(
 		// is SATS inverse contract
 		match, base = mai3Graph.InSATSInverseContractWhiteList(perpId)
 		if match {
-			// 1SATS = 1BTC / 1e8
-			var btcPerpetualID string
 			var onlyOI decimal.Decimal
-
-			btcPerpetualID, err = mai3Graph.GetPerpIDWithUSDBased("BTC")
-			if err != nil {
-				return
-			}
-			tFee, dFee, tFeeFactor, dFeeFactor := getFeeFromAccount(a, cache[btcPerpetualID].Div(decimal.NewFromInt(100000000)))
-			totalFee = totalFee.Add(tFee)
-			totalFeeFactor = totalFeeFactor.Add(tFeeFactor)
-			daoFee = daoFee.Add(dFee)
-			daoFeeFactor = daoFeeFactor.Add(dFeeFactor)
 
 			onlyOI, err = getOIFromAccount(a, cache, base, mai3Graph)
 			if err != nil {
@@ -258,12 +224,6 @@ func GetOIFeeValue(
 			cache[perpId] = p
 		}
 		oi = oi.Add(price.Mul(a.Position).Abs())
-		totalFee = totalFee.Add(a.TotalFee)
-		totalFeeFactor = totalFeeFactor.Add(a.TotalFeeFactor)
-		dFee := a.OperatorFee.Add(a.VaultFee)
-		daoFee = daoFee.Add(dFee)
-		dFeeFactor := a.OperatorFeeFactor.Add(a.VaultFeeFactor)
-		daoFeeFactor = daoFeeFactor.Add(dFeeFactor)
 	}
 	err = nil
 	return

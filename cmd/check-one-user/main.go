@@ -9,6 +9,7 @@ import (
 	"gorm.io/gorm"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -60,7 +61,6 @@ func main() {
 			config.GetString("BSC_ETH_USD_PERP_ID", ""),
 		)
 		mai3GraphClients = append(mai3GraphClients, bscMAI3GraphClient)
-		mai3Graph = bscMAI3GraphClient
 
 		goClient, err := go_ethereum.NewClient(logging.NewLoggerTag("go-eth"),
 			config.GetString("BSC_PRC_SERVER"), ctx,
@@ -90,6 +90,7 @@ func main() {
 			config.GetString("ARB_ONE_ETH_USD_PERP_ID", ""),
 		)
 		mai3GraphClients = append(mai3GraphClients, arbMAI3GraphClient)
+		mai3Graph = arbMAI3GraphClient
 
 		goClient, err := go_ethereum.NewClient(logging.NewLoggerTag("go-eth"),
 			config.GetString("ARB_ONE_PRC_SERVER"), ctx,
@@ -162,17 +163,17 @@ func main() {
 	logger.Info("BNs %d", multiBNs[0])
 	for _, u := range multiUsers[0] {
 		for _, a := range u.MarginAccounts {
-			if a.ID == "0x" {
-				logger.Info("totalFee %s, totalFeeFactor %s, vaultFee %s, vaultFeeFactor %s position %s",
-					a.TotalFee.String(), a.TotalFeeFactor.String(), a.VaultFee.String(), a.VaultFeeFactor.String(), a.Position)
+			if strings.HasPrefix(a.ID, "0xc7b2ad78fded2bbc74b50dc1881ce0f81a7a0cca-0") {
+				logger.Info("u.ID %s, totalFee %s, totalFeeFactor %s, vaultFee %s, vaultFeeFactor %s position %s",
+					u.ID, a.TotalFee.String(), a.TotalFeeFactor.String(), a.VaultFee.String(), a.VaultFeeFactor.String(), a.Position)
 			}
 		}
+		totalFee, daoFee, totalFeeFactor, daoFeeFactor := syncer.GetFeeValue(u.MarginAccounts)
+		pv, err := syncer.GetOIValue(u.MarginAccounts, multiBNs[0], multiPrices, mai3Graph)
+		if err != nil {
+			return
+		}
 		if u.ID == "0x" {
-			pv, totalFee, daoFee, totalFeeFactor, daoFeeFactor, err := syncer.GetOIFeeValue(
-				u.MarginAccounts, multiBNs[0], multiPrices, mai3Graph)
-			if err != nil {
-				return
-			}
 			logger.Info("pv %s, totalFee %s, daoFee %s, totalFeeFactor %s, daoFeeFactor %s",
 				pv.String(), totalFee.String(), daoFee.String(), totalFeeFactor.String(), daoFeeFactor.String())
 		}
@@ -184,17 +185,17 @@ func main() {
 	logger.Info("BNs %d", multiBNs[0])
 	for _, u := range multiUsers[0] {
 		for _, a := range u.MarginAccounts {
-			if a.ID == "0x" {
-				logger.Info("totalFee %s, totalFeeFactor %s, vaultFee %s, vaultFeeFactor %s position %s",
-					a.TotalFee.String(), a.TotalFeeFactor.String(), a.VaultFee.String(), a.VaultFeeFactor.String(), a.Position)
+			if strings.HasPrefix(a.ID, "0xc7b2ad78fded2bbc74b50dc1881ce0f81a7a0cca-0") {
+				logger.Info("u.ID %s, totalFee %s, totalFeeFactor %s, vaultFee %s, vaultFeeFactor %s position %s",
+					u.ID, a.TotalFee.String(), a.TotalFeeFactor.String(), a.VaultFee.String(), a.VaultFeeFactor.String(), a.Position)
 			}
 		}
+		totalFee, daoFee, totalFeeFactor, daoFeeFactor := syncer.GetFeeValue(u.MarginAccounts)
+		pv, err := syncer.GetOIValue(u.MarginAccounts, multiBNs[0], multiPrices, mai3Graph)
+		if err != nil {
+			return
+		}
 		if u.ID == "0x" {
-			pv, totalFee, daoFee, totalFeeFactor, daoFeeFactor, err := syncer.GetOIFeeValue(
-				u.MarginAccounts, multiBNs[0], multiPrices, mai3Graph)
-			if err != nil {
-				return
-			}
 			logger.Info("pv %s, totalFee %s, daoFee %s, totalFeeFactor %s, daoFeeFactor %s",
 				pv.String(), totalFee.String(), daoFee.String(), totalFeeFactor.String(), daoFeeFactor.String())
 		}

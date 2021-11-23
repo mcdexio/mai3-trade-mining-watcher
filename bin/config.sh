@@ -32,7 +32,7 @@ export ARB_RINKEBY_ETH_USD_PERP_ID="0xc32a2dfee97e2babc90a2b5e6aef41e789ef2e13-0
 export ARB_RINKEBY_PRC_SERVER="https://rinkeby.arbitrum.io/rpc"
 
 # BSC graph url & inverse white list
-export BSC_CHAIN=true
+export BSC_CHAIN=false
 export BSC_MAI3_GRAPH_URL=https://api.thegraph.com/subgraphs/name/mcdexio/mcdex3-bsc-trade-mining
 # export BSC_MAI3_GRAPH_URL=https://api.thegraph.com/subgraphs/name/champfu-mcdex/bsc-mining-fee
 export BSC_BLOCK_GRAPH_URL=https://api.thegraph.com/subgraphs/name/venomprotocol/bsc-blocks
@@ -48,7 +48,8 @@ export BSC_PRC_SERVER="https://bsc-dataseed.binance.org/"
 
 # Arb1 graph url & inverse white list
 export ARB_ONE_CHAIN=true
-export ARB_ONE_MAI3_GRAPH_URL=https://api.thegraph.com/subgraphs/name/mcdexio/mcdex3-arb-trade-mining2
+# export ARB_ONE_MAI3_GRAPH_URL=https://api.thegraph.com/subgraphs/name/mcdexio/mcdex3-arb-trade-mining2
+export ARB_ONE_MAI3_GRAPH_URL=https://api.thegraph.com/subgraphs/name/champfu-mcdex/arb-mining-fee
 # export ARB_ONE_BLOCK_GRAPH_URL=https://api.thegraph.com/subgraphs/name/ianlapham/arbitrum-one-blocks
 export ARB_ONE_BLOCK_GRAPH_URL=https://graph-arb1.mcdex.io/subgraphs/name/ianlapham/arbitrum-one-blocks
 export ARB_ONE_ETH_INVERSE_CONTRACT_WHITELIST0='0xc7b2ad78fded2bbc74b50dc1881ce0f81a7a0cca-0' # USD-ETH

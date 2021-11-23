@@ -274,7 +274,7 @@ func (s *Syncer) initUserStates(db *gorm.DB, epoch *mining.Schedule) error {
 		return nil
 	}
 
-	multiBNs, multiUsers, multiPrices, err := s.GetMultiChainInfo(epoch.StartTime)
+	multiBNs, multiUsers, _, err := s.GetMultiChainInfo(epoch.StartTime)
 	if err != nil {
 		return err
 	}
@@ -285,16 +285,7 @@ func (s *Syncer) initUserStates(db *gorm.DB, epoch *mining.Schedule) error {
 	for i, users := range multiUsers {
 		saveUser := make([]*mining.UserInfo, len(users))
 		for j, u := range users {
-			mai3Graph, err := s.mai3Graphs.GetMai3GraphInterface(i)
-			if err != nil {
-				return err
-			}
-			_, totalFee, daoFee, totalFeeFactor, daoFeeFactor, err := GetOIFeeValue(
-				u.MarginAccounts, multiBNs[i], multiPrices, mai3Graph)
-			if err != nil {
-				return fmt.Errorf("fail to get initial fee %s", err)
-			}
-
+			totalFee, daoFee, totalFeeFactor, daoFeeFactor := GetFeeValue(u.MarginAccounts)
 			userId := strings.ToLower(u.ID)
 
 			if user, match := summaryUser[userId]; match {
@@ -392,8 +383,8 @@ func (s *Syncer) getUserStateBasedOnBlockNumber(epoch *mining.Schedule, timestam
 			if err != nil {
 				return nil, nil, err
 			}
-			pv, totalFee, daoFee, totalFeeFactor, daoFeeFactor, err := GetOIFeeValue(
-				u.MarginAccounts, multiBNs[i], multiPrices, mai3Graph)
+			totalFee, daoFee, totalFeeFactor, daoFeeFactor := GetFeeValue(u.MarginAccounts)
+			pv, err := GetOIValue(u.MarginAccounts, multiBNs[0], multiPrices, mai3Graph)
 			if err != nil {
 				return nil, nil, err
 			}
