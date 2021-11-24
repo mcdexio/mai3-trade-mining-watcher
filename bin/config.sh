@@ -35,6 +35,7 @@ export ARB_RINKEBY_PRC_SERVER="https://rinkeby.arbitrum.io/rpc"
 export BSC_CHAIN=false
 export BSC_MAI3_GRAPH_URL=https://api.thegraph.com/subgraphs/name/mcdexio/mcdex3-bsc-trade-mining
 # export BSC_MAI3_GRAPH_URL=https://api.thegraph.com/subgraphs/name/champfu-mcdex/bsc-mining-fee
+# export BSC_MAI3_GRAPH_URL=https://graph-bsc.mcdex.io/subgraphs/name/mcdexio/mcdex3-bsc-trade-mining
 export BSC_BLOCK_GRAPH_URL=https://api.thegraph.com/subgraphs/name/venomprotocol/bsc-blocks
 # export BSC_BLOCK_GRAPH_URL=https://graph-bsc.mcdex.io/subgraphs/name/generatefinance/bsc-blocks
 export BSC_BTC_INVERSE_CONTRACT_WHITELIST0='0x2ea001032b0eb424120b4dec51bf02db0df46c78-0' # bsc USD-BTC
