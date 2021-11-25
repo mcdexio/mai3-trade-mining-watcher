@@ -49,6 +49,7 @@ type Client struct {
 	satsWhiteList *Whitelist
 	btcUsdPerpID  string
 	ethUsdPerpID  string
+	url string
 }
 
 type GraphInterface interface {
@@ -81,6 +82,7 @@ func NewClient(logger logging.Logger, url string, btcWhiteList *Whitelist,
 		btcWhiteList:  btcWhiteList,
 		ethWhiteList:  ethWhiteList,
 		satsWhiteList: satsWhiteList,
+		url: url,
 	}
 	for i, perpID := range perpIDsUSDBased {
 		if perpID == "" {
@@ -212,7 +214,7 @@ func (m *Client) queryGraph(resp interface{}, query string, args ...interface{})
 		// success
 		return nil
 	}
-	return fmt.Errorf("fail to query MAI3 graph in three times")
+	return fmt.Errorf("fail to query MAI3 graph in three times url=%s", m.url)
 }
 
 func (m *Client) GetUsersBasedOnBlockNumberTrade(blockNumber int64, trader string) (User, error) {
