@@ -162,6 +162,19 @@ func main() {
 	}
 	logger.Info("BNs %d", multiBNs[0])
 	for _, u := range multiUsers[0] {
+		if u.ID == "0x" {
+			for _, a := range u.MarginAccounts {
+				logger.Info("u.ID %s, totalFee %s, totalFeeFactor %s, vaultFee %s, vaultFeeFactor %s position %s",
+					u.ID, a.TotalFee.String(), a.TotalFeeFactor.String(), a.VaultFee.String(), a.VaultFeeFactor.String(), a.Position)
+			}
+			totalFee, daoFee, totalFeeFactor, daoFeeFactor := syncer.GetFeeValue(u.MarginAccounts)
+			pv, err := syncer.GetOIValue(u.MarginAccounts, multiBNs[0], multiPrices, mai3Graph)
+			if err != nil {
+				return
+			}
+			logger.Info("pv %s, totalFee %s, daoFee %s, totalFeeFactor %s, daoFeeFactor %s",
+				pv.String(), totalFee.String(), daoFee.String(), totalFeeFactor.String(), daoFeeFactor.String())
+		}
 		var hasInverse bool
 		for _, a := range u.MarginAccounts {
 			if strings.HasPrefix(a.ID, "0xc7b2ad78fded2bbc74b50dc1881ce0f81a7a0cca-0") {
@@ -180,12 +193,25 @@ func main() {
 				pv.String(), totalFee.String(), daoFee.String(), totalFeeFactor.String(), daoFeeFactor.String())
 		}
 	}
-	multiBNs, multiUsers, multiPrices, err = syn.GetMultiChainInfo(1637618400)
+	multiBNs, multiUsers, multiPrices, err = syn.GetMultiChainInfo(1637920800)
 	if err != nil {
 		return
 	}
 	logger.Info("BNs %d", multiBNs[0])
 	for _, u := range multiUsers[0] {
+		if u.ID == "0x" {
+			for _, a := range u.MarginAccounts {
+				logger.Info("u.ID %s, totalFee %s, totalFeeFactor %s, vaultFee %s, vaultFeeFactor %s position %s",
+					u.ID, a.TotalFee.String(), a.TotalFeeFactor.String(), a.VaultFee.String(), a.VaultFeeFactor.String(), a.Position)
+			}
+			totalFee, daoFee, totalFeeFactor, daoFeeFactor := syncer.GetFeeValue(u.MarginAccounts)
+			pv, err := syncer.GetOIValue(u.MarginAccounts, multiBNs[0], multiPrices, mai3Graph)
+			if err != nil {
+				return
+			}
+			logger.Info("pv %s, totalFee %s, daoFee %s, totalFeeFactor %s, daoFeeFactor %s",
+				pv.String(), totalFee.String(), daoFee.String(), totalFeeFactor.String(), daoFeeFactor.String())
+		}
 		var hasInverse bool
 		for _, a := range u.MarginAccounts {
 			if strings.HasPrefix(a.ID, "0xc7b2ad78fded2bbc74b50dc1881ce0f81a7a0cca-0") {
