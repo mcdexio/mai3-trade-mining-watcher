@@ -8,15 +8,15 @@ import (
 	"strings"
 )
 
-var readScoreCsvPath = "/Users/champ/Downloads/2021.11.17epoch2-totalScore.csv"
-var readFeeCsvPath = "/Users/champ/Downloads/2021.11.17epoch2-fee.csv"
+var readScoreCsvPath = "/Users/champ/Downloads/2021.11.30epoch3-sql1.csv"
+var readFeeCsvPath = "/Users/champ/Downloads/2021.11.30epoch3-sql2.csv"
 
-var writeCsvPathBsc = "/Users/champ/Downloads/2021.11.17epoch2BscProportion.csv"
-var writeCsvPathArb = "/Users/champ/Downloads/2021.11.17epoch2ArbProportion.csv"
+var writeCsvPathBsc = "/Users/champ/Downloads/2021.11.30epoch3BscProportion.csv"
+var writeCsvPathArb = "/Users/champ/Downloads/2021.11.30epoch3ArbProportion.csv"
 
 func main() {
 	decimal.DivisionPrecision = 21
-	mcbAmount, err := decimal.NewFromString("63000000000000000000000")
+	mcbAmount, err := decimal.NewFromString("54000000000000000000000")
 	if err != nil {
 		panic(err)
 	}
@@ -61,6 +61,9 @@ func main() {
 		score, err = decimal.NewFromString(record[1])
 		if err != nil {
 			panic(err)
+		}
+		if score.Equal(decimal.Zero) {
+			continue
 		}
 		totalSum = totalSum.Add(score)
 		trader := strings.ToLower(record[0])
