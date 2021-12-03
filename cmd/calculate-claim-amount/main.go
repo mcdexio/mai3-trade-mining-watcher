@@ -111,22 +111,27 @@ func main() {
 	}
 
 	var disperse decimal.Decimal
+	var disperseARB decimal.Decimal
+	var disperseBsc decimal.Decimal
 	for trader, chains := range traderMap {
 		score := traderScoreMap[trader]
 		proportion := score.Div(totalSum)
 		mcbAmountOne := score.Mul(mcbAmount).Div(totalSum)
 		if len(chains) == 1 {
 			var w *csv.Writer
-			if _, match := chains["0"]; match {
-				w = wBsc
-			} else {
-				w = wArb
-			}
+			mcbOne := mcbAmountOne.RoundDown(0)
 			x := []string{trader}
 			x = append(x, score.String())
 			x = append(x, proportion.String())
-			x = append(x, mcbAmountOne.RoundDown(0).String())
-			disperse = disperse.Add(mcbAmountOne.RoundDown(0))
+			x = append(x, mcbOne.String())
+			disperse = disperse.Add(mcbOne)
+			if _, match := chains["0"]; match {
+				w = wBsc
+				disperseBsc = disperseBsc.Add(mcbOne)
+			} else {
+				w = wArb
+				disperseARB = disperseARB.Add(mcbOne)
+			}
 			if err = w.Write(x); err != nil {
 				panic(err)
 			}
@@ -141,23 +146,27 @@ func main() {
 			arbProportion := arbFee.Div(chainFee)
 
 			xBsc := []string{trader}
+			mcbOneBsc := mcbAmountOne.Mul(bscProportion).RoundDown(0)
 			xBsc = append(xBsc, score.Mul(bscProportion).String())
 			xBsc = append(xBsc, proportion.Mul(bscProportion).String())
-			xBsc = append(xBsc, mcbAmountOne.Mul(bscProportion).RoundDown(0).String())
-			disperse = disperse.Add(mcbAmountOne.Mul(bscProportion).RoundDown(0))
+			xBsc = append(xBsc, mcbOneBsc.String())
+			disperse = disperse.Add(mcbOneBsc)
 			if err = wBsc.Write(xBsc); err != nil {
 				panic(err)
 			}
+			disperseBsc = disperseBsc.Add(mcbOneBsc)
 
+			mcbOneArb := mcbAmountOne.Mul(arbProportion).RoundDown(0)
 			xArb := []string{trader}
 			xArb = append(xArb, score.Mul(arbProportion).String())
 			xArb = append(xArb, proportion.Mul(arbProportion).String())
-			xArb = append(xArb, mcbAmountOne.Mul(arbProportion).RoundDown(0).String())
-			disperse = disperse.Add(mcbAmountOne.Mul(arbProportion).RoundDown(0))
+			xArb = append(xArb, mcbOneArb.String())
+			disperse = disperse.Add(mcbOneArb)
 			if err = wArb.Write(xArb); err != nil {
 				panic(err)
 			}
+			disperseARB = disperseARB.Add(mcbOneArb)
 		}
 	}
-	fmt.Printf("disperse %s\n", disperse.String())
+	fmt.Printf("disperse %s, bsc %s, arb %s\n", disperse.String(), disperseBsc.String(), disperseARB)
 }
