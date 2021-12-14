@@ -8,15 +8,15 @@ import (
 	"strings"
 )
 
-var readScoreCsvPath = "/Users/champ/Downloads/2021.11.30epoch3-sql1.csv"
-var readFeeCsvPath = "/Users/champ/Downloads/2021.11.30epoch3-sql2.csv"
+var readScoreCsvPath = "/Users/champ/Downloads/epoch4_total.csv"
+var readFeeCsvPath = "/Users/champ/Downloads/epoch4.csv"
 
-var writeCsvPathBsc = "/Users/champ/Downloads/2021.11.30epoch3BscProportion.csv"
-var writeCsvPathArb = "/Users/champ/Downloads/2021.11.30epoch3ArbProportion.csv"
+var writeCsvPathBsc = "/Users/champ/Downloads/2021.12.13epoch4BscProportion.csv"
+var writeCsvPathArb = "/Users/champ/Downloads/2021.12.13epoch4ArbProportion.csv"
 
 func main() {
 	decimal.DivisionPrecision = 21
-	mcbAmount, err := decimal.NewFromString("54000000000000000000000")
+	mcbAmount, err := decimal.NewFromString("45000000000000000000000")
 	if err != nil {
 		panic(err)
 	}
@@ -28,6 +28,9 @@ func main() {
 	rScore := csv.NewReader(rScoreFile)
 	defer rScoreFile.Close()
 	recordsScores, err := rScore.ReadAll()
+	if err != nil {
+		panic(err)
+	}
 
 	rFeeFile, err := os.OpenFile(readFeeCsvPath, os.O_RDONLY, 0777)
 	if err != nil {
