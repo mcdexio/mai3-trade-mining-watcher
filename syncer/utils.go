@@ -2,6 +2,7 @@ package syncer
 
 import (
 	"fmt"
+	"github.com/mcdexio/mai3-trade-mining-watcher/common/logging"
 	"github.com/mcdexio/mai3-trade-mining-watcher/database/models/mining"
 	"github.com/mcdexio/mai3-trade-mining-watcher/graph/mai3"
 	"github.com/shopspring/decimal"
@@ -32,7 +33,7 @@ func splitMarginAccountID(marginAccountID string) (poolAddr, userId string, perp
 
 func getEstimatedStakeScore(
 	nowTimestamp int64, epoch *mining.Schedule, unlockTime int64,
-	currentStakingReward decimal.Decimal,
+	currentStakingReward decimal.Decimal, logger logging.Logger,
 ) decimal.Decimal {
 	// fmt.Printf("nowTS %d, epochEndTime %d, unlockTime %d\n", nowTimestamp, epoch.EndTime, unlockTime)
 	// A = (1 - Floor(RemainEpochSeconds / 86400) / UnlockTimeInDays / 2) * CurrentStakingReward * RemainEpochMinutes
@@ -41,6 +42,7 @@ func getEstimatedStakeScore(
 	// floor to 0 if less than 1 day
 	endTimeMinusNowTS := float64(epoch.EndTime - nowTimestamp)
 	if endTimeMinusNowTS <= 0 {
+		logger.Warn("endTimeMinusNowTS(%+v) <= 0, epoch.EndTime %+v, nowTimestamp %+v", endTimeMinusNowTS, epoch.EndTime, nowTimestamp)
 		// there is no remainTime in this epoch
 		return decimal.Zero
 	}
@@ -51,10 +53,16 @@ func getEstimatedStakeScore(
 	// fmt.Printf("unlockTimeInDays %v\n", unlockTimeInDays)
 	var remainProportion decimal.Decimal
 	if unlockTimeInDays <= 0 {
+		logger.Warn("unlockTimeInDays(%+v) <= 0, unlockTime %+v, nowTimestamp %+v", unlockTimeInDays, unlockTime, nowTimestamp)
 		// there is no stake time
 		return decimal.Zero
 	} else {
 		remainProportion = decimal.NewFromFloat(1.0 - (remainEpochDays / unlockTimeInDays / 2.0))
+		logger.Debug("remainProportion(%+v), remainEpochDays %+v, unlockTimeInDays %+v", remainProportion, remainEpochDays, unlockTimeInDays)
+		if remainProportion.LessThanOrEqual(decimal.Zero) {
+			logger.Warn("remainProportion(%+v) <= 0, remainEpochDays %+v, unlockTimeInDays %+v", remainProportion, remainEpochDays, unlockTimeInDays)
+			return decimal.Zero
+		}
 	}
 	// fmt.Printf("remainProportion %v\n", remainProportion)
 	// ceil to 1 if less than 1 minute

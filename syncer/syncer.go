@@ -389,7 +389,7 @@ func (s *Syncer) getUserStateBasedOnBlockNumber(epoch *mining.Schedule, timestam
 				return nil, nil, err
 			}
 			ss := getStakeScore(timestamp, u.UnlockMCBTime, u.StakedMCB)
-			estimatedStakeScore := getEstimatedStakeScore(timestamp, epoch, u.UnlockMCBTime, ss)
+			estimatedStakeScore := getEstimatedStakeScore(timestamp, epoch, u.UnlockMCBTime, ss, s.logger)
 
 			userId := strings.ToLower(u.ID)
 
